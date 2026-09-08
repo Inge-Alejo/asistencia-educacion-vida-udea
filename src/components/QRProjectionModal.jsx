@@ -1,15 +1,23 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { X, Download, Printer, Maximize2, Sparkles, MapPin, Calendar, Clock, Car } from 'lucide-react';
+import { X, Download, Printer, Sparkles, MapPin, Calendar, Clock, Car, Globe, Check } from 'lucide-react';
 
 export default function QRProjectionModal({ isOpen, onClose, evento }) {
   const qrRef = useRef(null);
+  const [copied, setCopied] = useState(false);
+
+  // Determinar la URL base oficial
+  const officialProdDomain = 'https://asistencia-educacion-vida-udea.vercel.app';
+  const detectedOrigin = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null')
+    ? window.location.origin
+    : officialProdDomain;
+
+  const [baseUrl, setBaseUrl] = useState(detectedOrigin);
 
   if (!isOpen || !evento) return null;
 
-  // URL a la que dirigirá el QR
-  const currentUrl = window.location.origin + window.location.pathname;
-  const qrTargetUrl = `${currentUrl}?evento=${evento.id}&view=attendee`;
+  // URL absoluta y limpia a la que dirigirá el QR al escanear con el teléfono móvil
+  const qrTargetUrl = `${baseUrl.replace(/\/$/, '')}/?evento=${encodeURIComponent(evento.id)}&view=attendee`;
 
   const handleDownloadQR = () => {
     const svgElement = qrRef.current.querySelector('svg');
@@ -35,6 +43,12 @@ export default function QRProjectionModal({ isOpen, onClose, evento }) {
     };
 
     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(qrTargetUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
   };
 
   const handlePrint = () => {
@@ -87,9 +101,34 @@ export default function QRProjectionModal({ isOpen, onClose, evento }) {
               </div>
               <div className="instructions-text">
                 <h3>Escanee con la cámara de su teléfono móvil</h3>
-                <p>1. Apunte su cámara al código QR.</p>
-                <p>2. Active la geolocalización para validar su asistencia en sede.</p>
-                <p>3. Envíe sus preguntas en vivo a los ponentes y califique la jornada.</p>
+                <p>1. Abra la cámara de su celular y apunte al código QR.</p>
+                <p>2. Toque la notificación para abrir el formulario oficial.</p>
+                <p>3. Valide su ubicación presencial y confirme su asistencia.</p>
+              </div>
+            </div>
+
+            {/* Selector del Dominio del Enlace (Permite alternar entre dominio local y Vercel) */}
+            <div className="qr-domain-switcher">
+              <label className="domain-label">
+                <Globe size={14} /> Dominio destino del QR:
+              </label>
+              <div className="domain-buttons">
+                <button
+                  type="button"
+                  className={`btn-domain-choice ${baseUrl === officialProdDomain ? 'active' : ''}`}
+                  onClick={() => setBaseUrl(officialProdDomain)}
+                >
+                  Producción Vercel (.app)
+                </button>
+                {detectedOrigin !== officialProdDomain && (
+                  <button
+                    type="button"
+                    className={`btn-domain-choice ${baseUrl === detectedOrigin ? 'active' : ''}`}
+                    onClick={() => setBaseUrl(detectedOrigin)}
+                  >
+                    Origen Actual ({detectedOrigin.replace(/https?:\/\//, '')})
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -99,7 +138,7 @@ export default function QRProjectionModal({ isOpen, onClose, evento }) {
             <div className="qr-wrapper" ref={qrRef}>
               <QRCodeSVG
                 value={qrTargetUrl}
-                size={340}
+                size={320}
                 level="H"
                 includeMargin={true}
                 fgColor="#0F5938" // Verde UdeA
@@ -108,14 +147,26 @@ export default function QRProjectionModal({ isOpen, onClose, evento }) {
                   src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%230F5938'/%3E%3Cpath d='M50 20 v60 M20 50 h60' stroke='%23C59B27' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E",
                   x: undefined,
                   y: undefined,
-                  height: 60,
-                  width: 60,
+                  height: 56,
+                  width: 56,
                   excavate: true,
                 }}
               />
             </div>
-            <p className="qr-caption">Código QR Oficial de Asistencia y Preguntas en Vivo</p>
-            <span className="qr-url-preview">{qrTargetUrl}</span>
+
+            <p className="qr-caption">Código QR Oficial de Asistencia</p>
+
+            <div className="qr-link-box">
+              <span className="qr-url-preview">{qrTargetUrl}</span>
+              <button
+                type="button"
+                className="btn-copy-link"
+                onClick={handleCopyLink}
+                title="Copiar enlace directo"
+              >
+                {copied ? <Check size={14} /> : 'Copiar'}
+              </button>
+            </div>
 
             {/* Botones de acción del proyector */}
             <div className="projection-action-buttons">

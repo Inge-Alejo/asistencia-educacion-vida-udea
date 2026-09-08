@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import {
   Users, HelpCircle, Star, ThumbsUp, Download, QrCode, Plus, Search,
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
-  Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield
+  Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut
 } from 'lucide-react';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
 import { toggleQuestionAnswered, toggleQuestionFeatured, deleteQuestion } from '../services/storage';
+import { changeAdminPassword } from '../services/auth';
 
 export default function AdminPanel({
   evento,
@@ -15,13 +16,19 @@ export default function AdminPanel({
   satisfaccion,
   onOpenQRModal,
   onOpenNewEventModal,
-  onDataUpdated
+  onDataUpdated,
+  onLogout
 }) {
   const [activeTab, setActiveTab] = useState('asistencias');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterVinculacion, setFilterVinculacion] = useState('todos');
   const [filterPonente, setFilterPonente] = useState('todos');
   const [msFormsUrl, setMsFormsUrl] = useState(evento.microsoftFormsUrl || '');
+
+  // Estado para cambio de contraseña
+  const [currentPwd, setCurrentPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [pwdMsg, setPwdMsg] = useState({ text: '', isError: false });
 
   // Métricas calculadas
   const totalAsistentes = asistencias.length;
@@ -110,6 +117,12 @@ export default function AdminPanel({
             <Download size={16} />
             <span>Descargar Excel (.xlsx)</span>
           </button>
+          {onLogout && (
+            <button className="btn-secondary btn-logout-action" onClick={onLogout} title="Cerrar sesión de administrador">
+              <LogOut size={16} />
+              <span>Cerrar Sesión</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -613,6 +626,68 @@ export default function AdminPanel({
                   <span>Exportar Formato Idéntico a Microsoft Forms (.xlsx)</span>
                 </button>
               </div>
+            </div>
+
+            {/* Tarjeta de Seguridad y Cambio de Contraseña */}
+            <div className="integration-card">
+              <div className="int-header">
+                <Shield size={28} className="security-icon" />
+                <div>
+                  <h3>Seguridad y Contraseña Administrativa</h3>
+                  <p>Gestión de la clave de acceso para moderadores de la Facultad.</p>
+                </div>
+              </div>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setPwdMsg({ text: '', isError: false });
+                  const res = await changeAdminPassword(currentPwd, newPwd);
+                  if (res.success) {
+                    setPwdMsg({ text: res.message, isError: false });
+                    setCurrentPwd('');
+                    setNewPwd('');
+                  } else {
+                    setPwdMsg({ text: res.message, isError: true });
+                  }
+                }}
+                className="pwd-change-form"
+              >
+                <div className="form-group">
+                  <label className="form-sublabel">Contraseña Actual:</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="Contraseña actual"
+                    value={currentPwd}
+                    onChange={(e) => setCurrentPwd(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-sublabel">Nueva Contraseña (mínimo 6 caracteres):</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="Nueva contraseña segura"
+                    value={newPwd}
+                    onChange={(e) => setNewPwd(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {pwdMsg.text && (
+                  <div className={`pwd-status-msg ${pwdMsg.isError ? 'error' : 'success'}`}>
+                    {pwdMsg.text}
+                  </div>
+                )}
+
+                <button type="submit" className="btn-secondary full-width">
+                  <KeyRound size={15} />
+                  <span>Actualizar Contraseña de Acceso</span>
+                </button>
+              </form>
             </div>
           </div>
         </div>

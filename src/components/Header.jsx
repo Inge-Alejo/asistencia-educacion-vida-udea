@@ -1,7 +1,16 @@
 import React from 'react';
-import { ShieldCheck, UserCheck, Settings, QrCode, Building2, Calendar } from 'lucide-react';
+import { ShieldCheck, UserCheck, Settings, QrCode, Lock, LogOut, Calendar } from 'lucide-react';
 
-export default function Header({ currentView, setCurrentView, currentEvent, events, onSelectEvent, onOpenQRModal }) {
+export default function Header({
+  currentView,
+  onNavigateView,
+  currentEvent,
+  events,
+  onSelectEvent,
+  onOpenQRModal,
+  isAdmin,
+  onLogoutAdmin
+}) {
   return (
     <header className="udea-header">
       <div className="header-top-bar">
@@ -47,7 +56,7 @@ export default function Header({ currentView, setCurrentView, currentEvent, even
           <div className="nav-tabs">
             <button
               className={`nav-tab-btn ${currentView === 'attendee' ? 'active' : ''}`}
-              onClick={() => setCurrentView('attendee')}
+              onClick={() => onNavigateView('attendee')}
             >
               <UserCheck size={18} />
               <span>Portal del Asistente (Móvil/QR)</span>
@@ -55,14 +64,27 @@ export default function Header({ currentView, setCurrentView, currentEvent, even
 
             <button
               className={`nav-tab-btn ${currentView === 'admin' ? 'active' : ''}`}
-              onClick={() => setCurrentView('admin')}
+              onClick={() => onNavigateView('admin')}
             >
-              <Settings size={18} />
-              <span>Panel de Administración</span>
+              {isAdmin ? <Settings size={18} /> : <Lock size={18} />}
+              <span>
+                Panel de Administración {isAdmin ? '' : '(Protegido)'}
+              </span>
             </button>
           </div>
 
           <div className="nav-actions">
+            {isAdmin && currentView === 'admin' && (
+              <button
+                className="btn-admin-logout"
+                onClick={onLogoutAdmin}
+                title="Cerrar sesión de administración"
+              >
+                <LogOut size={16} />
+                <span>Cerrar Sesión Admin</span>
+              </button>
+            )}
+
             <button
               className="btn-projection-trigger"
               onClick={onOpenQRModal}

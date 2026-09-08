@@ -4,6 +4,7 @@ import AttendeeView from './components/AttendeeView';
 import AdminPanel from './components/AdminPanel';
 import QRProjectionModal from './components/QRProjectionModal';
 import EventModal from './components/EventModal';
+import AdminAuthModal from './components/AdminAuthModal';
 import {
   initStorage,
   getEvents,
@@ -13,14 +14,17 @@ import {
   getEvaluations,
   getSatisfaction
 } from './services/storage';
+import { isAdminAuthenticated, logoutAdmin } from './services/auth';
 
 export default function App() {
   const [events, setEvents] = useState([]);
   const [currentEvent, setCurrentEvent] = useState(null);
   const [currentView, setCurrentView] = useState('attendee'); // 'attendee' | 'admin'
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Estados de datos para el evento actual
   const [asistencias, setAsistencias] = useState([]);
@@ -34,14 +38,22 @@ export default function App() {
     const loadedEvents = getEvents();
     setEvents(loadedEvents);
 
+    const authActive = isAdminAuthenticated();
+    setIsAdmin(authActive);
+
     // Leer parámetros de la URL: ?evento=EVT-MED-01&view=attendee
     const params = new URLSearchParams(window.location.search);
     const urlEventId = params.get('evento');
     const urlView = params.get('view');
 
     if (urlView === 'admin') {
-      setCurrentView('admin');
-    } else if (urlView === 'attendee') {
+      if (authActive) {
+        setCurrentView('admin');
+      } else {
+        setCurrentView('attendee');
+        setIsAuthModalOpen(true);
+      }
+    } else {
       setCurrentView('attendee');
     }
 
@@ -79,15 +91,45 @@ export default function App() {
     refreshEventData();
   };
 
+  // Navegación segura entre vistas
+  const handleNavigateView = (viewName) => {
+    if (viewName === 'admin') {
+      if (isAdminAuthenticated()) {
+        setIsAdmin(true);
+        setCurrentView('admin');
+      } else {
+        setIsAuthModalOpen(true);
+      }
+    } else {
+      setCurrentView('attendee');
+    }
+  };
+
+  // Manejar éxito en login administrativo
+  const handleAuthSuccess = () => {
+    setIsAdmin(true);
+    setIsAuthModalOpen(false);
+    setCurrentView('admin');
+  };
+
+  // Manejar cierre de sesión administrativa
+  const handleLogout = () => {
+    logoutAdmin();
+    setIsAdmin(false);
+    setCurrentView('attendee');
+  };
+
   return (
     <div className="udea-app-root">
       <Header
         currentView={currentView}
-        setCurrentView={setCurrentView}
+        onNavigateView={handleNavigateView}
         currentEvent={currentEvent}
         events={events}
         onSelectEvent={setCurrentEvent}
         onOpenQRModal={() => setIsQRModalOpen(true)}
+        isAdmin={isAdmin}
+        onLogoutAdmin={handleLogout}
       />
 
       <main className="container main-content-wrapper">
@@ -110,6 +152,7 @@ export default function App() {
               onOpenQRModal={() => setIsQRModalOpen(true)}
               onOpenNewEventModal={() => setIsEventModalOpen(true)}
               onDataUpdated={refreshEventData}
+              onLogout={handleLogout}
             />
           )
         ) : (
@@ -137,6 +180,13 @@ export default function App() {
         onSave={handleSaveEvent}
       />
 
+      {/* Modal de Autenticación Administrativa */}
+      <AdminAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={handleAuthSuccess}
+      />
+
       {/* Pie de Página Institucional UdeA */}
       <footer className="udea-footer">
         <div className="container footer-content">
@@ -146,8 +196,8 @@ export default function App() {
             <p className="footer-addr">Calle 67 # 53 - 108, Medellín, Colombia • Tel: +57 (604) 219 6000</p>
           </div>
           <div className="footer-meta">
-            <span className="secure-badge">✓ Sistema Oficial de Asistencia y Preguntas en Tiempo Real</span>
-            <span className="version-tag">Versión 2.0 Web • Costo $0 Cloud</span>
+            <span className="secure-badge">🔒 Acceso Administrativo Protegido con Cifrado SHA-256</span>
+            <span className="version-tag">Versión 2.1 Web • Costo $0 Cloud</span>
           </div>
         </div>
       </footer>

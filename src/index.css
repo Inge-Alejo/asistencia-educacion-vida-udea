@@ -2218,3 +2218,221 @@ input:checked + .slider::before {
     align-items: flex-start;
   }
 }
+
+/* ==========================================================================
+   ESTILOS DE SEGURIDAD Y MODAL DE AUTENTICACIÓN
+   ========================================================================== */
+.auth-modal-dialog {
+  max-width: 460px;
+  border-top: 4px solid var(--udea-green);
+  text-align: center;
+}
+
+.auth-modal-header {
+  padding: 2rem 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auth-icon-circle {
+  width: 60px;
+  height: 60px;
+  background-color: var(--udea-green-subtle);
+  color: var(--udea-green);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.auth-title {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--udea-green-dark);
+}
+
+.auth-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.auth-modal-body {
+  padding: 1rem 2rem 2rem;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field {
+  padding-right: 2.75rem !important;
+  font-size: 1rem;
+}
+
+.btn-toggle-eye {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-toggle-eye:hover {
+  color: var(--text-main);
+}
+
+.auth-security-notice {
+  background-color: #F8FAF9;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.auth-actions-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.btn-admin-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: rgba(220, 38, 38, 0.15);
+  color: #FCA5A5;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-admin-logout:hover {
+  background-color: #DC2626;
+  color: #FFFFFF;
+}
+
+.btn-logout-action {
+  color: #DC2626 !important;
+  border-color: #FCA5A5 !important;
+}
+
+.btn-logout-action:hover {
+  background-color: #FEF2F2 !important;
+}
+
+/* Selector de Dominio y Copiar Enlace QR */
+.qr-domain-switcher {
+  background-color: #F8FAF9;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.domain-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.domain-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-domain-choice {
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: var(--text-main);
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-domain-choice.active {
+  background-color: var(--udea-green);
+  border-color: var(--udea-green);
+  color: #FFFFFF;
+}
+
+.qr-link-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #F8FAF9;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  max-width: 320px;
+}
+
+.btn-copy-link {
+  background-color: var(--udea-green);
+  color: #FFFFFF;
+  border: none;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-copy-link:hover {
+  background-color: var(--udea-green-light);
+}
+
+/* Formulario de Cambio de Contraseña */
+.pwd-change-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.pwd-status-msg {
+  font-size: 0.8rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+.pwd-status-msg.success {
+  background-color: var(--badge-success-bg);
+  color: var(--badge-success-text);
+}
+
+.pwd-status-msg.error {
+  background-color: var(--badge-error-bg);
+  color: var(--badge-error-text);
+}
+
