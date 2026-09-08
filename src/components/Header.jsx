@@ -59,18 +59,20 @@ export default function Header({
               className={`nav-tab-btn ${currentView === 'attendee' ? 'active' : ''}`}
               onClick={() => onNavigateView('attendee')}
             >
-              <UserCheck size={18} />
-              <span>Portal del Asistente (Móvil/QR)</span>
+              <UserCheck size={16} />
+              <span className="tab-text-full">Portal del Asistente (Móvil/QR)</span>
+              <span className="tab-text-compact">Asistente</span>
             </button>
 
             <button
               className={`nav-tab-btn ${currentView === 'admin' ? 'active' : ''}`}
               onClick={() => onNavigateView('admin')}
             >
-              {isAdmin ? <Settings size={18} /> : <Lock size={18} />}
-              <span>
+              {isAdmin ? <Settings size={16} /> : <Lock size={16} />}
+              <span className="tab-text-full">
                 Panel de Administración {isAdmin ? '' : '(Protegido)'}
               </span>
+              <span className="tab-text-compact">Admin</span>
             </button>
           </div>
 
@@ -81,8 +83,8 @@ export default function Header({
                 onClick={onLogoutAdmin}
                 title="Cerrar sesión de administración"
               >
-                <LogOut size={16} />
-                <span>Cerrar Sesión Admin</span>
+                <LogOut size={15} />
+                <span className="logout-btn-text">Salir</span>
               </button>
             )}
 
@@ -91,8 +93,8 @@ export default function Header({
               onClick={onOpenQRModal}
               title="Proyectar Código QR del Evento en pantalla grande"
             >
-              <QrCode size={18} />
-              <span>Proyectar QR del Evento</span>
+              <QrCode size={16} />
+              <span className="proj-btn-text">Proyectar QR</span>
             </button>
           </div>
         </div>

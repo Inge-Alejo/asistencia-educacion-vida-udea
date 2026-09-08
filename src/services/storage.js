@@ -246,9 +246,33 @@ export function saveEvent(eventData) {
   return eventData;
 }
 
-export function deleteEvent(eventId) {
+export async function deleteEvent(eventId) {
+  // 1. Eliminar evento de la lista
   const events = getEvents().filter(e => e.id !== eventId);
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(events));
+
+  // 2. Purgar asistencias del evento
+  const remainingAtt = getAttendance().filter(a => a.eventoId !== eventId);
+  localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(remainingAtt));
+
+  // 3. Purgar preguntas del evento
+  const remainingQ = getQuestions().filter(q => q.eventoId !== eventId);
+  localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(remainingQ));
+
+  // 4. Purgar evaluaciones de ponentes del evento
+  const remainingEval = getEvaluations().filter(ev => ev.eventoId !== eventId);
+  localStorage.setItem(STORAGE_KEY_EVALUATIONS, JSON.stringify(remainingEval));
+
+  // 5. Purgar satisfacción del evento
+  const remainingSat = getSatisfaction().filter(s => s.eventoId !== eventId);
+  localStorage.setItem(STORAGE_KEY_SATISFACTION, JSON.stringify(remainingSat));
+
+  // 6. Limpiar sesión en caché del asistente para este evento
+  try {
+    localStorage.removeItem(`udea_session_attendee_${eventId}`);
+  } catch (e) {}
+
+  return events;
 }
 
 // Métodos de Asistencia
@@ -287,6 +311,21 @@ export async function recordAttendance(record) {
   }
 
   return { success: true, record: newRecord };
+}
+
+export async function deleteAttendance(attId) {
+  const list = getAttendance().filter(a => a.id !== attId);
+  localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(list));
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'asistencias', attId));
+    } catch (err) {
+      console.warn('Firestore deleteDoc attendance notice:', err);
+    }
+  }
+
+  return list;
 }
 
 // Métodos de Preguntas en Vivo
@@ -406,6 +445,21 @@ export async function recordEvaluation(evalData) {
   return newEval;
 }
 
+export async function deleteEvaluation(evalId) {
+  const list = getEvaluations().filter(ev => ev.id !== evalId);
+  localStorage.setItem(STORAGE_KEY_EVALUATIONS, JSON.stringify(list));
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'evaluaciones', evalId));
+    } catch (err) {
+      console.warn('Firestore eval delete notice:', err);
+    }
+  }
+
+  return list;
+}
+
 // Métodos de Satisfacción General
 export function getSatisfaction(eventId = null) {
   initStorage();
@@ -436,6 +490,21 @@ export async function recordSatisfaction(satData) {
   }
 
   return newSat;
+}
+
+export async function deleteSatisfaction(satId) {
+  const list = getSatisfaction().filter(s => s.id !== satId);
+  localStorage.setItem(STORAGE_KEY_SATISFACTION, JSON.stringify(list));
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'satisfaccion', satId));
+    } catch (err) {
+      console.warn('Firestore sat delete notice:', err);
+    }
+  }
+
+  return list;
 }
 
 // Suscripción en Tiempo Real Multi-dispositivo (Firestore Snapshot + Local Fallback)

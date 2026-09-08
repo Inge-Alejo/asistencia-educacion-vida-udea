@@ -9,6 +9,7 @@ import {
   initStorage,
   getEvents,
   saveEvent,
+  deleteEvent,
   getAttendance,
   getQuestions,
   getEvaluations,
@@ -97,6 +98,22 @@ export default function App() {
     refreshEventData();
   };
 
+  // Manejar eliminación del evento actual
+  const handleDeleteCurrentEvent = async () => {
+    if (!currentEvent) return;
+    const confirmMessage = `¿Está seguro de que desea eliminar permanentemente el evento "${currentEvent.titulo}"?\n\nEsta acción purgará de forma irreversible todas las asistencias registradas, preguntas de los participantes, calificaciones de ponentes y métricas asociadas.`;
+    if (window.confirm(confirmMessage)) {
+      await deleteEvent(currentEvent.id);
+      const updated = getEvents();
+      setEvents(updated);
+      if (updated.length > 0) {
+        setCurrentEvent(updated[0]);
+      } else {
+        setCurrentEvent(null);
+      }
+    }
+  };
+
   // Navegación segura entre vistas
   const handleNavigateView = (viewName) => {
     if (viewName === 'admin') {
@@ -157,6 +174,7 @@ export default function App() {
               satisfaccion={satisfaccion}
               onOpenQRModal={() => setIsQRModalOpen(true)}
               onOpenNewEventModal={() => setIsEventModalOpen(true)}
+              onDeleteEvent={handleDeleteCurrentEvent}
               onDataUpdated={refreshEventData}
               onLogout={handleLogout}
             />
@@ -202,8 +220,8 @@ export default function App() {
             <p className="footer-addr">Calle 67 # 53 - 108, Medellín, Colombia • Tel: +57 (604) 219 6000</p>
           </div>
           <div className="footer-meta">
-            <span className="secure-badge">🔒 Acceso Administrativo Protegido con Cifrado SHA-256</span>
-            <span className="version-tag">Versión 2.1 Web • Costo $0 Cloud</span>
+            <span className="secure-badge">🔒 Acceso Administrativo Protegido</span>
+            <span className="version-tag">Versión 2.1 Web Institucional</span>
           </div>
         </div>
       </footer>

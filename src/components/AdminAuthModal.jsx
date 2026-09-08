@@ -82,7 +82,7 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }) {
 
           <div className="auth-security-notice">
             <p>
-              🔒 <strong>Acceso Seguro Cifrado:</strong> Esta sesión administrativa está protegida con cifrado criptográfico SHA-256.
+              🔒 <strong>Acceso Seguro Institucional:</strong> Esta sesión administrativa está protegida y monitoreada para personal autorizado de la Facultad de Medicina.
             </p>
           </div>
 

@@ -5,7 +5,15 @@ import {
   Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut
 } from 'lucide-react';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
-import { toggleQuestionAnswered, toggleQuestionFeatured, deleteQuestion, isFirebaseConfigured } from '../services/storage';
+import {
+  toggleQuestionAnswered,
+  toggleQuestionFeatured,
+  deleteQuestion,
+  deleteAttendance,
+  deleteEvaluation,
+  deleteSatisfaction,
+  isFirebaseConfigured
+} from '../services/storage';
 import { changeAdminPassword } from '../services/auth';
 
 export default function AdminPanel({
@@ -16,6 +24,7 @@ export default function AdminPanel({
   satisfaccion,
   onOpenQRModal,
   onOpenNewEventModal,
+  onDeleteEvent,
   onDataUpdated,
   onLogout
 }) {
@@ -120,6 +129,16 @@ export default function AdminPanel({
             <Download size={16} />
             <span>Descargar Excel (.xlsx)</span>
           </button>
+          {onDeleteEvent && (
+            <button
+              className="btn-danger-outline"
+              onClick={onDeleteEvent}
+              title="Eliminar permanentemente este evento y todos sus registros asociados"
+            >
+              <Trash2 size={16} />
+              <span>Eliminar Evento</span>
+            </button>
+          )}
           {onLogout && (
             <button className="btn-secondary btn-logout-action" onClick={onLogout} title="Cerrar sesión de administrador">
               <LogOut size={16} />
@@ -276,12 +295,13 @@ export default function AdminPanel({
                   <th>Placa Vehicular</th>
                   <th>Geolocalización GPS</th>
                   <th>Hora Registro</th>
+                  <th>Acción</th>
                 </tr>
               </thead>
               <tbody>
                 {asistenciasFiltradas.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="empty-table-row">
+                    <td colSpan="9" className="empty-table-row">
                       No se encontraron registros de asistencia que coincidan con la búsqueda.
                     </td>
                   </tr>
@@ -326,6 +346,20 @@ export default function AdminPanel({
                         )}
                       </td>
                       <td className="time-cell">{a.fechaRegistro}</td>
+                      <td>
+                        <button
+                          className="btn-table-delete"
+                          title={`Eliminar asistencia de ${a.nombreCompleto}`}
+                          onClick={async () => {
+                            if (window.confirm(`¿Eliminar el registro de asistencia de "${a.nombreCompleto}" (Doc: ${a.documento})?`)) {
+                              await deleteAttendance(a.id);
+                              if (onDataUpdated) onDataUpdated();
+                            }
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -504,9 +538,23 @@ export default function AdminPanel({
                         evals
                           .filter(e => e.comentario)
                           .map((e, idx) => (
-                            <div key={idx} className="comment-quote">
-                              "{e.comentario}"
-                              <span className="comment-date">— {e.fecha}</span>
+                            <div key={e.id || idx} className="comment-quote-row">
+                              <div className="comment-quote">
+                                "{e.comentario}"
+                                <span className="comment-date">— {e.fecha} (Dominio: {e.dominio} ★ | Claridad: {e.claridad} ★ | Aplicabilidad: {e.aplicabilidad} ★)</span>
+                              </div>
+                              <button
+                                className="btn-action-pill delete"
+                                title="Eliminar esta valoración del ponente"
+                                onClick={async () => {
+                                  if (window.confirm('¿Desea eliminar permanentemente esta valoración?')) {
+                                    await deleteEvaluation(e.id);
+                                    if (onDataUpdated) onDataUpdated();
+                                  }
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             </div>
                           ))
                       )}
@@ -549,9 +597,23 @@ export default function AdminPanel({
                 satisfaccion
                   .filter(s => s.sugerencias)
                   .map((s, idx) => (
-                    <div key={idx} className="suggestion-item">
-                      <p className="suggestion-text">"{s.sugerencias}"</p>
-                      <span className="suggestion-meta">Recibida el {s.fecha} • NPS: {s.npsRecomendacion}/10</span>
+                    <div key={s.id || idx} className="suggestion-item-row">
+                      <div className="suggestion-item">
+                        <p className="suggestion-text">"{s.sugerencias}"</p>
+                        <span className="suggestion-meta">Recibida el {s.fecha} • NPS: {s.npsRecomendacion}/10 • Objetivos: {s.cumplimientoObjetivos}/5</span>
+                      </div>
+                      <button
+                        className="btn-action-pill delete"
+                        title="Eliminar este registro de satisfacción"
+                        onClick={async () => {
+                          if (window.confirm('¿Desea eliminar permanentemente esta respuesta de satisfacción?')) {
+                            await deleteSatisfaction(s.id);
+                            if (onDataUpdated) onDataUpdated();
+                          }
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   ))
               )}
