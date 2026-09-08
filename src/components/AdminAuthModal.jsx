@@ -80,7 +80,10 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }) {
 
           <div className="auth-security-notice">
             <p>
-              🔒 <strong>Seguridad Institucional:</strong> Su sesión permanecerá protegida mientras mantenga la ventana abierta y expirará automáticamente al cerrarla.
+              🔒 <strong>Clave inicial institucional:</strong> <code>MedicinaUdeA2026*</code> (o <code>UdeA2026</code>)
+            </p>
+            <p style={{ marginTop: '0.35rem', fontSize: '0.72rem', opacity: 0.85 }}>
+              Puedes cambiar esta contraseña en cualquier momento desde el panel administrativo.
             </p>
           </div>
 

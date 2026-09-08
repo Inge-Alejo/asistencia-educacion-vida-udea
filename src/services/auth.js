@@ -5,9 +5,17 @@
 const AUTH_STORAGE_KEY = 'udea_admin_session_auth_v1';
 const CUSTOM_HASH_KEY = 'udea_admin_custom_hash_v1';
 
-// Hash SHA-256 por defecto para la clave inicial: 'MedicinaUdeA2026*'
-// Generado con SHA-256: 'MedicinaUdeA2026*'
-const DEFAULT_ADMIN_HASH = '5a6117565b938ef680c2f6026a090e5f7200ef65e900c4391ef42fae9ff76865';
+// Hashes SHA-256 autorizados por defecto para la clave inicial:
+// 'MedicinaUdeA2026*' -> 2c6788c8b11fe826f18c48a868619f822dc33b6821011961d259c3140dedd008
+// 'MedicinaUdeA2026'  -> 60e5eb06b7a141514188b9c0ac999c1edb7b0fc6fab051623e041467548427d7
+// 'UdeA2026'          -> 71882182ed4b07d998c5e9ebcfbb3918b88aaf67c44fd3127b47faa52be7aada
+// 'udea2026'          -> eacec5801f2e2c7c7d8cc7647aac2a096c7440015f602c715da78fabc78a5eb9
+const AUTHORIZED_DEFAULT_HASHES = [
+  '2c6788c8b11fe826f18c48a868619f822dc33b6821011961d259c3140dedd008', // MedicinaUdeA2026*
+  '60e5eb06b7a141514188b9c0ac999c1edb7b0fc6fab051623e041467548427d7', // MedicinaUdeA2026
+  '71882182ed4b07d998c5e9ebcfbb3918b88aaf67c44fd3127b47faa52be7aada', // UdeA2026
+  'eacec5801f2e2c7c7d8cc7647aac2a096c7440015f602c715da78fabc78a5eb9'  // udea2026
+];
 
 // Función para calcular SHA-256 usando Web Crypto API nativa del navegador
 async function sha256(message) {
@@ -30,22 +38,29 @@ export function isAdminAuthenticated() {
 export async function authenticateAdmin(password) {
   if (!password) return { success: false, message: 'Por favor ingrese la contraseña.' };
 
-  const inputHash = await sha256(password.trim());
+  const trimmed = password.trim();
+  const inputHash = await sha256(trimmed);
 
   // Si se configuró una variable de entorno en Vercel (VITE_ADMIN_PASSWORD)
   const envPassword = import.meta.env.VITE_ADMIN_PASSWORD;
-  if (envPassword && password.trim() === envPassword.trim()) {
+  if (envPassword && trimmed === envPassword.trim()) {
     sessionStorage.setItem(AUTH_STORAGE_KEY, 'true');
     return { success: true };
   }
 
-  // Comprobar contra clave personalizada guardada localmente
+  // Comprobar contra clave personalizada guardada localmente por el usuario
   const customHash = localStorage.getItem(CUSTOM_HASH_KEY);
-  const targetHash = customHash || DEFAULT_ADMIN_HASH;
-
-  if (inputHash === targetHash) {
-    sessionStorage.setItem(AUTH_STORAGE_KEY, 'true');
-    return { success: true };
+  if (customHash) {
+    if (inputHash === customHash) {
+      sessionStorage.setItem(AUTH_STORAGE_KEY, 'true');
+      return { success: true };
+    }
+  } else {
+    // Si no ha configurado una personalizada, validar contra las iniciales autorizadas
+    if (AUTHORIZED_DEFAULT_HASHES.includes(inputHash)) {
+      sessionStorage.setItem(AUTH_STORAGE_KEY, 'true');
+      return { success: true };
+    }
   }
 
   return { success: false, message: 'Contraseña incorrecta. Acceso restringido al personal administrativo.' };
