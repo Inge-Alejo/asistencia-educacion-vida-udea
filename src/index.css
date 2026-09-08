@@ -3065,6 +3065,75 @@ input:checked + .slider::before {
   box-shadow: 0 2px 5px rgba(0,0,0,0.12);
 }
 
+/* Cláusula Legal de Habeas Data UdeA (Ley 1581 de 2012) */
+.habeas-data-card {
+  margin-top: 1.25rem;
+  background-color: #F0FDF4;
+  border: 1.5px solid #BBF7D0;
+  border-radius: var(--radius-md);
+  padding: 1rem 1.15rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.habeas-data-card:hover {
+  border-color: var(--udea-green);
+  background-color: #ECFDF5;
+}
+
+.habeas-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.habeas-checkbox {
+  width: 19px;
+  height: 19px;
+  margin-top: 0.15rem;
+  accent-color: var(--udea-green);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.habeas-text {
+  font-size: 0.81rem;
+  color: #14532D;
+  line-height: 1.48;
+}
+
+.habeas-text strong {
+  color: var(--udea-green-dark);
+}
+
+/* Indicador de Estado de Base de Datos Cloud vs Local */
+.db-status-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  letter-spacing: 0.02em;
+}
+
+.db-status-pill.cloud {
+  background-color: #ECFDF5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+}
+
+.db-status-pill.local {
+  background-color: #F8FAFC;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+}
+
+
+
 
 
 

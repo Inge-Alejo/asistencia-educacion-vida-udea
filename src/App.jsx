@@ -12,7 +12,8 @@ import {
   getAttendance,
   getQuestions,
   getEvaluations,
-  getSatisfaction
+  getSatisfaction,
+  subscribeToEventData
 } from './services/storage';
 import { isAdminAuthenticated, logoutAdmin } from './services/auth';
 
@@ -80,6 +81,11 @@ export default function App() {
 
   useEffect(() => {
     refreshEventData();
+    if (!currentEvent?.id) return;
+    const unsubscribe = subscribeToEventData(currentEvent.id, () => {
+      refreshEventData();
+    });
+    return () => unsubscribe();
   }, [currentEvent]);
 
   // Manejar creación o edición de evento

@@ -47,7 +47,8 @@ export default function AttendeeView({
     correo: '',
     telefono: '',
     vinculacion: 'Estudiante Pregrado Medicina UdeA',
-    placaVehiculo: ''
+    placaVehiculo: '',
+    habeasDataAceptado: false
   });
 
   const [asistenciaRegistrada, setAsistenciaRegistrada] = useState(false);
@@ -182,7 +183,7 @@ export default function AttendeeView({
   };
 
   // Envío del Formulario de Asistencia
-  const handleRegistrarAsistencia = (e) => {
+  const handleRegistrarAsistencia = async (e) => {
     e.preventDefault();
     setErrorAsistencia('');
 
@@ -196,6 +197,11 @@ export default function AttendeeView({
       return;
     }
 
+    if (!formData.habeasDataAceptado) {
+      setErrorAsistencia('Debe autorizar el tratamiento de datos personales conforme a la Ley 1581 de 2012 para registrar su asistencia.');
+      return;
+    }
+
     const payload = {
       eventoId: evento.id,
       tipoDocumento: formData.tipoDocumento,
@@ -205,6 +211,8 @@ export default function AttendeeView({
       telefono: formData.telefono.trim(),
       vinculacion: formData.vinculacion,
       placaVehiculo: evento.habilitarPlacaVehiculo ? formData.placaVehiculo.trim().toUpperCase() : '',
+      habeasDataAceptado: true,
+      fechaHabeasData: new Date().toISOString(),
       geolocalizacion: {
         latitud: geoState.latitud,
         longitud: geoState.longitud,
@@ -214,7 +222,7 @@ export default function AttendeeView({
       }
     };
 
-    const res = recordAttendance(payload);
+    const res = await recordAttendance(payload);
     if (res.success) {
       setAsistenciaRegistrada(true);
       setCodigoComprobante(res.record.id);
@@ -236,11 +244,11 @@ export default function AttendeeView({
   };
 
   // Envío de Preguntas al Ponente
-  const handleEnviarPregunta = (e) => {
+  const handleEnviarPregunta = async (e) => {
     e.preventDefault();
     if (!preguntaForm.textoPregunta.trim()) return;
 
-    addQuestion({
+    await addQuestion({
       eventoId: evento.id,
       ponenteId: preguntaForm.ponenteId,
       autor: preguntaForm.esAnonimo ? 'Asistente Anónimo' : (formData.nombreCompleto || preguntaForm.autor || 'Asistente'),
@@ -254,9 +262,9 @@ export default function AttendeeView({
   };
 
   // Envío de Evaluación individual de un Ponente
-  const handleCalificarPonente = (ponenteId) => {
+  const handleCalificarPonente = async (ponenteId) => {
     const data = evaluacionesPonentes[ponenteId] || { dominio: 5, claridad: 5, aplicabilidad: 5, comentario: '' };
-    recordEvaluation({
+    await recordEvaluation({
       eventoId: evento.id,
       ponenteId,
       dominio: data.dominio || 5,
@@ -270,9 +278,9 @@ export default function AttendeeView({
   };
 
   // Envío de Encuesta de Satisfacción General
-  const handleEnviarSatisfaccion = (e) => {
+  const handleEnviarSatisfaccion = async (e) => {
     e.preventDefault();
-    recordSatisfaction({
+    await recordSatisfaction({
       eventoId: evento.id,
       cumplimientoObjetivos: satisfaccionForm.cumplimiento,
       organizacionLogistica: satisfaccionForm.logistica,
@@ -717,6 +725,22 @@ export default function AttendeeView({
                     </span>
                   </div>
                 )}
+              </div>
+
+              {/* AUTORIZACIÓN DE TRATAMIENTO DE DATOS PERSONALES (HABEAS DATA - LEY 1581 DE 2012) */}
+              <div className="habeas-data-card">
+                <label className="habeas-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={formData.habeasDataAceptado || false}
+                    onChange={(e) => handleFieldChange('habeasDataAceptado', e.target.checked)}
+                    className="habeas-checkbox"
+                    required
+                  />
+                  <span className="habeas-text">
+                    <strong>Autorización de Tratamiento de Datos Personales (Ley 1581 de 2012):</strong> Autorizo de manera voluntaria, previa y explícita a la <strong>Universidad de Antioquia - Facultad de Medicina</strong> para recolectar, almacenar y tratar mis datos personales con fines de registro de asistencia, emisión de certificaciones oficiales y gestión de eventos de Educación a lo Largo de la Vida, conforme a la política institucional de Habeas Data UdeA. <span className="req">*</span>
+                  </span>
+                </label>
               </div>
 
               {errorAsistencia && (

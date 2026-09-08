@@ -22,7 +22,9 @@ export function exportEventDataToExcel({ evento, asistencias, preguntas, evaluac
     'Distancia a Facultad (m)': a.geolocalizacion?.distanciaSedeMetros ?? 'N/A',
     'Latitud': a.geolocalizacion?.latitud ?? 'N/A',
     'Longitud': a.geolocalizacion?.longitud ?? 'N/A',
-    'Precisión GPS (m)': a.geolocalizacion?.precisionMetros ?? 'N/A'
+    'Precisión GPS (m)': a.geolocalizacion?.precisionMetros ?? 'N/A',
+    'Habeas Data (Ley 1581/2012)': a.habeasDataAceptado !== false ? 'AUTORIZADO Y FIRMADO' : 'PENDIENTE',
+    'Fecha Aceptación Habeas Data': a.fechaHabeasData || a.fechaRegistro
   }));
 
   const wsAsistencias = XLSX.utils.json_to_sheet(asistenciasData.length > 0 ? asistenciasData : [

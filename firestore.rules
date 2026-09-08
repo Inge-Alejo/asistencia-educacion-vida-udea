@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función de validación de campos mínimos requeridos para asistencia
+    function isValidAttendance() {
+      return request.resource.data.documento is string &&
+             request.resource.data.documento.size() >= 4 &&
+             request.resource.data.nombreCompleto is string &&
+             request.resource.data.correo is string &&
+             request.resource.data.eventoId is string;
+    }
+
+    // Colección de Asistencias:
+    // Los asistentes pueden registrar su asistencia (create), pero NO pueden listar ni leer
+    // las cédulas, teléfonos ni correos de los demás participantes.
+    match /asistencias/{asistenciaId} {
+      allow create: if isValidAttendance();
+      // Lectura y borrado solo permitido a administradores autorizados
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // Colección de Preguntas a Ponentes:
+    // Abierto para crear preguntas y leer preguntas del auditorio en vivo.
+    // Solo administradores o moderadores pueden marcar respondida, destacar o eliminar.
+    match /preguntas/{preguntaId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null;
+    }
+
+    // Colección de Evaluaciones de Ponentes:
+    // Los asistentes pueden calificar (create), pero solo el comité académico puede ver los consolidados.
+    match /evaluaciones/{evalId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // Colección de Encuestas de Satisfacción:
+    // Creación abierta, lectura restringida a administradores.
+    match /satisfaccion/{satId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // Colección de Eventos Académicos:
+    // Lectura pública de eventos disponibles; creación y edición restringida a administradores.
+    match /eventos/{eventoId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

@@ -5,7 +5,7 @@ import {
   Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut
 } from 'lucide-react';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
-import { toggleQuestionAnswered, toggleQuestionFeatured, deleteQuestion } from '../services/storage';
+import { toggleQuestionAnswered, toggleQuestionFeatured, deleteQuestion, isFirebaseConfigured } from '../services/storage';
 import { changeAdminPassword } from '../services/auth';
 
 export default function AdminPanel({
@@ -97,6 +97,9 @@ export default function AdminPanel({
             <h2 className="admin-heading">Panel de Control y Analítica en Tiempo Real</h2>
             <span className="live-pill">
               <span className="live-dot"></span> Sincronizado en Vivo
+            </span>
+            <span className={`db-status-pill ${isFirebaseConfigured() ? 'cloud' : 'local'}`}>
+              {isFirebaseConfigured() ? '☁️ Cloud Firestore Activo' : '💾 Modo Local de Contingencia'}
             </span>
           </div>
           <p className="admin-subheading">

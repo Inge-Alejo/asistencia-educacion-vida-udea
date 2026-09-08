@@ -1,5 +1,21 @@
 // Servicio de Almacenamiento Local y Estado Persistente
 // Diseñado para la Facultad de Medicina - Universidad de Antioquia
+// Soporte híbrido: Cloud Firestore (en tiempo real) + LocalStorage (fallback de contingencia)
+
+import {
+  isFirebaseConfigured,
+  db,
+  collection,
+  doc,
+  setDoc,
+  query,
+  where,
+  onSnapshot,
+  updateDoc,
+  deleteDoc
+} from './firebase';
+
+export { isFirebaseConfigured };
 
 const STORAGE_KEY_EVENTS = 'udea_med_events_v1';
 const STORAGE_KEY_ATTENDANCE = 'udea_med_attendance_v1';
@@ -246,7 +262,7 @@ export function getAttendance(eventId = null) {
   }
 }
 
-export function recordAttendance(record) {
+export async function recordAttendance(record) {
   const list = getAttendance();
   // Evitar duplicados por cédula y evento
   const existe = list.find(a => a.eventoId === record.eventoId && a.documento === record.documento);
@@ -260,6 +276,16 @@ export function recordAttendance(record) {
   };
   list.unshift(newRecord);
   localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(list));
+
+  // Sincronización en la nube con Firestore si está configurado
+  if (isFirebaseConfigured() && db) {
+    try {
+      await setDoc(doc(db, 'asistencias', newRecord.id), newRecord);
+    } catch (err) {
+      console.warn('Registro local exitoso. Firestore cloud sync notice:', err);
+    }
+  }
+
   return { success: true, record: newRecord };
 }
 
@@ -274,7 +300,7 @@ export function getQuestions(eventId = null) {
   }
 }
 
-export function addQuestion(qData) {
+export async function addQuestion(qData) {
   const list = getQuestions();
   const newQ = {
     ...qData,
@@ -285,32 +311,66 @@ export function addQuestion(qData) {
   };
   list.unshift(newQ);
   localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(list));
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await setDoc(doc(db, 'preguntas', newQ.id), newQ);
+    } catch (err) {
+      console.warn('Pregunta local guardada. Firestore sync notice:', err);
+    }
+  }
+
   return newQ;
 }
 
-export function toggleQuestionAnswered(qId) {
+export async function toggleQuestionAnswered(qId) {
   const list = getQuestions();
   const item = list.find(q => q.id === qId);
   if (item) {
     item.respondida = !item.respondida;
     localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(list));
+
+    if (isFirebaseConfigured() && db) {
+      try {
+        await updateDoc(doc(db, 'preguntas', qId), { respondida: item.respondida });
+      } catch (err) {
+        console.warn('Firestore updateDoc notice:', err);
+      }
+    }
   }
   return list;
 }
 
-export function toggleQuestionFeatured(qId) {
+export async function toggleQuestionFeatured(qId) {
   const list = getQuestions();
   const item = list.find(q => q.id === qId);
   if (item) {
     item.destacada = !item.destacada;
     localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(list));
+
+    if (isFirebaseConfigured() && db) {
+      try {
+        await updateDoc(doc(db, 'preguntas', qId), { destacada: item.destacada });
+      } catch (err) {
+        console.warn('Firestore updateDoc notice:', err);
+      }
+    }
   }
   return list;
 }
 
-export function deleteQuestion(qId) {
+export async function deleteQuestion(qId) {
   const list = getQuestions().filter(q => q.id !== qId);
   localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(list));
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'preguntas', qId));
+    } catch (err) {
+      console.warn('Firestore deleteDoc notice:', err);
+    }
+  }
+
   return list;
 }
 
@@ -325,7 +385,7 @@ export function getEvaluations(eventId = null) {
   }
 }
 
-export function recordEvaluation(evalData) {
+export async function recordEvaluation(evalData) {
   const list = getEvaluations();
   const newEval = {
     ...evalData,
@@ -334,6 +394,15 @@ export function recordEvaluation(evalData) {
   };
   list.unshift(newEval);
   localStorage.setItem(STORAGE_KEY_EVALUATIONS, JSON.stringify(list));
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await setDoc(doc(db, 'evaluaciones', newEval.id), newEval);
+    } catch (err) {
+      console.warn('Firestore eval notice:', err);
+    }
+  }
+
   return newEval;
 }
 
@@ -348,7 +417,7 @@ export function getSatisfaction(eventId = null) {
   }
 }
 
-export function recordSatisfaction(satData) {
+export async function recordSatisfaction(satData) {
   const list = getSatisfaction();
   const newSat = {
     ...satData,
@@ -357,7 +426,64 @@ export function recordSatisfaction(satData) {
   };
   list.unshift(newSat);
   localStorage.setItem(STORAGE_KEY_SATISFACTION, JSON.stringify(list));
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await setDoc(doc(db, 'satisfaccion', newSat.id), newSat);
+    } catch (err) {
+      console.warn('Firestore sat notice:', err);
+    }
+  }
+
   return newSat;
+}
+
+// Suscripción en Tiempo Real Multi-dispositivo (Firestore Snapshot + Local Fallback)
+export function subscribeToEventData(eventId, onUpdate) {
+  if (!eventId) return () => {};
+
+  if (!isFirebaseConfigured() || !db) {
+    // Si no hay Firebase activo, escuchar eventos locales entre pestañas
+    const handler = (e) => {
+      if ([STORAGE_KEY_ATTENDANCE, STORAGE_KEY_QUESTIONS, STORAGE_KEY_EVALUATIONS, STORAGE_KEY_SATISFACTION].includes(e.key)) {
+        if (onUpdate) onUpdate();
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }
+
+  try {
+    const unsubAtt = onSnapshot(query(collection(db, 'asistencias'), where('eventoId', '==', eventId)), (snapshot) => {
+      const cloudList = [];
+      snapshot.forEach(docSnap => cloudList.push(docSnap.data()));
+      if (cloudList.length > 0) {
+        const localOther = getAttendance().filter(a => a.eventoId !== eventId);
+        const combined = [...cloudList, ...localOther];
+        localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(combined));
+        if (onUpdate) onUpdate();
+      }
+    }, (err) => console.warn('Firestore asistencias snapshot:', err));
+
+    const unsubQ = onSnapshot(query(collection(db, 'preguntas'), where('eventoId', '==', eventId)), (snapshot) => {
+      const cloudQ = [];
+      snapshot.forEach(docSnap => cloudQ.push(docSnap.data()));
+      if (cloudQ.length > 0) {
+        const localOther = getQuestions().filter(q => q.eventoId !== eventId);
+        const combined = [...cloudQ, ...localOther];
+        localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(combined));
+        if (onUpdate) onUpdate();
+      }
+    }, (err) => console.warn('Firestore preguntas snapshot:', err));
+
+    return () => {
+      unsubAtt();
+      unsubQ();
+    };
+  } catch (err) {
+    console.warn('Error setting up Firestore listener:', err);
+    return () => {};
+  }
 }
 
 // Función matemática de Haversine para cálculo de distancia GPS exacta en metros
