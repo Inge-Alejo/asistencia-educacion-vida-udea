@@ -2714,4 +2714,115 @@ input:checked + .slider::before {
   margin-bottom: 1rem;
 }
 
+/* ==========================================================================
+   ESTILOS ADICIONALES DE GEOLOCALIZACIÓN Y MANEJO INTERACTIVO DE ERRORES
+   ========================================================================== */
+.geo-tech-specs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background-color: #FFFFFF;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  margin-top: 0.5rem;
+}
+
+.geo-btn-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+@media (max-width: 600px) {
+  .geo-btn-cluster {
+    align-items: stretch;
+    width: 100%;
+  }
+}
+
+.btn-sim-sede {
+  background-color: #F8FAF9;
+  border: 1px dashed var(--udea-green);
+  color: var(--udea-green-dark);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-sim-sede:hover {
+  background-color: var(--udea-green-subtle);
+}
+
+.btn-re-scan {
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-top: 0.4rem;
+}
+
+.btn-re-scan:hover {
+  background-color: #F1F5F9;
+  color: var(--text-main);
+}
+
+/* Banner Interactivo de Errores */
+.form-error-banner.interactive {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background-color: #FEF2F2;
+  border: 1.5px solid #F87171;
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+}
+
+.error-banner-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #991B1B;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.error-icon {
+  color: #DC2626;
+  flex-shrink: 0;
+}
+
+.btn-recover-attendance {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: #15803D;
+  color: #FFFFFF;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.btn-recover-attendance:hover {
+  background-color: #166534;
+}
+
+
 

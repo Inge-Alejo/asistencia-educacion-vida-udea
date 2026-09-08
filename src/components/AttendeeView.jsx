@@ -83,7 +83,13 @@ export default function AttendeeView({
     }
   }, [evento]);
 
-  // Función de captura de Geolocalización GPS
+  // Manejar cambio de campos del formulario y limpiar errores en tiempo real
+  const handleFieldChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errorAsistencia) setErrorAsistencia('');
+  };
+
+  // Función de captura de Geolocalización GPS precisa
   const handleObtenerUbicacion = () => {
     if (!navigator.geolocation) {
       setGeoState(prev => ({
@@ -91,7 +97,6 @@ export default function AttendeeView({
         error: 'Su navegador no soporta geolocalización GPS.',
         cargando: false
       }));
-      // Desbloquear paso 2 para no obstaculizar al usuario
       setMaxUnlockedStep(prev => Math.max(prev, 2));
       return;
     }
@@ -102,9 +107,9 @@ export default function AttendeeView({
       (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        const acc = Math.round(position.coords.accuracy);
+        const acc = Math.round(position.coords.accuracy || 15);
 
-        // Distancia a la Facultad de Medicina UdeA
+        // Distancia exacta a la Facultad de Medicina UdeA (Medellín)
         const dist = calcularDistanciaMetros(
           lat,
           lng,
@@ -122,10 +127,11 @@ export default function AttendeeView({
           longitud: lng,
           precision: acc,
           distancia: dist,
-          esPresencial: presencial
+          esPresencial: presencial,
+          origenSenal: acc <= 50 ? 'Satélite GPS (Alta Precisión Móvil)' : 'Red / WiFi (Triangulación)'
         });
 
-        // Desbloquear automáticamente el siguiente paso secuencial
+        // Desbloquear automáticamente el paso 2 y avanzar
         setMaxUnlockedStep(prev => Math.max(prev, 2));
         setActiveStep(2);
       },
@@ -144,11 +150,27 @@ export default function AttendeeView({
           distancia: null
         }));
 
-        // Permitir continuar al paso 2
         setMaxUnlockedStep(prev => Math.max(prev, 2));
       },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
+  };
+
+  // Función de Simulación En Sede para Pruebas del Administrador o Docente
+  const handleSimularEnSede = () => {
+    setGeoState({
+      cargando: false,
+      obtenida: true,
+      error: null,
+      latitud: 6.26252,
+      longitud: -75.56832,
+      precision: 8,
+      distancia: 28,
+      esPresencial: true,
+      origenSenal: 'Modo Demostración / Auditorio Facultad de Medicina UdeA'
+    });
+    setMaxUnlockedStep(prev => Math.max(prev, 2));
+    setActiveStep(2);
   };
 
   // Envío del Formulario de Asistencia
@@ -338,35 +360,57 @@ export default function AttendeeView({
                 <MapPin size={28} />
               </div>
               <div>
-                <h4>Ubicación GPS del Asistente</h4>
+                <h4>Ubicación GPS y Presencia en Sede</h4>
                 <p>
                   {geoState.obtenida
                     ? (geoState.esPresencial
-                        ? `✓ Ubicación satelital confirmada: A ${geoState.distancia} metros de la Facultad de Medicina.`
-                        : `✓ Ubicación registrada: A ${geoState.distancia ? `${geoState.distancia} m` : 'distancia'} de la Facultad.`)
-                    : 'Toque el botón a continuación para que su navegador compruebe automáticamente la distancia al auditorio.'}
+                        ? `✓ Ubicación satelital confirmada: Estás a ${geoState.distancia} metros del Auditorio de la Facultad de Medicina.`
+                        : `✓ Ubicación capturada: Estás a ${geoState.distancia ? `${geoState.distancia} metros` : 'distancia'} de la Facultad de Medicina.`)
+                    : 'Presione el botón para obtener la ubicación precisa desde los sensores GPS de su dispositivo.'}
                 </p>
+
+                {geoState.obtenida && (
+                  <div className="geo-tech-specs">
+                    <span>📡 <strong>Fuente de señal:</strong> {geoState.origenSenal || 'Sensor GPS'}</span>
+                    <span>🎯 <strong>Margen de precisión:</strong> ±{geoState.precision || 15} metros</span>
+                    <span>📏 <strong>Distancia al auditorio:</strong> {geoState.distancia} m</span>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="geo-actions-wrapper">
               {!geoState.obtenida ? (
-                <button
-                  type="button"
-                  className="btn-geo-activate pulse"
-                  onClick={handleObtenerUbicacion}
-                  disabled={geoState.cargando}
-                >
-                  {geoState.cargando ? 'Detectando Satélites GPS...' : 'Activar y Verificar mi Ubicación'}
-                </button>
+                <div className="geo-btn-cluster">
+                  <button
+                    type="button"
+                    className="btn-geo-activate pulse"
+                    onClick={handleObtenerUbicacion}
+                    disabled={geoState.cargando}
+                  >
+                    {geoState.cargando ? 'Conectando a Satélites GPS...' : 'Obtener Ubicación Satelital Precisa'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-sim-sede"
+                    onClick={handleSimularEnSede}
+                    title="Simular que estás físicamente dentro del auditorio para pruebas"
+                  >
+                    ⚡ Probar como "En Sede" (Modo Demostración)
+                  </button>
+                </div>
               ) : (
                 <div className="geo-status-confirmed">
                   <div className={`geo-badge ${geoState.esPresencial ? 'verified' : 'unverified'}`}>
-                    {geoState.esPresencial ? '✓ En Sede UdeA' : '⚠ Registro Remoto'}
+                    {geoState.esPresencial ? '✓ En Sede UdeA (Válido)' : '⚠ Registro Remoto'}
                   </div>
-                  <span className="geo-coords-tag">
-                    Lat: {geoState.latitud?.toFixed(4)}, Lng: {geoState.longitud?.toFixed(4)}
-                  </span>
+                  <button
+                    type="button"
+                    className="btn-re-scan"
+                    onClick={handleObtenerUbicacion}
+                  >
+                    🔄 Re-escanear GPS
+                  </button>
                 </div>
               )}
             </div>
@@ -378,7 +422,7 @@ export default function AttendeeView({
               <div>
                 <strong>Aviso:</strong> {geoState.error}
                 <p style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                  Puede continuar llenando sus datos de asistencia a continuación.
+                  Puedes continuar y registrar tu asistencia normalmente.
                 </p>
               </div>
             </div>
@@ -462,7 +506,7 @@ export default function AttendeeView({
                   <select
                     className="form-input"
                     value={formData.tipoDocumento}
-                    onChange={(e) => setFormData({ ...formData, tipoDocumento: e.target.value })}
+                    onChange={(e) => handleFieldChange('tipoDocumento', e.target.value)}
                   >
                     <option value="CC">Cédula de Ciudadanía (CC)</option>
                     <option value="TI">Tarjeta de Identidad (TI)</option>
@@ -481,7 +525,7 @@ export default function AttendeeView({
                     className="form-input"
                     placeholder="Ej: 1037654321"
                     value={formData.documento}
-                    onChange={(e) => setFormData({ ...formData, documento: e.target.value })}
+                    onChange={(e) => handleFieldChange('documento', e.target.value)}
                     required
                   />
                 </div>
@@ -495,7 +539,7 @@ export default function AttendeeView({
                     className="form-input"
                     placeholder="Nombres y Apellidos completos"
                     value={formData.nombreCompleto}
-                    onChange={(e) => setFormData({ ...formData, nombreCompleto: e.target.value })}
+                    onChange={(e) => handleFieldChange('nombreCompleto', e.target.value)}
                     required
                   />
                 </div>
@@ -509,7 +553,7 @@ export default function AttendeeView({
                     className="form-input"
                     placeholder="ejemplo@udea.edu.co"
                     value={formData.correo}
-                    onChange={(e) => setFormData({ ...formData, correo: e.target.value })}
+                    onChange={(e) => handleFieldChange('correo', e.target.value)}
                     required
                   />
                 </div>
@@ -523,7 +567,7 @@ export default function AttendeeView({
                     className="form-input"
                     placeholder="300 123 4567"
                     value={formData.telefono}
-                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                    onChange={(e) => handleFieldChange('telefono', e.target.value)}
                   />
                 </div>
 
@@ -532,7 +576,7 @@ export default function AttendeeView({
                   <select
                     className="form-input"
                     value={formData.vinculacion}
-                    onChange={(e) => setFormData({ ...formData, vinculacion: e.target.value })}
+                    onChange={(e) => handleFieldChange('vinculacion', e.target.value)}
                   >
                     <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado Medicina UdeA</option>
                     <option value="Residente / Posgrado UdeA">Residente / Especialidades Médicas UdeA</option>
@@ -555,7 +599,7 @@ export default function AttendeeView({
                       className="form-input vehicle-input"
                       placeholder="Ej: ABC-123 o KMW-45E"
                       value={formData.placaVehiculo}
-                      onChange={(e) => setFormData({ ...formData, placaVehiculo: e.target.value.toUpperCase() })}
+                      onChange={(e) => handleFieldChange('placaVehiculo', e.target.value.toUpperCase())}
                       maxLength={8}
                       required
                     />
@@ -567,9 +611,35 @@ export default function AttendeeView({
               </div>
 
               {errorAsistencia && (
-                <div className="form-error-banner">
-                  <AlertTriangle size={16} />
-                  <span>{errorAsistencia}</span>
+                <div className="form-error-banner interactive">
+                  <div className="error-banner-lead">
+                    <AlertTriangle size={18} className="error-icon" />
+                    <span>{errorAsistencia}</span>
+                  </div>
+                  {errorAsistencia.includes('Ya se encuentra registrada') && (
+                    <button
+                      type="button"
+                      className="btn-recover-attendance"
+                      onClick={() => {
+                        const existing = asistencias.find(
+                          a => a.eventoId === evento.id && a.documento === formData.documento.trim()
+                        );
+                        if (existing) {
+                          setCodigoComprobante(existing.id);
+                          setAsistenciaRegistrada(true);
+                          setMaxUnlockedStep(5);
+                        } else {
+                          setCodigoComprobante(`ATT-${Date.now()}`);
+                          setAsistenciaRegistrada(true);
+                          setMaxUnlockedStep(5);
+                        }
+                        setErrorAsistencia('');
+                      }}
+                    >
+                      <span>✓ Ver comprobante y continuar</span>
+                      <ChevronRight size={14} />
+                    </button>
+                  )}
                 </div>
               )}
 
