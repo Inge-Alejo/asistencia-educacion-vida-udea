@@ -1,0 +1,142 @@
+import React, { useRef } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+import { X, Download, Printer, Maximize2, Sparkles, MapPin, Calendar, Clock, Car } from 'lucide-react';
+
+export default function QRProjectionModal({ isOpen, onClose, evento }) {
+  const qrRef = useRef(null);
+
+  if (!isOpen || !evento) return null;
+
+  // URL a la que dirigirá el QR
+  const currentUrl = window.location.origin + window.location.pathname;
+  const qrTargetUrl = `${currentUrl}?evento=${evento.id}&view=attendee`;
+
+  const handleDownloadQR = () => {
+    const svgElement = qrRef.current.querySelector('svg');
+    if (!svgElement) return;
+
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    img.onload = () => {
+      canvas.width = 1200;
+      canvas.height = 1200;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 100, 100, 1000, 1000);
+
+      const pngFile = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.download = `QR_${evento.id}_UdeA_Medicina.png`;
+      downloadLink.href = pngFile;
+      downloadLink.click();
+    };
+
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container qr-projection-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="projection-header">
+          <div className="projection-branding">
+            <span className="inst-badge">Universidad de Antioquia</span>
+            <h2 className="inst-faculty">Facultad de Medicina • Educación a lo Largo de la Vida</h2>
+          </div>
+          <button className="btn-close-modal" onClick={onClose} aria-label="Cerrar modal">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="projection-body">
+          {/* Tarjeta de Información del Evento */}
+          <div className="projection-info-card">
+            <span className="event-code-badge">{evento.id}</span>
+            <h1 className="projection-event-title">{evento.titulo}</h1>
+
+            <div className="projection-meta-grid">
+              <div className="meta-item">
+                <Calendar size={18} />
+                <span>{evento.fecha}</span>
+              </div>
+              <div className="meta-item">
+                <Clock size={18} />
+                <span>{evento.horaInicio} - {evento.horaFin}</span>
+              </div>
+              <div className="meta-item">
+                <MapPin size={18} />
+                <span>{evento.lugar}</span>
+              </div>
+              {evento.habilitarPlacaVehiculo && (
+                <div className="meta-item vehicle-allowed">
+                  <Car size={18} />
+                  <span>Registro vehicular habilitado para parqueadero</span>
+                </div>
+              )}
+            </div>
+
+            <div className="scan-instructions-box">
+              <div className="instructions-icon">
+                <Sparkles size={24} />
+              </div>
+              <div className="instructions-text">
+                <h3>Escanee con la cámara de su teléfono móvil</h3>
+                <p>1. Apunte su cámara al código QR.</p>
+                <p>2. Active la geolocalización para validar su asistencia en sede.</p>
+                <p>3. Envíe sus preguntas en vivo a los ponentes y califique la jornada.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tarjeta del Código QR de Gran Tamaño */}
+          <div className="projection-qr-card">
+            <div className="qr-wrapper" ref={qrRef}>
+              <QRCodeSVG
+                value={qrTargetUrl}
+                size={340}
+                level="H"
+                includeMargin={true}
+                fgColor="#0F5938" // Verde UdeA
+                bgColor="#FFFFFF"
+                imageSettings={{
+                  src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%230F5938'/%3E%3Cpath d='M50 20 v60 M20 50 h60' stroke='%23C59B27' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E",
+                  x: undefined,
+                  y: undefined,
+                  height: 60,
+                  width: 60,
+                  excavate: true,
+                }}
+              />
+            </div>
+            <p className="qr-caption">Código QR Oficial de Asistencia y Preguntas en Vivo</p>
+            <span className="qr-url-preview">{qrTargetUrl}</span>
+
+            {/* Botones de acción del proyector */}
+            <div className="projection-action-buttons">
+              <button className="btn-secondary" onClick={handleDownloadQR}>
+                <Download size={16} />
+                <span>Descargar Imagen HD</span>
+              </button>
+              <button className="btn-secondary" onClick={handlePrint}>
+                <Printer size={16} />
+                <span>Imprimir Afiche</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="projection-footer">
+          <p className="footer-notice">
+            Portal oficial de registro presencial • Facultad de Medicina de la Universidad de Antioquia • Medellín, Colombia
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
