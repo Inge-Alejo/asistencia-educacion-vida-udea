@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import {
   MapPin, CheckCircle2, AlertTriangle, Send, Star, Car, User, Mail,
   Phone, CreditCard, Sparkles, MessageSquare, ThumbsUp, HelpCircle,
-  Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check
+  Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check,
+  Navigation, Radio
 } from 'lucide-react';
 import {
   UDEA_MEDICINA_COORDS,
@@ -52,6 +53,13 @@ export default function AttendeeView({
   const [asistenciaRegistrada, setAsistenciaRegistrada] = useState(false);
   const [codigoComprobante, setCodigoComprobante] = useState('');
   const [errorAsistencia, setErrorAsistencia] = useState('');
+
+  // Detección en tiempo real de documento previamente registrado en este evento
+  const registroExistente = useMemo(() => {
+    if (!formData.documento || !formData.documento.trim() || !evento?.id) return null;
+    const doc = formData.documento.trim();
+    return (asistencias || []).find(a => a.eventoId === evento.id && a.documento === doc);
+  }, [asistencias, evento?.id, formData.documento]);
 
   // Estado de Preguntas a Ponentes
   const [preguntaForm, setPreguntaForm] = useState({
@@ -357,16 +365,16 @@ export default function AttendeeView({
           <div className="geo-activation-box large">
             <div className="geo-info-content">
               <div className="geo-icon">
-                <MapPin size={28} />
+                <Navigation size={30} />
               </div>
               <div>
-                <h4>Ubicación GPS y Presencia en Sede</h4>
+                <h4>Sensor de Geolocalización Satelital</h4>
                 <p>
                   {geoState.obtenida
                     ? (geoState.esPresencial
                         ? `✓ Ubicación satelital confirmada: Estás a ${geoState.distancia} metros del Auditorio de la Facultad de Medicina.`
-                        : `✓ Ubicación capturada: Estás a ${geoState.distancia ? `${geoState.distancia} metros` : 'distancia'} de la Facultad de Medicina.`)
-                    : 'Presione el botón para obtener la ubicación precisa desde los sensores GPS de su dispositivo.'}
+                        : `✓ Coordenadas registradas: Estás a ${geoState.distancia ? `${geoState.distancia} metros` : 'distancia'} de la Facultad de Medicina.`)
+                    : 'Presione el botón para obtener la ubicación satelital precisa de su dispositivo.'}
                 </p>
 
                 {geoState.obtenida && (
@@ -388,13 +396,14 @@ export default function AttendeeView({
                     onClick={handleObtenerUbicacion}
                     disabled={geoState.cargando}
                   >
-                    {geoState.cargando ? 'Conectando a Satélites GPS...' : 'Obtener Ubicación Satelital Precisa'}
+                    <Radio size={16} />
+                    <span>{geoState.cargando ? 'Conectando con Satélites GPS...' : 'Obtener Ubicación Satelital Precisa'}</span>
                   </button>
                   <button
                     type="button"
                     className="btn-sim-sede"
                     onClick={handleSimularEnSede}
-                    title="Simular que estás físicamente dentro del auditorio para pruebas"
+                    title="Simular que estás físicamente dentro del auditorio para pruebas y demostraciones"
                   >
                     ⚡ Probar como "En Sede" (Modo Demostración)
                   </button>
@@ -402,7 +411,7 @@ export default function AttendeeView({
               ) : (
                 <div className="geo-status-confirmed">
                   <div className={`geo-badge ${geoState.esPresencial ? 'verified' : 'unverified'}`}>
-                    {geoState.esPresencial ? '✓ En Sede UdeA (Válido)' : '⚠ Registro Remoto'}
+                    {geoState.esPresencial ? '✓ En Sede UdeA (Presencial)' : '⚠ Registro Remoto'}
                   </div>
                   <button
                     type="button"
@@ -413,6 +422,60 @@ export default function AttendeeView({
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Comparador Visual de Sede vs Dispositivo */}
+          <div className="geo-comparison-radar">
+            <div className="geo-radar-col">
+              <div className="radar-col-header">
+                <span className="radar-badge sede">Sede Oficial UdeA</span>
+                <strong>Facultad de Medicina</strong>
+              </div>
+              <p className="radar-col-sub">Calle 67 # 53-108, Medellín</p>
+              <div className="radar-specs-list">
+                <span>📍 <strong>Coord:</strong> 6.26252, -75.56832</span>
+                <span>⭕ <strong>Radio de presencia:</strong> 120 metros</span>
+              </div>
+            </div>
+
+            <div className="geo-radar-divider">
+              <div className="radar-distance-pill">
+                {geoState.obtenida ? `${geoState.distancia} m` : '---'}
+              </div>
+            </div>
+
+            <div className="geo-radar-col">
+              <div className="radar-col-header">
+                <span className={`radar-badge ${geoState.obtenida ? (geoState.esPresencial ? 'presencial' : 'remoto') : 'neutral'}`}>
+                  {geoState.obtenida ? (geoState.esPresencial ? 'En Auditorio' : 'Remoto') : 'Por Escanear'}
+                </span>
+                <strong>Tu Dispositivo</strong>
+              </div>
+              <p className="radar-col-sub">
+                {geoState.obtenida
+                  ? (geoState.origenSenal || 'Sensor GPS Móvil')
+                  : 'Presione "Obtener Ubicación Satelital"'}
+              </p>
+              <div className="radar-specs-list">
+                <span>🎯 <strong>Margen:</strong> {geoState.precision ? `±${geoState.precision} m` : 'No capturado'}</span>
+                <span>📌 <strong>Estado:</strong> {geoState.obtenida ? (geoState.esPresencial ? '✓ Validado en Sede' : 'Registrado como Remoto') : 'Pendiente'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Nota técnica educativa para los asistentes */}
+          <div className="geo-edu-note">
+            <HelpCircle size={16} className="edu-icon" />
+            <div>
+              <strong>¿Cómo funciona la precisión de ubicación?</strong>
+              <p>
+                <strong>En celulares:</strong> El navegador activa el chip satelital GPS de su teléfono con precisión de 5 a 15 metros.
+                <br />
+                <strong>En computadores:</strong> La ubicación se calcula por la dirección IP de su conexión a internet (puede marcar unos kilómetros de distancia).
+                <br />
+                <strong>Tranquilidad:</strong> La geolocalización es de verificación y trazabilidad; nunca le impedirá registrar su asistencia si la señal es baja dentro del auditorio.
+              </p>
             </div>
           </div>
 
@@ -522,12 +585,54 @@ export default function AttendeeView({
                   </label>
                   <input
                     type="text"
-                    className="form-input"
+                    className={`form-input ${registroExistente ? 'input-warning-border' : ''}`}
                     placeholder="Ej: 1037654321"
                     value={formData.documento}
                     onChange={(e) => handleFieldChange('documento', e.target.value)}
                     required
                   />
+
+                  {/* Alerta inmediata si el documento ya se encuentra registrado */}
+                  {registroExistente ? (
+                    <div className="doc-duplicate-alert animated-step">
+                      <div className="doc-duplicate-header">
+                        <AlertTriangle size={15} className="warn-icon" />
+                        <span>Este documento ya registró asistencia en este evento:</span>
+                      </div>
+                      <div className="doc-duplicate-details">
+                        <strong>{registroExistente.nombreCompleto}</strong> (Comprobante: <code>{registroExistente.id}</code>)
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-recover-attendance"
+                        onClick={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            nombreCompleto: registroExistente.nombreCompleto || prev.nombreCompleto,
+                            correo: registroExistente.correo || prev.correo,
+                            telefono: registroExistente.telefono || prev.telefono,
+                            vinculacion: registroExistente.vinculacion || prev.vinculacion,
+                            placaVehiculo: registroExistente.placaVehiculo || prev.placaVehiculo
+                          }));
+                          setCodigoComprobante(registroExistente.id);
+                          setAsistenciaRegistrada(true);
+                          setMaxUnlockedStep(5);
+                          setErrorAsistencia('');
+                        }}
+                      >
+                        <CheckCircle2 size={15} />
+                        <span>Ver mi comprobante y avanzar al Paso 3</span>
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    formData.documento.trim().length >= 4 && (
+                      <div className="doc-available-hint">
+                        <Check size={13} />
+                        <span>Documento disponible para nuevo registro</span>
+                      </div>
+                    )
+                  )}
                 </div>
 
                 <div className="form-group col-span-2">
