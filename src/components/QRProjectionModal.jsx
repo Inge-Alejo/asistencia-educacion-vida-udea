@@ -60,8 +60,12 @@ export default function QRProjectionModal({ isOpen, onClose, evento }) {
       <div className="modal-container qr-projection-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="projection-header">
           <div className="projection-branding">
-            <span className="inst-badge">Universidad de Antioquia</span>
-            <h2 className="inst-faculty">Facultad de Medicina • Educación a lo Largo de la Vida</h2>
+            <img
+              src="/logo-udea-horizontal.png"
+              alt="Universidad de Antioquia - Facultad de Medicina"
+              className="projection-official-logo"
+            />
+            <span className="inst-badge">Educación a lo Largo de la Vida</span>
           </div>
           <button className="btn-close-modal" onClick={onClose} aria-label="Cerrar modal">
             <X size={24} />

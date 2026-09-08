@@ -294,8 +294,12 @@ export default function AttendeeView({
     <div className="attendee-view-container">
       {/* Banner Principal del Evento */}
       <section className="event-hero-banner">
-        <div className="banner-badge-row">
-          <span className="badge-udea-tag">Facultad de Medicina • UdeA</span>
+        <div className="banner-top-brand">
+          <img
+            src="/logo-udea-horizontal.png"
+            alt="Facultad de Medicina - Universidad de Antioquia"
+            className="banner-udea-logo"
+          />
           <span className="badge-event-id">{evento.id}</span>
         </div>
         <h1 className="banner-title">{evento.titulo}</h1>

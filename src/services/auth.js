@@ -5,16 +5,15 @@
 const AUTH_STORAGE_KEY = 'udea_admin_session_auth_v1';
 const CUSTOM_HASH_KEY = 'udea_admin_custom_hash_v1';
 
-// Hashes SHA-256 autorizados por defecto para la clave inicial:
-// 'MedicinaUdeA2026*' -> 2c6788c8b11fe826f18c48a868619f822dc33b6821011961d259c3140dedd008
-// 'MedicinaUdeA2026'  -> 60e5eb06b7a141514188b9c0ac999c1edb7b0fc6fab051623e041467548427d7
-// 'UdeA2026'          -> 71882182ed4b07d998c5e9ebcfbb3918b88aaf67c44fd3127b47faa52be7aada
-// 'udea2026'          -> eacec5801f2e2c7c7d8cc7647aac2a096c7440015f602c715da78fabc78a5eb9
+// Hashes SHA-256 autorizados por defecto:
+// Clave de alta seguridad: 'MedUdeA#2026!EduVida' -> 0eb2c22ad273170ac289d7c07387cd46fbba73ec5faeb427efea6e8635f7ea08
+// Clave alternativa:     'UdeA.Medicina#2026!' -> 71728d69b3c66c223cf772d6a54aaa61806bc7be46f3d6831798bf878b1c8a3d
 const AUTHORIZED_DEFAULT_HASHES = [
+  '0eb2c22ad273170ac289d7c07387cd46fbba73ec5faeb427efea6e8635f7ea08', // MedUdeA#2026!EduVida
+  '71728d69b3c66c223cf772d6a54aaa61806bc7be46f3d6831798bf878b1c8a3d', // UdeA.Medicina#2026!
   '2c6788c8b11fe826f18c48a868619f822dc33b6821011961d259c3140dedd008', // MedicinaUdeA2026*
   '60e5eb06b7a141514188b9c0ac999c1edb7b0fc6fab051623e041467548427d7', // MedicinaUdeA2026
-  '71882182ed4b07d998c5e9ebcfbb3918b88aaf67c44fd3127b47faa52be7aada', // UdeA2026
-  'eacec5801f2e2c7c7d8cc7647aac2a096c7440015f602c715da78fabc78a5eb9'  // udea2026
+  '71882182ed4b07d998c5e9ebcfbb3918b88aaf67c44fd3127b47faa52be7aada'  // UdeA2026
 ];
 
 // Función para calcular SHA-256 usando Web Crypto API nativa del navegador

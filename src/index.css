@@ -3004,6 +3004,68 @@ input:checked + .slider::before {
   color: #1E40AF;
 }
 
+/* Logos Oficiales UdeA Integrados */
+.udea-official-header-logo {
+  height: 52px;
+  width: auto;
+  max-width: 220px;
+  object-fit: contain;
+  background-color: #FFFFFF;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  transition: transform 0.2s ease;
+}
+
+.udea-official-header-logo:hover {
+  transform: scale(1.02);
+}
+
+.auth-modal-udea-shield {
+  height: 95px;
+  width: auto;
+  max-width: 130px;
+  object-fit: contain;
+  margin: 0 auto 0.75rem auto;
+  display: block;
+  background: #FFFFFF;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+}
+
+.projection-official-logo {
+  height: 48px;
+  width: auto;
+  max-width: 220px;
+  object-fit: contain;
+  background-color: #FFFFFF;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.banner-top-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.banner-udea-logo {
+  height: 44px;
+  width: auto;
+  max-width: 210px;
+  object-fit: contain;
+  background-color: #FFFFFF;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.12);
+}
+
+
 
 
 

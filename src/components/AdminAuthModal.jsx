@@ -34,13 +34,15 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-container auth-modal-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="auth-modal-header">
-          <div className="auth-icon-circle">
-            <Lock size={28} className="lock-icon" />
-          </div>
+          <img
+            src="/logo-udea-vertical.png"
+            alt="Escudo Oficial Universidad de Antioquia"
+            className="auth-modal-udea-shield"
+          />
           <span className="inst-badge">Facultad de Medicina • UdeA</span>
           <h2 className="auth-title">Acceso al Panel Administrativo</h2>
           <p className="auth-subtitle">
-            Área restringida para moderadores y administradores de Educación a lo Largo de la Vida.
+            Área restringida para moderadores y coordinadores de Educación a lo Largo de la Vida.
           </p>
         </div>
 
@@ -80,10 +82,7 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }) {
 
           <div className="auth-security-notice">
             <p>
-              🔒 <strong>Clave inicial institucional:</strong> <code>MedicinaUdeA2026*</code> (o <code>UdeA2026</code>)
-            </p>
-            <p style={{ marginTop: '0.35rem', fontSize: '0.72rem', opacity: 0.85 }}>
-              Puedes cambiar esta contraseña en cualquier momento desde el panel administrativo.
+              🔒 <strong>Acceso Seguro Cifrado:</strong> Esta sesión administrativa está protegida con cifrado criptográfico SHA-256.
             </p>
           </div>
 

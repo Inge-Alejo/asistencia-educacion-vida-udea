@@ -17,14 +17,15 @@ export default function Header({
         <div className="container header-content">
           {/* Identidad Institucional UdeA */}
           <div className="brand-wrapper">
-            <div className="udea-badge-emblem">
-              <span className="emblem-cross">+</span>
-              <span className="emblem-text">UdeA</span>
-            </div>
+            <img
+              src="/logo-udea-horizontal.png"
+              alt="Universidad de Antioquia - Facultad de Medicina"
+              className="udea-official-header-logo"
+            />
             <div className="brand-text">
               <span className="institution-name">Universidad de Antioquia</span>
               <h1 className="faculty-title">Facultad de Medicina</h1>
-              <span className="program-subtitle">Educación a lo Largo de la Vida • Asistencia y Gestión Académica</span>
+              <span className="program-subtitle">Educación a lo Largo de la Vida • Gestión Académica</span>
             </div>
           </div>
 
