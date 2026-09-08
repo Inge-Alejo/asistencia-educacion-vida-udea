@@ -3132,6 +3132,143 @@ input:checked + .slider::before {
   border: 1px solid #CBD5E1;
 }
 
+/* Banner de Sesión Activa Persistente del Asistente */
+.attendee-active-session-banner {
+  background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
+  border: 1.5px solid #86EFAC;
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 4px 12px rgba(15, 89, 56, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.session-banner-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  flex: 1;
+  min-width: 260px;
+}
+
+.session-badge-check {
+  background-color: var(--udea-green);
+  color: #FFFFFF;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(15, 89, 56, 0.25);
+}
+
+.session-user-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.session-tag {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #15803D;
+  background-color: #DCFCE7;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  border: 1px solid #BBF7D0;
+}
+
+.session-comprobante-pill {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #166534;
+  background-color: #FFFFFF;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid #BBF7D0;
+}
+
+.session-user-name {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #14532D;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.2;
+}
+
+.session-desc-text {
+  font-size: 0.82rem;
+  color: #166534;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.session-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.btn-session-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background-color: #FFFFFF;
+  color: var(--udea-green-dark);
+  border: 1.5px solid var(--udea-green);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+  transition: all 0.2s ease;
+}
+
+.btn-session-nav:hover {
+  background-color: var(--udea-green);
+  color: #FFFFFF;
+  transform: translateY(-1px);
+}
+
+.btn-session-nav.active {
+  background-color: var(--udea-green);
+  color: #FFFFFF;
+  box-shadow: 0 3px 6px rgba(15, 89, 56, 0.25);
+}
+
+.btn-change-attendee {
+  background: transparent;
+  color: #64748B;
+  border: 1px dashed #94A3B8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-change-attendee:hover {
+  background-color: #F1F5F9;
+  color: #0F172A;
+  border-color: #475569;
+}
+
+
 
 
 

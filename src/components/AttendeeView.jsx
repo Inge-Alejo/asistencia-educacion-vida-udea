@@ -92,6 +92,39 @@ export default function AttendeeView({
     }
   }, [evento]);
 
+  // Recuperar sesión activa persistente del asistente en este evento
+  // Si ya se registró previamente en este dispositivo, va DIRECTAMENTE al Paso 3 (Preguntas en Vivo)
+  useEffect(() => {
+    if (!evento?.id) return;
+    try {
+      const sessionKey = `udea_session_attendee_${evento.id}`;
+      const saved = localStorage.getItem(sessionKey);
+      if (saved) {
+        const session = JSON.parse(saved);
+        if (session.documento && session.registrado) {
+          setFormData(prev => ({
+            ...prev,
+            tipoDocumento: session.tipoDocumento || prev.tipoDocumento,
+            documento: session.documento,
+            nombreCompleto: session.nombreCompleto || prev.nombreCompleto,
+            correo: session.correo || prev.correo,
+            telefono: session.telefono || prev.telefono,
+            vinculacion: session.vinculacion || prev.vinculacion,
+            placaVehiculo: session.placaVehiculo || prev.placaVehiculo,
+            habeasDataAceptado: true
+          }));
+          setCodigoComprobante(session.comprobanteId || '');
+          setAsistenciaRegistrada(true);
+          setMaxUnlockedStep(5);
+          // Va directamente a Preguntas en Vivo
+          setActiveStep(3);
+        }
+      }
+    } catch (e) {
+      console.warn('Error al recuperar sesión del asistente:', e);
+    }
+  }, [evento?.id]);
+
   // Manejar cambio de campos del formulario y limpiar errores en tiempo real
   const handleFieldChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -227,6 +260,18 @@ export default function AttendeeView({
       setAsistenciaRegistrada(true);
       setCodigoComprobante(res.record.id);
 
+      // Guardar sesión persistente del asistente en este dispositivo
+      try {
+        localStorage.setItem(`udea_session_attendee_${evento.id}`, JSON.stringify({
+          ...payload,
+          comprobanteId: res.record.id,
+          registrado: true,
+          fechaRegistro: new Date().toISOString()
+        }));
+      } catch (err) {
+        console.warn('Error al guardar sesión del asistente:', err);
+      }
+
       // Desbloquear todos los pasos siguientes (Preguntas, Evaluaciones, Forms)
       setMaxUnlockedStep(5);
 
@@ -320,6 +365,72 @@ export default function AttendeeView({
           </span>
         </div>
       </section>
+
+      {/* BANNER DE SESIÓN ACTIVA PERSISTENTE (Si el usuario ya registró asistencia) */}
+      {asistenciaRegistrada && (
+        <div className="attendee-active-session-banner animated-step">
+          <div className="session-banner-left">
+            <div className="session-badge-check">
+              <CheckCircle2 size={22} className="check-icon" />
+            </div>
+            <div>
+              <div className="session-user-row">
+                <span className="session-tag">✓ Asistencia Registrada Oficialmente</span>
+                <span className="session-comprobante-pill">N° {codigoComprobante}</span>
+              </div>
+              <h3 className="session-user-name">¡Hola, {formData.nombreCompleto || 'Asistente'}!</h3>
+              <p className="session-desc-text">
+                Tu asistencia a este evento ya está confirmada. Puedes interactuar en tiempo real con preguntas a los ponentes o calificar sus ponencias.
+              </p>
+            </div>
+          </div>
+
+          <div className="session-banner-actions">
+            <button
+              type="button"
+              className={`btn-session-nav ${activeStep === 3 ? 'active' : ''}`}
+              onClick={() => setActiveStep(3)}
+            >
+              <MessageSquare size={15} />
+              <span>Preguntas en Vivo</span>
+            </button>
+            <button
+              type="button"
+              className={`btn-session-nav ${activeStep === 2 ? 'active' : ''}`}
+              onClick={() => setActiveStep(2)}
+            >
+              <FileText size={15} />
+              <span>Ver Comprobante</span>
+            </button>
+            <button
+              type="button"
+              className="btn-change-attendee"
+              onClick={() => {
+                if (window.confirm('¿Deseas registrar a otra persona con otro documento en este dispositivo?')) {
+                  localStorage.removeItem(`udea_session_attendee_${evento.id}`);
+                  setAsistenciaRegistrada(false);
+                  setCodigoComprobante('');
+                  setFormData({
+                    tipoDocumento: 'CC',
+                    documento: '',
+                    nombreCompleto: '',
+                    correo: '',
+                    telefono: '',
+                    vinculacion: 'Estudiante Pregrado Medicina UdeA',
+                    placaVehiculo: '',
+                    habeasDataAceptado: false
+                  });
+                  setActiveStep(1);
+                  setMaxUnlockedStep(1);
+                }
+              }}
+              title="Registrar a otro participante"
+            >
+              Cambiar Asistente
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* BARRA DE PROGRESO SECUENCIAL INTERACTIVA */}
       <nav className="stepper-progress-nav" aria-label="Progreso secuencial del registro">
@@ -630,10 +741,20 @@ export default function AttendeeView({
                           setAsistenciaRegistrada(true);
                           setMaxUnlockedStep(5);
                           setErrorAsistencia('');
+                          try {
+                            localStorage.setItem(`udea_session_attendee_${evento.id}`, JSON.stringify({
+                              ...formData,
+                              nombreCompleto: registroExistente.nombreCompleto,
+                              documento: registroExistente.documento,
+                              comprobanteId: registroExistente.id,
+                              registrado: true
+                            }));
+                          } catch (e) {}
+                          setActiveStep(3);
                         }}
                       >
                         <CheckCircle2 size={15} />
-                        <span>Ver mi comprobante y avanzar al Paso 3</span>
+                        <span>Ver mi comprobante e ir a Preguntas en Vivo</span>
                         <ChevronRight size={14} />
                       </button>
                     </div>
@@ -751,27 +872,33 @@ export default function AttendeeView({
                   </div>
                   {errorAsistencia.includes('Ya se encuentra registrada') && (
                     <button
-                      type="button"
-                      className="btn-recover-attendance"
-                      onClick={() => {
-                        const existing = asistencias.find(
-                          a => a.eventoId === evento.id && a.documento === formData.documento.trim()
-                        );
-                        if (existing) {
-                          setCodigoComprobante(existing.id);
+                        type="button"
+                        className="btn-recover-attendance"
+                        onClick={() => {
+                          const existing = asistencias.find(
+                            a => a.eventoId === evento.id && a.documento === formData.documento.trim()
+                          );
+                          const compId = existing ? existing.id : `ATT-${Date.now()}`;
+                          const attendeeName = existing?.nombreCompleto || formData.nombreCompleto;
+                          setCodigoComprobante(compId);
                           setAsistenciaRegistrada(true);
                           setMaxUnlockedStep(5);
-                        } else {
-                          setCodigoComprobante(`ATT-${Date.now()}`);
-                          setAsistenciaRegistrada(true);
-                          setMaxUnlockedStep(5);
-                        }
-                        setErrorAsistencia('');
-                      }}
-                    >
-                      <span>✓ Ver comprobante y continuar</span>
-                      <ChevronRight size={14} />
-                    </button>
+                          try {
+                            localStorage.setItem(`udea_session_attendee_${evento.id}`, JSON.stringify({
+                              ...formData,
+                              nombreCompleto: attendeeName,
+                              comprobanteId: compId,
+                              registrado: true
+                            }));
+                          } catch (e) {}
+                          setErrorAsistencia('');
+                          setActiveStep(3);
+                        }}
+                      >
+                        <CheckCircle2 size={15} />
+                        <span>Ver mi comprobante e ir a Preguntas en Vivo</span>
+                        <ChevronRight size={14} />
+                      </button>
                   )}
                 </div>
               )}
