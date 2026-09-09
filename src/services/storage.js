@@ -23,11 +23,12 @@ const STORAGE_KEY_QUESTIONS = 'udea_med_questions_v1';
 const STORAGE_KEY_EVALUATIONS = 'udea_med_evaluations_v1';
 const STORAGE_KEY_SATISFACTION = 'udea_med_satisfaction_v1';
 
-// Coordenadas oficiales de la Facultad de Medicina UdeA (Calle 67 # 53-108, Medellín)
+// Coordenadas oficiales de la Facultad de Medicina UdeA (Cra. 51D # 62-29, Medellín - Área de la Salud)
+// Verificado con enlace oficial Google Maps: https://maps.app.goo.gl/968rjfJ1vFJtpDbn7
 export const UDEA_MEDICINA_COORDS = {
-  latitude: 6.262500,
-  longitude: -75.568300,
-  name: 'Facultad de Medicina UdeA (Sede Principal Medellín)',
+  latitude: 6.261341,
+  longitude: -75.566464,
+  name: 'Facultad de Medicina UdeA (Cra. 51D # 62-29, Medellín)',
   radioMaximoMetros: 350 // Radio permitido para considerar asistencia estrictamente presencial en sede
 };
 
@@ -40,7 +41,7 @@ const SEED_EVENTS = [
     horaInicio: '08:00',
     horaFin: '17:00',
     lugar: 'Auditorio Manuel Uribe Ángel - Facultad de Medicina UdeA',
-    coordenadas: { lat: 6.2625, lng: -75.5683 },
+    coordenadas: { lat: 6.261341, lng: -75.566464 },
     habilitarPlacaVehiculo: true, // Placa habilitada
     descripcion: 'Jornada académica de actualización clínica dirigida a especialistas, médicos generales, residentes y estudiantes de la Universidad de Antioquia.',
     microsoftFormsUrl: 'https://forms.office.com/r/ejemploUdeAMedicina2026',
@@ -72,7 +73,7 @@ const SEED_EVENTS = [
     horaInicio: '14:00',
     horaFin: '18:30',
     lugar: 'Laboratorio de Simulación Médica - Piso 3',
-    coordenadas: { lat: 6.2625, lng: -75.5683 },
+    coordenadas: { lat: 6.261341, lng: -75.566464 },
     habilitarPlacaVehiculo: false, // Placa NO habilitada en este evento
     descripcion: 'Taller práctico con simuladores de alta fidelidad para el manejo integral de paro cardiorrespiratorio.',
     microsoftFormsUrl: '',
@@ -100,10 +101,10 @@ const SEED_ATTENDANCE = [
     placaVehiculo: 'KMW-452',
     fechaRegistro: '2026-09-15 08:12:30',
     geolocalizacion: {
-      latitud: 6.26248,
-      longitud: -75.56828,
-      precisionMetros: 12,
-      distanciaSedeMetros: 22,
+      latitud: 6.261315,
+      longitud: -75.566450,
+      precisionMetros: 10,
+      distanciaSedeMetros: 5,
       esPresencial: true
     }
   },
@@ -119,10 +120,10 @@ const SEED_ATTENDANCE = [
     placaVehiculo: 'UDA-890',
     fechaRegistro: '2026-09-15 08:15:10',
     geolocalizacion: {
-      latitud: 6.26261,
-      longitud: -75.56815,
-      precisionMetros: 18,
-      distanciaSedeMetros: 35,
+      latitud: 6.261420,
+      longitud: -75.566390,
+      precisionMetros: 14,
+      distanciaSedeMetros: 18,
       esPresencial: true
     }
   },
@@ -138,10 +139,10 @@ const SEED_ATTENDANCE = [
     placaVehiculo: '',
     fechaRegistro: '2026-09-15 08:20:45',
     geolocalizacion: {
-      latitud: 6.26235,
-      longitud: -75.56845,
-      precisionMetros: 15,
-      distanciaSedeMetros: 48,
+      latitud: 6.261220,
+      longitud: -75.566530,
+      precisionMetros: 12,
+      distanciaSedeMetros: 21,
       esPresencial: true
     }
   }

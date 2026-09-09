@@ -215,12 +215,12 @@ export default function AttendeeView({
       cargando: false,
       obtenida: true,
       error: null,
-      latitud: 6.26252,
-      longitud: -75.56832,
+      latitud: 6.261341,
+      longitud: -75.566464,
       precision: 8,
-      distancia: 28,
+      distancia: 12,
       esPresencial: true,
-      origenSenal: 'Modo Demostración / Auditorio Facultad de Medicina UdeA'
+      origenSenal: 'Modo Demostración / Facultad de Medicina UdeA (Cra. 51D # 62-29)'
     });
     setMaxUnlockedStep(prev => Math.max(prev, 2));
     setActiveStep(2);
@@ -595,10 +595,10 @@ export default function AttendeeView({
                 <span className="radar-badge sede">Sede Oficial UdeA</span>
                 <strong>Facultad de Medicina</strong>
               </div>
-              <p className="radar-col-sub">Calle 67 # 53-108, Medellín</p>
+              <p className="radar-col-sub">Cra. 51D # 62-29, Medellín (Área de la Salud)</p>
               <div className="radar-specs-list">
-                <span>📍 <strong>Coord:</strong> 6.26252, -75.56832</span>
-                <span>⭕ <strong>Radio de presencia:</strong> 120 metros</span>
+                <span>📍 <strong>Coord:</strong> 6.261341, -75.566464</span>
+                <span>⭕ <strong>Radio de presencia:</strong> {UDEA_MEDICINA_COORDS.radioMaximoMetros} metros</span>
               </div>
             </div>
 

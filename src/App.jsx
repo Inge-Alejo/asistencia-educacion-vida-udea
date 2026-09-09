@@ -218,7 +218,7 @@ export default function App() {
           <div className="footer-brand">
             <span className="footer-inst">Universidad de Antioquia</span>
             <span className="footer-fac">Facultad de Medicina • Educación a lo Largo de la Vida</span>
-            <p className="footer-addr">Calle 67 # 53 - 108, Medellín, Colombia • Tel: +57 (604) 219 6000</p>
+            <p className="footer-addr">Cra. 51D # 62 - 29, Medellín, Colombia (Área de la Salud) • Tel: +57 (604) 219 6000</p>
           </div>
           <div className="footer-meta">
             <span className="secure-badge">🔒 Acceso Administrativo Protegido</span>

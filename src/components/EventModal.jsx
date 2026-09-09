@@ -52,7 +52,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       horaInicio,
       horaFin,
       lugar,
-      coordenadas: { lat: 6.2625, lng: -75.5683 },
+      coordenadas: { lat: 6.261341, lng: -75.566464 },
       habilitarPlacaVehiculo,
       descripcion,
       microsoftFormsUrl,
