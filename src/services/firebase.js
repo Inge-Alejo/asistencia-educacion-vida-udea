@@ -19,17 +19,17 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 
-// Las credenciales deben ser configuradas exclusivamente mediante variables de entorno
+// Configuración de conexión Cloud Firestore (Firebase) para sincronización en vivo
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ''
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDYFLei8xJPwrMHQegMS6FF2P3SYBPbx00",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "udea-medicina-eventos.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "udea-medicina-eventos",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "udea-medicina-eventos.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "983460169904",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:983460169904:web:68ed632f1bc487df3ed375"
 };
 
-// Determinar si las credenciales de Firebase fueron provistas válidamente en variables de entorno
+// Determinar si las credenciales de Firebase están activas
 export const isFirebaseConfigured = () => {
   return Boolean(
     firebaseConfig.apiKey &&
@@ -42,15 +42,13 @@ export const isFirebaseConfigured = () => {
 let app = null;
 let db = null;
 
-if (isFirebaseConfigured()) {
-  try {
-    app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    console.info('✓ Conexión en la nube inicializada para Facultad de Medicina UdeA');
-  } catch (err) {
-    console.warn('Operando en Modo Local Seguro (almacenamiento en navegador).');
-    db = null;
-  }
+try {
+  app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  console.info('✓ Firebase Cloud Firestore en vivo conectado para Facultad de Medicina UdeA');
+} catch (err) {
+  console.error('Error al inicializar Firebase Firestore:', err);
+  db = null;
 }
 
 export {

@@ -315,22 +315,25 @@ export async function recordAttendance(record) {
   if (existe) {
     return { success: false, message: 'Ya se encuentra registrada la asistencia con este número de documento.' };
   }
+
   const newRecord = {
     ...record,
-    id: `ATT-${Date.now()}`,
+    id: `ATT-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     fechaRegistro: new Date().toLocaleString('es-CO')
   };
-  list.unshift(newRecord);
-  localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(list));
 
-  // Sincronización en la nube con Firestore si está configurado
-  if (isFirebaseConfigured() && db) {
+  // Guardar primero en Cloud Firestore para sincronización multi-dispositivo en vivo
+  if (db) {
     try {
       await setDoc(doc(db, 'asistencias', newRecord.id), newRecord);
+      console.info('✓ Asistencia registrada en Firebase Firestore en vivo:', newRecord.id);
     } catch (err) {
-      console.warn('Registro local exitoso. Firestore cloud sync notice:', err);
+      console.error('Error guardando en Firestore:', err);
     }
   }
+
+  list.unshift(newRecord);
+  localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(list));
 
   return { success: true, record: newRecord };
 }
@@ -529,52 +532,94 @@ export async function deleteSatisfaction(satId) {
   return list;
 }
 
-// Suscripción en Tiempo Real Multi-dispositivo (Firestore Snapshot + Local Fallback)
+// Suscripción en Tiempo Real Multi-dispositivo (Firestore Snapshot en vivo)
 export function subscribeToEventData(eventId, onUpdate) {
   if (!eventId) return () => {};
 
-  if (!isFirebaseConfigured() || !db) {
-    // Si no hay Firebase activo, escuchar eventos locales entre pestañas
-    const handler = (e) => {
-      if ([STORAGE_KEY_ATTENDANCE, STORAGE_KEY_QUESTIONS, STORAGE_KEY_EVALUATIONS, STORAGE_KEY_SATISFACTION].includes(e.key)) {
-        if (onUpdate) onUpdate();
-      }
-    };
-    window.addEventListener('storage', handler);
-    return () => window.removeEventListener('storage', handler);
+  const unsubs = [];
+
+  // 1. Escuchar eventos locales entre pestañas del mismo navegador
+  const storageHandler = (e) => {
+    if ([STORAGE_KEY_ATTENDANCE, STORAGE_KEY_QUESTIONS, STORAGE_KEY_EVALUATIONS, STORAGE_KEY_SATISFACTION].includes(e.key)) {
+      if (onUpdate) onUpdate();
+    }
+  };
+  window.addEventListener('storage', storageHandler);
+  unsubs.push(() => window.removeEventListener('storage', storageHandler));
+
+  // 2. Escuchar Firestore Cloud en tiempo real multi-dispositivo (móvil, tablet, laptop)
+  if (db) {
+    try {
+      // Sincronización en vivo de Asistencias
+      const unsubAtt = onSnapshot(
+        query(collection(db, 'asistencias'), where('eventoId', '==', eventId)),
+        (snapshot) => {
+          const cloudList = [];
+          snapshot.forEach(docSnap => cloudList.push(docSnap.data()));
+          const localOther = getAttendance().filter(a => a.eventoId !== eventId);
+          // Si cloudList tiene datos, o si la colección en nube se vació, actualizar la caché
+          const combined = [...cloudList, ...localOther];
+          localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(combined));
+          if (onUpdate) onUpdate();
+        },
+        (err) => console.warn('Firestore asistencias snapshot:', err)
+      );
+      unsubs.push(unsubAtt);
+
+      // Sincronización en vivo de Preguntas a Ponentes
+      const unsubQ = onSnapshot(
+        query(collection(db, 'preguntas'), where('eventoId', '==', eventId)),
+        (snapshot) => {
+          const cloudQ = [];
+          snapshot.forEach(docSnap => cloudQ.push(docSnap.data()));
+          const localOther = getQuestions().filter(q => q.eventoId !== eventId);
+          const combined = [...cloudQ, ...localOther];
+          localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(combined));
+          if (onUpdate) onUpdate();
+        },
+        (err) => console.warn('Firestore preguntas snapshot:', err)
+      );
+      unsubs.push(unsubQ);
+
+      // Sincronización en vivo de Calificaciones de Ponentes
+      const unsubEval = onSnapshot(
+        query(collection(db, 'evaluaciones'), where('eventoId', '==', eventId)),
+        (snapshot) => {
+          const cloudEval = [];
+          snapshot.forEach(docSnap => cloudEval.push(docSnap.data()));
+          const localOther = getEvaluations().filter(ev => ev.eventoId !== eventId);
+          const combined = [...cloudEval, ...localOther];
+          localStorage.setItem(STORAGE_KEY_EVALUATIONS, JSON.stringify(combined));
+          if (onUpdate) onUpdate();
+        },
+        (err) => console.warn('Firestore evaluaciones snapshot:', err)
+      );
+      unsubs.push(unsubEval);
+
+      // Sincronización en vivo de Encuestas de Satisfacción
+      const unsubSat = onSnapshot(
+        query(collection(db, 'satisfaccion'), where('eventoId', '==', eventId)),
+        (snapshot) => {
+          const cloudSat = [];
+          snapshot.forEach(docSnap => cloudSat.push(docSnap.data()));
+          const localOther = getSatisfaction().filter(s => s.eventoId !== eventId);
+          const combined = [...cloudSat, ...localOther];
+          localStorage.setItem(STORAGE_KEY_SATISFACTION, JSON.stringify(combined));
+          if (onUpdate) onUpdate();
+        },
+        (err) => console.warn('Firestore satisfaccion snapshot:', err)
+      );
+      unsubs.push(unsubSat);
+    } catch (err) {
+      console.error('Error al configurar los listeners en vivo de Firestore:', err);
+    }
   }
 
-  try {
-    const unsubAtt = onSnapshot(query(collection(db, 'asistencias'), where('eventoId', '==', eventId)), (snapshot) => {
-      const cloudList = [];
-      snapshot.forEach(docSnap => cloudList.push(docSnap.data()));
-      if (cloudList.length > 0) {
-        const localOther = getAttendance().filter(a => a.eventoId !== eventId);
-        const combined = [...cloudList, ...localOther];
-        localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(combined));
-        if (onUpdate) onUpdate();
-      }
-    }, (err) => console.warn('Firestore asistencias snapshot:', err));
-
-    const unsubQ = onSnapshot(query(collection(db, 'preguntas'), where('eventoId', '==', eventId)), (snapshot) => {
-      const cloudQ = [];
-      snapshot.forEach(docSnap => cloudQ.push(docSnap.data()));
-      if (cloudQ.length > 0) {
-        const localOther = getQuestions().filter(q => q.eventoId !== eventId);
-        const combined = [...cloudQ, ...localOther];
-        localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(combined));
-        if (onUpdate) onUpdate();
-      }
-    }, (err) => console.warn('Firestore preguntas snapshot:', err));
-
-    return () => {
-      unsubAtt();
-      unsubQ();
-    };
-  } catch (err) {
-    console.warn('Error setting up Firestore listener:', err);
-    return () => {};
-  }
+  return () => {
+    unsubs.forEach(unsub => {
+      try { unsub(); } catch (e) {}
+    });
+  };
 }
 
 // Función matemática de Haversine para cálculo de distancia GPS exacta en metros
