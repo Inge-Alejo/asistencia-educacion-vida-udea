@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Users, HelpCircle, Star, ThumbsUp, Download, QrCode, Plus, Search,
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
-  Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut, Upload
+  Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut, Upload, X
 } from 'lucide-react';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
 import {
@@ -37,6 +37,7 @@ export default function AdminPanel({
   const [searchTermQuestions, setSearchTermQuestions] = useState('');
   const [filterEstadoPregunta, setFilterEstadoPregunta] = useState('todas');
   const [msFormsUrl, setMsFormsUrl] = useState(evento.microsoftFormsUrl || '');
+  const [selectedGeoRecord, setSelectedGeoRecord] = useState(null);
 
   // Estado para cambio de contraseña
   const [currentPwd, setCurrentPwd] = useState('');
@@ -391,15 +392,41 @@ export default function AdminPanel({
                         )}
                       </td>
                       <td>
-                        {a.geolocalizacion?.esPresencial ? (
-                          <span className="geo-badge-success" title={`A ${a.geolocalizacion.distanciaSedeMetros}m de la sede`}>
-                            <CheckCircle size={13} /> En Sede ({a.geolocalizacion.distanciaSedeMetros}m)
-                          </span>
-                        ) : (
-                          <span className="geo-badge-warning" title={a.geolocalizacion?.distanciaSedeMetros ? `A ${a.geolocalizacion.distanciaSedeMetros}m` : 'Remoto'}>
-                            <AlertCircle size={13} /> {a.geolocalizacion?.distanciaSedeMetros ? `${a.geolocalizacion.distanciaSedeMetros}m (Remoto)` : 'Remoto'}
-                          </span>
-                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-start' }}>
+                          {a.geolocalizacion?.esPresencial ? (
+                            <span className="geo-badge-success" title={`A ${a.geolocalizacion.distanciaSedeMetros}m de la sede`}>
+                              <CheckCircle size={13} /> En Sede ({a.geolocalizacion.distanciaSedeMetros}m)
+                            </span>
+                          ) : (
+                            <span className="geo-badge-warning" title={a.geolocalizacion?.distanciaSedeMetros ? `A ${a.geolocalizacion.distanciaSedeMetros}m` : 'Remoto'}>
+                              <AlertCircle size={13} /> {a.geolocalizacion?.distanciaSedeMetros ? `${a.geolocalizacion.distanciaSedeMetros}m (Remoto)` : 'Remoto'}
+                            </span>
+                          )}
+
+                          {a.geolocalizacion?.latitud && a.geolocalizacion?.longitud && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedGeoRecord(a)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.3rem',
+                                fontSize: '0.74rem',
+                                background: '#eefbf4',
+                                border: '1px solid #86efac',
+                                color: '#166534',
+                                padding: '0.2rem 0.5rem',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontWeight: '600'
+                              }}
+                              title="Ver ubicación exacta en mapa y satélite"
+                            >
+                              <MapPin size={11} />
+                              <span>Ver Mapa Exacto</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="time-cell">{a.fechaRegistro}</td>
                       <td>
@@ -832,6 +859,139 @@ export default function AdminPanel({
                   <span>Actualizar Contraseña de Acceso</span>
                 </button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE INSPECCIÓN DE UBICACIÓN GPS EXACTA */}
+      {selectedGeoRecord && (
+        <div className="modal-overlay" onClick={() => setSelectedGeoRecord(null)}>
+          <div
+            className="modal-container"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '640px', padding: '1.75rem' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ background: '#ecfdf5', padding: '0.5rem', borderRadius: '8px', color: '#059669', display: 'flex' }}>
+                  <MapPin size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a', fontWeight: '700' }}>
+                    Ubicación Satelital del Registro
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
+                    Auditoría de presencia y geolocalización en tiempo real
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-close-modal"
+                onClick={() => setSelectedGeoRecord(null)}
+                title="Cerrar modal"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Ficha de Asistente */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <div style={{ fontWeight: '700', fontSize: '1rem', color: '#1e293b' }}>
+                    {selectedGeoRecord.nombreCompleto}
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.2rem' }}>
+                    Doc: <strong>{selectedGeoRecord.documento}</strong> ({selectedGeoRecord.tipoDocumento || 'CC'}) • {selectedGeoRecord.vinculacion}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
+                    Registrado el: <strong>{selectedGeoRecord.fechaRegistro}</strong>
+                  </div>
+                </div>
+
+                <div>
+                  {selectedGeoRecord.geolocalizacion?.esPresencial ? (
+                    <span className="geo-badge-success" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}>
+                      <CheckCircle size={14} /> En Sede Oficial
+                    </span>
+                  ) : (
+                    <span className="geo-badge-warning" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}>
+                      <AlertCircle size={14} /> Fuera de Sede / Remoto
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem', marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px dashed #cbd5e1' }}>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: '600' }}>Distancia a Sede</span>
+                  <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '0.95rem' }}>
+                    {selectedGeoRecord.geolocalizacion?.distanciaSedeMetros !== undefined
+                      ? `${selectedGeoRecord.geolocalizacion.distanciaSedeMetros} metros`
+                      : 'No calculada'}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: '600' }}>Precisión GPS</span>
+                  <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '0.95rem' }}>
+                    ±{selectedGeoRecord.geolocalizacion?.precisionMetros || 10} m
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: '600' }}>Coordenadas</span>
+                  <div style={{ fontWeight: '600', color: '#0369a1', fontSize: '0.85rem' }}>
+                    {selectedGeoRecord.geolocalizacion?.latitud?.toFixed(6)}, {selectedGeoRecord.geolocalizacion?.longitud?.toFixed(6)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Mapa Interactivo Embebido (OpenStreetMap) */}
+            {selectedGeoRecord.geolocalizacion?.latitud && selectedGeoRecord.geolocalizacion?.longitud && (
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#334155', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <MapPin size={15} color="#059669" />
+                  <span>Visor Cartográfico (Marcador en la posición exacta del dispositivo):</span>
+                </div>
+                <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)' }}>
+                  <iframe
+                    title="Ubicación Asistente"
+                    width="100%"
+                    height="300"
+                    frameBorder="0"
+                    scrolling="no"
+                    marginHeight="0"
+                    marginWidth="0"
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${selectedGeoRecord.geolocalizacion.longitud - 0.005}%2C${selectedGeoRecord.geolocalizacion.latitud - 0.005}%2C${selectedGeoRecord.geolocalizacion.longitud + 0.005}%2C${selectedGeoRecord.geolocalizacion.latitud + 0.005}&layer=mapnik&marker=${selectedGeoRecord.geolocalizacion.latitud}%2C${selectedGeoRecord.geolocalizacion.longitud}`}
+                    style={{ display: 'block', width: '100%' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Botones de Acción */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <a
+                href={`https://www.google.com/maps?q=${selectedGeoRecord.geolocalizacion?.latitud},${selectedGeoRecord.geolocalizacion?.longitud}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.88rem' }}
+              >
+                <ExternalLink size={15} />
+                <span>Abrir en Google Maps</span>
+              </a>
+
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => setSelectedGeoRecord(null)}
+                style={{ padding: '0.5rem 1.25rem' }}
+              >
+                Cerrar Visor
+              </button>
             </div>
           </div>
         </div>

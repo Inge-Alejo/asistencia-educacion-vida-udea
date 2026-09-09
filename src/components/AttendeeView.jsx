@@ -231,13 +231,39 @@ export default function AttendeeView({
     e.preventDefault();
     setErrorAsistencia('');
 
-    if (!formData.documento.trim() || !formData.nombreCompleto.trim() || !formData.correo.trim()) {
-      setErrorAsistencia('Por favor complete todos los campos obligatorios.');
+    const doc = formData.documento.trim();
+    if (!doc) {
+      setErrorAsistencia('Por favor ingrese su número de documento de identidad.');
+      return;
+    }
+    if (formData.tipoDocumento !== 'PASAPORTE' && !/^\d{5,12}$/.test(doc)) {
+      setErrorAsistencia('El número de documento debe contener entre 5 y 12 dígitos numéricos.');
       return;
     }
 
-    if (evento.habilitarPlacaVehiculo && !formData.placaVehiculo.trim()) {
-      setErrorAsistencia('Para este evento es obligatorio registrar la placa vehicular para el parqueadero.');
+    const nombre = formData.nombreCompleto.trim();
+    if (!nombre || nombre.length < 5 || nombre.split(/\s+/).length < 2) {
+      setErrorAsistencia('Por favor ingrese su nombre y apellido completos (mínimo 2 palabras).');
+      return;
+    }
+
+    const email = formData.correo.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      setErrorAsistencia('Por favor ingrese un correo electrónico válido (ejemplo: usuario@udea.edu.co).');
+      return;
+    }
+
+    const telClean = formData.telefono.trim().replace(/\D/g, '');
+    if (!telClean || telClean.length < 7 || telClean.length > 10) {
+      setErrorAsistencia('Por favor ingrese un número de teléfono o celular válido (de 7 a 10 dígitos, ej: 3124567890).');
+      return;
+    }
+
+    // Placa vehicular: Totalmente OPCIONAL. Máximo 6 caracteres alfanuméricos si se provee.
+    const placaClean = formData.placaVehiculo.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (placaClean.length > 0 && (placaClean.length < 5 || placaClean.length > 6)) {
+      setErrorAsistencia('La placa vehicular debe tener entre 5 y 6 caracteres alfanuméricos (ej: KMW452). Si no cuenta con vehículo o moto, puede dejar este campo vacío.');
       return;
     }
 
@@ -249,12 +275,12 @@ export default function AttendeeView({
     const payload = {
       eventoId: evento.id,
       tipoDocumento: formData.tipoDocumento,
-      documento: sanitizeText(formData.documento.trim(), 20),
-      nombreCompleto: sanitizeText(formData.nombreCompleto.trim(), 100),
-      correo: sanitizeText(formData.correo.trim().toLowerCase(), 100),
-      telefono: sanitizeText(formData.telefono.trim(), 25),
+      documento: sanitizeText(doc, 20),
+      nombreCompleto: sanitizeText(nombre, 100),
+      correo: sanitizeText(email, 100),
+      telefono: sanitizeText(telClean, 25),
       vinculacion: formData.vinculacion,
-      placaVehiculo: evento.habilitarPlacaVehiculo ? sanitizeText(formData.placaVehiculo.trim().toUpperCase(), 10) : '',
+      placaVehiculo: (evento.habilitarPlacaVehiculo && placaClean) ? sanitizeText(placaClean, 6) : '',
       habeasDataAceptado: true,
       fechaHabeasData: new Date().toISOString(),
       geolocalizacion: {
@@ -812,14 +838,16 @@ export default function AttendeeView({
 
                 <div className="form-group">
                   <label className="form-label">
-                    <Phone size={14} /> Teléfono Móvil
+                    <Phone size={14} /> Celular / Teléfono <span className="req">*</span>
                   </label>
                   <input
                     type="tel"
                     className="form-input"
-                    placeholder="300 123 4567"
+                    placeholder="Ej: 3124567890 (10 dígitos)"
                     value={formData.telefono}
-                    onChange={(e) => handleFieldChange('telefono', e.target.value)}
+                    maxLength={10}
+                    onChange={(e) => handleFieldChange('telefono', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    required
                   />
                 </div>
 
@@ -840,23 +868,22 @@ export default function AttendeeView({
                   </select>
                 </div>
 
-                {/* CAMPO CONDICIONAL DE PLACA VEHICULAR: Solo se muestra si el evento lo habilitó */}
+                {/* CAMPO CONDICIONAL DE PLACA VEHICULAR: Totalmente opcional, máx 6 caracteres */}
                 {evento.habilitarPlacaVehiculo && (
                   <div className="form-group col-span-2 vehicle-highlight-field">
                     <label className="form-label vehicle-label">
-                      <Car size={16} /> Placa del Vehículo (Acceso a Parqueadero) <span className="req">*</span>
+                      <Car size={16} /> Placa del Vehículo <span style={{ fontSize: '0.8rem', color: '#008744', fontWeight: 'normal', marginLeft: '0.35rem' }}>(Opcional si tiene carro o moto)</span>
                     </label>
                     <input
                       type="text"
                       className="form-input vehicle-input"
-                      placeholder="Ej: ABC-123 o KMW-45E"
+                      placeholder="Ej: KMW452 o ABC12D (Opcional - máx. 6 caracteres)"
                       value={formData.placaVehiculo}
-                      onChange={(e) => handleFieldChange('placaVehiculo', e.target.value.toUpperCase())}
-                      maxLength={8}
-                      required
+                      onChange={(e) => handleFieldChange('placaVehiculo', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+                      maxLength={6}
                     />
                     <span className="field-hint">
-                      Este evento cuenta con control de parqueadero en la Facultad. Su placa quedará registrada para autorizar el ingreso.
+                      💡 <strong>Campo opcional:</strong> Ingrese la placa únicamente si requiere autorizar el ingreso al parqueadero de la Facultad. Si asiste a pie o en transporte público, déjelo vacío.
                     </span>
                   </div>
                 )}
