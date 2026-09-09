@@ -570,3 +570,54 @@ export function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
 
   return Math.round(R * c);
 }
+
+// Exportar respaldo integral de base de datos en formato JSON (Local-First)
+export function exportDatabaseBackupJSON() {
+  const backup = {
+    version: '1.0',
+    fechaExportacion: new Date().toISOString(),
+    institucion: 'Facultad de Medicina - Universidad de Antioquia',
+    data: {
+      events: JSON.parse(localStorage.getItem(STORAGE_KEY_EVENTS) || '[]'),
+      attendance: JSON.parse(localStorage.getItem(STORAGE_KEY_ATTENDANCE) || '[]'),
+      questions: JSON.parse(localStorage.getItem(STORAGE_KEY_QUESTIONS) || '[]'),
+      evaluations: JSON.parse(localStorage.getItem(STORAGE_KEY_EVALUATIONS) || '[]'),
+      satisfaction: JSON.parse(localStorage.getItem(STORAGE_KEY_SATISFACTION) || '[]')
+    }
+  };
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Backup_UdeA_Medicina_Eventos_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Restaurar respaldo integral de base de datos desde archivo JSON
+export function importDatabaseBackupJSON(jsonString) {
+  try {
+    const backup = JSON.parse(jsonString);
+    if (!backup?.data || !Array.isArray(backup.data.events)) {
+      return { success: false, message: 'El archivo no contiene un formato de respaldo válido de UdeA Medicina.' };
+    }
+
+    localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(backup.data.events || []));
+    localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(backup.data.attendance || []));
+    localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(backup.data.questions || []));
+    localStorage.setItem(STORAGE_KEY_EVALUATIONS, JSON.stringify(backup.data.evaluations || []));
+    localStorage.setItem(STORAGE_KEY_SATISFACTION, JSON.stringify(backup.data.satisfaction || []));
+
+    return {
+      success: true,
+      countEvents: backup.data.events.length,
+      countAttendance: backup.data.attendance?.length || 0
+    };
+  } catch (err) {
+    return { success: false, message: 'Error al procesar el archivo JSON: ' + err.message };
+  }
+}
+

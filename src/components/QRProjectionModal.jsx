@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { X, Download, Printer, Sparkles, MapPin, Calendar, Clock, Car, Globe, Check } from 'lucide-react';
+import { X, Download, Printer, Sparkles, MapPin, Calendar, Clock, Car, Globe, Check, Users } from 'lucide-react';
 
-export default function QRProjectionModal({ isOpen, onClose, evento }) {
+export default function QRProjectionModal({ isOpen, onClose, evento, asistencias = [] }) {
   const qrRef = useRef(null);
   const [copied, setCopied] = useState(false);
 
@@ -90,6 +90,10 @@ export default function QRProjectionModal({ isOpen, onClose, evento }) {
               <div className="meta-item">
                 <MapPin size={18} />
                 <span>{evento.lugar}</span>
+              </div>
+              <div className="meta-item live-counter-meta" style={{ color: '#008744', fontWeight: '700', backgroundColor: '#eafaf1', padding: '0.35rem 0.65rem', borderRadius: '6px' }}>
+                <Users size={18} />
+                <span>{asistencias.length} Asistente(s) Registrado(s) en Vivo</span>
               </div>
               {evento.habilitarPlacaVehiculo && (
                 <div className="meta-item vehicle-allowed">

@@ -14,6 +14,7 @@ import {
   recordEvaluation,
   recordSatisfaction
 } from '../services/storage';
+import { maskFullName, sanitizeText } from '../services/sanitizer';
 
 export default function AttendeeView({
   evento,
@@ -22,6 +23,16 @@ export default function AttendeeView({
   evaluaciones,
   onDataUpdated
 }) {
+  // Cooldown anti-spam para preguntas en vivo (20s)
+  const [qaCooldown, setQaCooldown] = useState(0);
+
+  useEffect(() => {
+    if (qaCooldown > 0) {
+      const timer = setTimeout(() => setQaCooldown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [qaCooldown]);
+
   // Control del Flujo Secuencial (Pasos 1 a 5)
   // 1: Ubicación GPS, 2: Datos de Asistencia, 3: Preguntas en Vivo, 4: Calificación Ponentes, 5: Microsoft Forms / Satisfacción
   const [activeStep, setActiveStep] = useState(1);
@@ -238,12 +249,12 @@ export default function AttendeeView({
     const payload = {
       eventoId: evento.id,
       tipoDocumento: formData.tipoDocumento,
-      documento: formData.documento.trim(),
-      nombreCompleto: formData.nombreCompleto.trim(),
-      correo: formData.correo.trim(),
-      telefono: formData.telefono.trim(),
+      documento: sanitizeText(formData.documento.trim(), 20),
+      nombreCompleto: sanitizeText(formData.nombreCompleto.trim(), 100),
+      correo: sanitizeText(formData.correo.trim().toLowerCase(), 100),
+      telefono: sanitizeText(formData.telefono.trim(), 25),
       vinculacion: formData.vinculacion,
-      placaVehiculo: evento.habilitarPlacaVehiculo ? formData.placaVehiculo.trim().toUpperCase() : '',
+      placaVehiculo: evento.habilitarPlacaVehiculo ? sanitizeText(formData.placaVehiculo.trim().toUpperCase(), 10) : '',
       habeasDataAceptado: true,
       fechaHabeasData: new Date().toISOString(),
       geolocalizacion: {
@@ -288,19 +299,22 @@ export default function AttendeeView({
     }
   };
 
-  // Envío de Preguntas al Ponente
+  // Envío de Preguntas al Ponente con sanitización y cooldown
   const handleEnviarPregunta = async (e) => {
     e.preventDefault();
-    if (!preguntaForm.textoPregunta.trim()) return;
+    if (qaCooldown > 0) return;
+    const cleanPregunta = sanitizeText(preguntaForm.textoPregunta.trim(), 400);
+    if (!cleanPregunta) return;
 
     await addQuestion({
       eventoId: evento.id,
       ponenteId: preguntaForm.ponenteId,
-      autor: preguntaForm.esAnonimo ? 'Asistente Anónimo' : (formData.nombreCompleto || preguntaForm.autor || 'Asistente'),
-      pregunta: preguntaForm.textoPregunta.trim()
+      autor: preguntaForm.esAnonimo ? 'Asistente Anónimo' : sanitizeText(formData.nombreCompleto || preguntaForm.autor || 'Asistente', 80),
+      pregunta: cleanPregunta
     });
 
     setPreguntaEnviada(true);
+    setQaCooldown(20); // 20s cooldown anti-spam
     setPreguntaForm(prev => ({ ...prev, textoPregunta: '' }));
     setTimeout(() => setPreguntaEnviada(false), 3500);
     if (onDataUpdated) onDataUpdated();
@@ -723,7 +737,7 @@ export default function AttendeeView({
                         <span>Este documento ya registró asistencia en este evento:</span>
                       </div>
                       <div className="doc-duplicate-details">
-                        <strong>{registroExistente.nombreCompleto}</strong> (Comprobante: <code>{registroExistente.id}</code>)
+                        <strong>{maskFullName(registroExistente.nombreCompleto)}</strong> (Comprobante: <code>{registroExistente.id}</code>)
                       </div>
                       <button
                         type="button"
@@ -980,9 +994,9 @@ export default function AttendeeView({
                 <span>Enviar pregunta de forma anónima</span>
               </label>
 
-              <button type="submit" className="btn-send-question">
+              <button type="submit" className="btn-send-question" disabled={qaCooldown > 0}>
                 <Send size={16} />
-                <span>Enviar al Moderador</span>
+                <span>{qaCooldown > 0 ? `Espere ${qaCooldown}s...` : 'Enviar al Moderador'}</span>
               </button>
             </div>
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Users, HelpCircle, Star, ThumbsUp, Download, QrCode, Plus, Search,
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
-  Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut
+  Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut, Upload
 } from 'lucide-react';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
 import {
@@ -12,7 +12,9 @@ import {
   deleteAttendance,
   deleteEvaluation,
   deleteSatisfaction,
-  isFirebaseConfigured
+  isFirebaseConfigured,
+  exportDatabaseBackupJSON,
+  importDatabaseBackupJSON
 } from '../services/storage';
 import { changeAdminPassword } from '../services/auth';
 
@@ -32,6 +34,8 @@ export default function AdminPanel({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterVinculacion, setFilterVinculacion] = useState('todos');
   const [filterPonente, setFilterPonente] = useState('todos');
+  const [searchTermQuestions, setSearchTermQuestions] = useState('');
+  const [filterEstadoPregunta, setFilterEstadoPregunta] = useState('todas');
   const [msFormsUrl, setMsFormsUrl] = useState(evento.microsoftFormsUrl || '');
 
   // Estado para cambio de contraseña
@@ -74,9 +78,20 @@ export default function AdminPanel({
     return matchSearch && matchVinculacion;
   });
 
-  // Filtrado de Preguntas
+  // Filtrado Multicriterio de Preguntas en Vivo
   const preguntasFiltradas = preguntas.filter(q => {
-    return filterPonente === 'todos' || q.ponenteId === filterPonente;
+    const matchPonente = filterPonente === 'todos' || q.ponenteId === filterPonente;
+    const matchSearch =
+      !searchTermQuestions.trim() ||
+      q.pregunta.toLowerCase().includes(searchTermQuestions.toLowerCase()) ||
+      q.autor.toLowerCase().includes(searchTermQuestions.toLowerCase());
+
+    let matchEstado = true;
+    if (filterEstadoPregunta === 'pendientes') matchEstado = !q.respondida;
+    else if (filterEstadoPregunta === 'respondidas') matchEstado = q.respondida;
+    else if (filterEstadoPregunta === 'destacadas') matchEstado = q.destacada;
+
+    return matchPonente && matchSearch && matchEstado;
   });
 
   const handleDescargarExcel = () => {
@@ -129,6 +144,47 @@ export default function AdminPanel({
             <Download size={16} />
             <span>Descargar Excel (.xlsx)</span>
           </button>
+          <button
+            className="btn-secondary"
+            onClick={exportDatabaseBackupJSON}
+            title="Exportar copia de seguridad integral de la base de datos en archivo .JSON"
+          >
+            <Download size={15} />
+            <span>Respaldar BD (JSON)</span>
+          </button>
+          <label
+            className="btn-secondary"
+            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            title="Restaurar base de datos desde un archivo de copia de seguridad .JSON"
+          >
+            <Upload size={15} />
+            <span>Restaurar BD</span>
+            <input
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (!window.confirm('¿Desea restaurar los datos desde este archivo? Se actualizarán los eventos y asistencias locales.')) {
+                  e.target.value = '';
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  const res = importDatabaseBackupJSON(event.target.result);
+                  if (res.success) {
+                    alert(`✓ Respaldo restaurado exitosamente: ${res.countEvents} eventos y ${res.countAttendance} asistencias.`);
+                    if (onDataUpdated) onDataUpdated();
+                  } else {
+                    alert('Error al restaurar respaldo: ' + res.message);
+                  }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+              }}
+            />
+          </label>
           {onDeleteEvent && (
             <button
               className="btn-danger-outline"
@@ -372,7 +428,17 @@ export default function AdminPanel({
       {/* PESTAÑA 2: PREGUNTAS A PONENTES (Q&A EN VIVO) */}
       {activeTab === 'preguntas' && (
         <div className="tab-panel">
-          <div className="table-controls-bar">
+          <div className="table-controls-bar" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+            <div className="search-box" style={{ flex: '1', minWidth: '220px' }}>
+              <Search size={16} />
+              <input
+                type="text"
+                placeholder="Buscar en preguntas o remitente..."
+                value={searchTermQuestions}
+                onChange={(e) => setSearchTermQuestions(e.target.value)}
+              />
+            </div>
+
             <div className="filter-box">
               <Filter size={16} />
               <select
@@ -387,8 +453,21 @@ export default function AdminPanel({
                 ))}
               </select>
             </div>
+
+            <div className="filter-box">
+              <select
+                value={filterEstadoPregunta}
+                onChange={(e) => setFilterEstadoPregunta(e.target.value)}
+              >
+                <option value="todas">Todas las preguntas</option>
+                <option value="pendientes">⏳ Solo Pendientes ({preguntas.filter(q => !q.respondida).length})</option>
+                <option value="destacadas">★ Solo Destacadas ({preguntas.filter(q => q.destacada).length})</option>
+                <option value="respondidas">✓ Solo Respondidas ({preguntas.filter(q => q.respondida).length})</option>
+              </select>
+            </div>
+
             <span className="feed-counter">
-              Mostrando {preguntasFiltradas.length} preguntas formuladas
+              Mostrando {preguntasFiltradas.length} de {preguntas.length} preguntas
             </span>
           </div>
 

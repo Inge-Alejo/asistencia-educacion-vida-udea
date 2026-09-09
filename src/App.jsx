@@ -195,6 +195,7 @@ export default function App() {
         isOpen={isQRModalOpen}
         onClose={() => setIsQRModalOpen(false)}
         evento={currentEvent}
+        asistencias={asistencias}
       />
 
       {/* Modal de Creación / Configuración de Evento */}
