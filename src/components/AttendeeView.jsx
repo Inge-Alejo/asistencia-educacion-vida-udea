@@ -108,7 +108,19 @@ export default function AttendeeView({
   useEffect(() => {
     if (!evento?.id) return;
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isReset = urlParams.get('reset') === '1' || urlParams.get('new') === '1';
       const sessionKey = `udea_session_attendee_${evento.id}`;
+
+      if (isReset) {
+        localStorage.removeItem(sessionKey);
+        setAsistenciaRegistrada(false);
+        setCodigoComprobante('');
+        setActiveStep(1);
+        setMaxUnlockedStep(1);
+        return;
+      }
+
       const saved = localStorage.getItem(sessionKey);
       if (saved) {
         const session = JSON.parse(saved);
@@ -428,6 +440,15 @@ export default function AttendeeView({
           <div className="session-banner-actions">
             <button
               type="button"
+              className={`btn-session-nav ${activeStep === 1 ? 'active' : ''}`}
+              onClick={() => setActiveStep(1)}
+              title="Ver el radar y las coordenadas GPS detectadas"
+            >
+              <MapPin size={15} />
+              <span>Ver Ubicación GPS</span>
+            </button>
+            <button
+              type="button"
               className={`btn-session-nav ${activeStep === 3 ? 'active' : ''}`}
               onClick={() => setActiveStep(3)}
             >
@@ -446,7 +467,7 @@ export default function AttendeeView({
               type="button"
               className="btn-change-attendee"
               onClick={() => {
-                if (window.confirm('¿Deseas registrar a otra persona con otro documento en este dispositivo?')) {
+                if (window.confirm('¿Deseas registrar a otra persona o realizar un nuevo registro para probar la ubicación GPS?')) {
                   localStorage.removeItem(`udea_session_attendee_${evento.id}`);
                   setAsistenciaRegistrada(false);
                   setCodigoComprobante('');
@@ -464,9 +485,9 @@ export default function AttendeeView({
                   setMaxUnlockedStep(1);
                 }
               }}
-              title="Registrar a otro participante"
+              title="Registrar a otro participante o probar de nuevo"
             >
-              Cambiar Asistente
+              🔄 Nuevo Registro / Probar GPS
             </button>
           </div>
         </div>

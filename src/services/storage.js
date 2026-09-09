@@ -206,11 +206,32 @@ const SEED_SATISFACTION = [
   }
 ];
 
-// Inicializador de LocalStorage
+// Inicializador de LocalStorage con migración automática de coordenadas
 export function initStorage() {
   if (!localStorage.getItem(STORAGE_KEY_EVENTS)) {
     localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(SEED_EVENTS));
+  } else {
+    // Migración automática en dispositivos que visitaron la app previamente:
+    // Asegura que los eventos semilla tengan las coordenadas exactas de la Facultad de Medicina
+    try {
+      const storedEvents = JSON.parse(localStorage.getItem(STORAGE_KEY_EVENTS) || '[]');
+      let updated = false;
+      storedEvents.forEach(evt => {
+        if (evt.id === 'EVT-MED-01' || evt.id === 'EVT-MED-02') {
+          if (!evt.coordenadas || Math.abs(evt.coordenadas.lat - UDEA_MEDICINA_COORDS.latitude) > 0.0001) {
+            evt.coordenadas = { lat: UDEA_MEDICINA_COORDS.latitude, lng: UDEA_MEDICINA_COORDS.longitude };
+            updated = true;
+          }
+        }
+      });
+      if (updated) {
+        localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(storedEvents));
+      }
+    } catch (e) {
+      console.warn('Error al verificar migración de eventos:', e);
+    }
   }
+
   if (!localStorage.getItem(STORAGE_KEY_ATTENDANCE)) {
     localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(SEED_ATTENDANCE));
   }

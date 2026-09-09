@@ -6,18 +6,18 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
   const qrRef = useRef(null);
   const [copied, setCopied] = useState(false);
 
-  // Determinar la URL base oficial
+  // Determinar la URL base oficial: Por defecto Producción Vercel para asegurar que cualquier teléfono móvil abra la versión oficial en vivo
   const officialProdDomain = 'https://asistencia-educacion-vida-udea.vercel.app';
-  const detectedOrigin = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null')
+  const detectedOrigin = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1'))
     ? window.location.origin
     : officialProdDomain;
 
-  const [baseUrl, setBaseUrl] = useState(detectedOrigin);
+  const [baseUrl, setBaseUrl] = useState(officialProdDomain);
 
   if (!isOpen || !evento) return null;
 
-  // URL absoluta y limpia a la que dirigirá el QR al escanear con el teléfono móvil
-  const qrTargetUrl = `${baseUrl.replace(/\/$/, '')}/?evento=${encodeURIComponent(evento.id)}&view=attendee`;
+  // URL absoluta y limpia con parámetro de versión/actualización (?v=2.2) para obligar a los móviles a cargar la versión más reciente sin caché vieja
+  const qrTargetUrl = `${baseUrl.replace(/\/$/, '')}/?evento=${encodeURIComponent(evento.id)}&view=attendee&v=2.2`;
 
   const handleDownloadQR = () => {
     const svgElement = qrRef.current.querySelector('svg');
