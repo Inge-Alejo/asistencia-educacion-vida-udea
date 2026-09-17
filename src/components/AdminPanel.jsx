@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import QRScannerModal from './QRScannerModal';
+import EventSelectorModal from './EventSelectorModal';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
 import {
   toggleQuestionAnswered,
@@ -25,6 +26,8 @@ import { changeAdminPassword } from '../services/auth';
 
 export default function AdminPanel({
   evento = {},
+  events = [],
+  onSelectEvent,
   asistencias = [],
   preguntas = [],
   evaluaciones = [],
@@ -42,6 +45,7 @@ export default function AdminPanel({
   const [selectedGeoRecord, setSelectedGeoRecord] = useState(null);
   const [selectedBadgeAttendee, setSelectedBadgeAttendee] = useState(null);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+  const [isEditSelectorOpen, setIsEditSelectorOpen] = useState(false);
 
   // Estados para filtros de Preguntas en Vivo (corrige error de carga)
   const [searchTermQuestions, setSearchTermQuestions] = useState('');
@@ -265,11 +269,11 @@ export default function AdminPanel({
           <button
             type="button"
             className="btn-edit-event"
-            onClick={() => onOpenEditEventModal && onOpenEditEventModal(evento)}
-            title="Editar la configuración, fechas o ponentes de este evento"
+            onClick={() => setIsEditSelectorOpen(true)}
+            title="Ver la lista de eventos creados para seleccionar cuál editar"
           >
             <Edit3 size={16} />
-            <span>Editar Evento Actual</span>
+            <span>Editar Evento Existente</span>
           </button>
           <button className="btn-secondary" onClick={onOpenQRModal}>
             <QrCode size={16} />
@@ -1506,6 +1510,23 @@ export default function AdminPanel({
           onClose={() => setIsQRScannerOpen(false)}
           eventoActual={evento}
           onDataUpdated={onDataUpdated}
+        />
+      )}
+
+      {/* Modal para Seleccionar Evento a Editar de la Lista de Existentes */}
+      {isEditSelectorOpen && (
+        <EventSelectorModal
+          isOpen={isEditSelectorOpen}
+          onClose={() => setIsEditSelectorOpen(false)}
+          events={events}
+          currentEventId={evento?.id}
+          onSelectForEdit={(ev) => {
+            if (onOpenEditEventModal) onOpenEditEventModal(ev);
+          }}
+          onSelectToView={(ev) => {
+            if (onSelectEvent) onSelectEvent(ev);
+          }}
+          onOpenNewEvent={onOpenNewEventModal}
         />
       )}
     </div>

@@ -183,12 +183,24 @@ export function getEventDaysList(evento) {
 export function checkEventDayStatus(evento, fechaYMD) {
   const days = getEventDaysList(evento);
   const index = days.indexOf(fechaYMD);
+  const diaNumero = index !== -1 ? index + 1 : null;
+
+  // Extraer horario específico para este día si existe en horariosPorDia
+  const horarioDia = (evento?.horariosPorDia && evento.horariosPorDia[fechaYMD])
+    ? evento.horariosPorDia[fechaYMD]
+    : null;
+
+  const horaInicio = horarioDia?.horaInicio || evento?.horaInicio || '08:00';
+  const horaFin = horarioDia?.horaFin || evento?.horaFin || '18:00';
 
   return {
     esDiaActivo: index !== -1,
-    diaNumero: index !== -1 ? index + 1 : null,
+    diaNumero,
     totalDias: days.length,
     fechaDia: fechaYMD,
-    diasList: days
+    diasList: days,
+    horaInicio,
+    horaFin,
+    tieneHorarioEspecial: Boolean(horarioDia && (horarioDia.horaFin !== evento?.horaFin || horarioDia.horaInicio !== evento?.horaInicio))
   };
 }

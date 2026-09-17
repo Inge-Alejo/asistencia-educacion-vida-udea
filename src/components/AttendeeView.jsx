@@ -801,6 +801,11 @@ export default function AttendeeView({
                 {eventDays.map((dStr, idx) => {
                   const attendedForThisDay = misAsistenciasEvento.find(a => a.fechaDia === dStr || a.diaNumero === (idx + 1));
                   const isToday = dStr === officialTime.fechaStr;
+                  const diaHorario = (evento?.horariosPorDia && evento.horariosPorDia[dStr]) || {
+                    horaInicio: evento?.horaInicio || '08:00',
+                    horaFin: evento?.horaFin || '17:00'
+                  };
+
                   return (
                     <div
                       key={dStr}
@@ -815,6 +820,7 @@ export default function AttendeeView({
                         ) : null}
                       </div>
                       <span className="step-day-date">{dStr}</span>
+                      <span className="step-day-hours">{diaHorario.horaInicio} - {diaHorario.horaFin}</span>
                       <span className={`step-status-tag ${attendedForThisDay ? 'ok' : 'pending'}`}>
                         {attendedForThisDay ? '✓ Registrado' : (isToday ? 'Por Registrar' : 'Pendiente')}
                       </span>
@@ -822,6 +828,17 @@ export default function AttendeeView({
                   );
                 })}
               </div>
+
+              {/* Indicador de horario de la jornada activa de hoy */}
+              {dayStatus.esDiaActivo && (
+                <div style={{ marginTop: '0.6rem', padding: '0.5rem 0.75rem', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '6px', fontSize: '0.82rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Clock size={14} color="#006633" />
+                  <span>
+                    Jornada de hoy ({officialTime.fechaStr}): <strong>{dayStatus.horaInicio} a {dayStatus.horaFin}</strong>
+                    {dayStatus.tieneHorarioEspecial ? ' • Horario especial de cierre' : ''}
+                  </span>
+                </div>
+              )}
 
               {yaRegistroHoy && (
                 <div style={{ marginTop: '0.75rem', background: '#ECFDF5', border: '1px solid #A7F3D0', padding: '0.65rem 0.85rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#065F46', fontSize: '0.85rem' }}>

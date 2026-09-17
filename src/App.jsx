@@ -239,6 +239,8 @@ export default function App() {
           ) : (
             <AdminPanel
               evento={currentEvent}
+              events={events}
+              onSelectEvent={handleSelectEvent}
               asistencias={asistencias}
               preguntas={preguntas}
               evaluaciones={evaluaciones}

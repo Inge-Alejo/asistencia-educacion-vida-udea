@@ -34,6 +34,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
     setFechaFin(initialEvent?.fechaFin || initialEvent?.fecha || new Date().toISOString().slice(0, 10));
     setHoraInicio(initialEvent?.horaInicio || '08:00');
     setHoraFin(initialEvent?.horaFin || '17:00');
+    setHorariosPorDia(initialEvent?.horariosPorDia || {});
     setLugar(initialEvent?.lugar || 'Auditorio Manuel Uribe Ángel - Facultad de Medicina UdeA');
     setHabilitarPlacaVehiculo(initialEvent?.habilitarPlacaVehiculo ?? true);
     setMicrosoftFormsUrl(initialEvent?.microsoftFormsUrl || '');
@@ -42,6 +43,19 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '' }]
     );
   }
+
+  const [horariosPorDia, setHorariosPorDia] = useState(() => initialEvent?.horariosPorDia || {});
+
+  const handleDayScheduleChange = (dateStr, field, value) => {
+    setHorariosPorDia(prev => ({
+      ...prev,
+      [dateStr]: {
+        horaInicio: prev[dateStr]?.horaInicio || horaInicio,
+        horaFin: prev[dateStr]?.horaFin || horaFin,
+        [field]: value
+      }
+    }));
+  };
 
   // Lista calculada de días para eventos multidía
   const computedDaysList = useMemo(() => {
@@ -86,6 +100,16 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       return;
     }
 
+    const computedHorariosPorDia = esMultidia
+      ? computedDaysList.reduce((acc, dStr) => {
+          acc[dStr] = {
+            horaInicio: horariosPorDia[dStr]?.horaInicio || horaInicio,
+            horaFin: horariosPorDia[dStr]?.horaFin || horaFin
+          };
+          return acc;
+        }, {})
+      : null;
+
     const eventPayload = {
       id: initialEvent?.id || `EVT-MED-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       titulo: titulo.trim(),
@@ -97,6 +121,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       diasEvento: computedDaysList,
       horaInicio,
       horaFin,
+      horariosPorDia: computedHorariosPorDia,
       lugar,
       coordenadas: initialEvent?.coordenadas || { lat: 6.261341, lng: -75.566464 },
       habilitarPlacaVehiculo,
@@ -262,7 +287,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                 </div>
               </div>
 
-              {/* Vista previa de los días calculados */}
+              {/* Vista previa y configuración de horarios por jornada */}
               <div className="days-preview-container">
                 <span className="days-preview-title">
                   <CheckCircle2 size={14} color="#006633" />
@@ -275,8 +300,61 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                     </span>
                   ))}
                 </div>
-                <p className="days-preview-note">
-                  El sistema verificará la fecha legal de Colombia por internet y exigirá que el participante registre su asistencia en cada uno de estos días de forma individual.
+              </div>
+
+              {/* Ajuste personalizado de hora de finalización/inicio por fecha */}
+              <div className="days-custom-schedules-card">
+                <div className="days-custom-schedules-header">
+                  <Clock size={16} color="#006633" />
+                  <div>
+                    <strong>Horario Específico por cada Fecha</strong>
+                    <p className="days-schedules-subtitle">
+                      Si alguna fecha finaliza a una hora diferente (ej. cierre al mediodía o tarde), puedes ajustar su horario de finalización aquí:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="days-schedules-table">
+                  {computedDaysList.map((dStr, idx) => {
+                    const diaConfig = horariosPorDia[dStr] || { horaInicio, horaFin };
+                    const currentInicio = diaConfig.horaInicio || horaInicio;
+                    const currentFin = diaConfig.horaFin || horaFin;
+                    const isCustom = currentInicio !== horaInicio || currentFin !== horaFin;
+
+                    return (
+                      <div key={dStr} className={`day-schedule-item ${isCustom ? 'is-custom' : ''}`}>
+                        <div className="day-schedule-meta">
+                          <span className="day-schedule-badge">Día {idx + 1}</span>
+                          <span className="day-schedule-date">{dStr}</span>
+                          {isCustom && <span className="custom-schedule-tag">Hora ajustada</span>}
+                        </div>
+                        <div className="day-schedule-inputs-row">
+                          <div className="day-input-pair">
+                            <span className="mini-label">Inicio:</span>
+                            <input
+                              type="time"
+                              className="form-input time-mini-input"
+                              value={currentInicio}
+                              onChange={(e) => handleDayScheduleChange(dStr, 'horaInicio', e.target.value)}
+                            />
+                          </div>
+                          <span className="time-separator">hasta</span>
+                          <div className="day-input-pair">
+                            <span className="mini-label">Finalización:</span>
+                            <input
+                              type="time"
+                              className="form-input time-mini-input"
+                              value={currentFin}
+                              onChange={(e) => handleDayScheduleChange(dStr, 'horaFin', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="days-preview-note" style={{ marginTop: '0.6rem' }}>
+                  El sistema validará la asistencia de cada día según su horario de finalización programado y la hora legal de Colombia.
                 </p>
               </div>
             </div>
