@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users, HelpCircle, Star, ThumbsUp, Download, QrCode, Plus, Search,
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
@@ -11,6 +11,7 @@ import {
   toggleQuestionFeatured,
   deleteQuestion,
   deleteAttendance,
+  deleteAllAttendance,
   deleteEvaluation,
   deleteSatisfaction,
   isFirebaseConfigured,
@@ -20,11 +21,11 @@ import {
 import { changeAdminPassword } from '../services/auth';
 
 export default function AdminPanel({
-  evento,
-  asistencias,
-  preguntas,
-  evaluaciones,
-  satisfaccion,
+  evento = {},
+  asistencias = [],
+  preguntas = [],
+  evaluaciones = [],
+  satisfaccion = [],
   onOpenQRModal,
   onOpenNewEventModal,
   onDeleteEvent,
@@ -36,6 +37,48 @@ export default function AdminPanel({
   const [filterVinculacion, setFilterVinculacion] = useState('todos');
   const [selectedGeoRecord, setSelectedGeoRecord] = useState(null);
   const [selectedBadgeAttendee, setSelectedBadgeAttendee] = useState(null);
+
+  // Estados para filtros de Preguntas en Vivo (corrige error de carga)
+  const [searchTermQuestions, setSearchTermQuestions] = useState('');
+  const [filterPonente, setFilterPonente] = useState('todos');
+  const [filterEstadoPregunta, setFilterEstadoPregunta] = useState('todas');
+
+  // Estados para eliminación masiva de datos con cuenta regresiva de 3s
+  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [purgeCountdown, setPurgeCountdown] = useState(3);
+  const [isPurging, setIsPurging] = useState(false);
+
+  // Efecto de temporizador de 3 segundos para confirmar eliminación masiva
+  useEffect(() => {
+    let timer;
+    if (showPurgeModal && purgeCountdown > 0) {
+      timer = setTimeout(() => {
+        setPurgeCountdown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [showPurgeModal, purgeCountdown]);
+
+  const handleOpenPurgeModal = () => {
+    setPurgeCountdown(3);
+    setShowPurgeModal(true);
+  };
+
+  const handleConfirmPurgeAll = async () => {
+    if (purgeCountdown > 0 || isPurging) return;
+    setIsPurging(true);
+    try {
+      await deleteAllAttendance(evento?.id);
+      setShowPurgeModal(false);
+      if (onDataUpdated) onDataUpdated();
+      alert(`✓ Se han eliminado exitosamente todos los registros de asistencia del evento "${evento?.titulo || ''}".`);
+    } catch (err) {
+      console.error('Error al purgar asistencias:', err);
+      alert('Hubo un inconveniente al eliminar los registros de asistencia.');
+    } finally {
+      setIsPurging(false);
+    }
+  };
 
   // Estados para cambio de contraseña
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -69,29 +112,35 @@ export default function AdminPanel({
     ? (satisfaccion.reduce((acc, s) => acc + s.npsRecomendacion, 0) / totalSat).toFixed(1)
     : '10.0';
 
-  // Filtrado de Asistencias
-  const asistenciasFiltradas = asistencias.filter(a => {
-    const matchSearch =
-      a.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.documento.includes(searchTerm) ||
-      (a.placaVehiculo && a.placaVehiculo.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Filtrado de Asistencias seguro
+  const asistenciasFiltradas = (asistencias || []).filter(a => {
+    const docStr = String(a?.documento || '');
+    const nameStr = String(a?.nombreCompleto || '').toLowerCase();
+    const placaStr = String(a?.placaVehiculo || '').toLowerCase();
+    const term = (searchTerm || '').toLowerCase();
 
-    const matchVinculacion = filterVinculacion === 'todos' || a.vinculacion === filterVinculacion;
+    const matchSearch =
+      nameStr.includes(term) ||
+      docStr.includes(searchTerm) ||
+      (placaStr && placaStr.includes(term));
+
+    const matchVinculacion = filterVinculacion === 'todos' || a?.vinculacion === filterVinculacion;
     return matchSearch && matchVinculacion;
   });
 
-  // Filtrado Multicriterio de Preguntas en Vivo
-  const preguntasFiltradas = preguntas.filter(q => {
-    const matchPonente = filterPonente === 'todos' || q.ponenteId === filterPonente;
+  // Filtrado Multicriterio de Preguntas en Vivo seguro
+  const preguntasFiltradas = (preguntas || []).filter(q => {
+    const matchPonente = filterPonente === 'todos' || q?.ponenteId === filterPonente;
+    const termQ = (searchTermQuestions || '').toLowerCase().trim();
     const matchSearch =
-      !searchTermQuestions.trim() ||
-      q.pregunta.toLowerCase().includes(searchTermQuestions.toLowerCase()) ||
-      q.autor.toLowerCase().includes(searchTermQuestions.toLowerCase());
+      !termQ ||
+      String(q?.pregunta || '').toLowerCase().includes(termQ) ||
+      String(q?.autor || '').toLowerCase().includes(termQ);
 
     let matchEstado = true;
-    if (filterEstadoPregunta === 'pendientes') matchEstado = !q.respondida;
-    else if (filterEstadoPregunta === 'respondidas') matchEstado = q.respondida;
-    else if (filterEstadoPregunta === 'destacadas') matchEstado = q.destacada;
+    if (filterEstadoPregunta === 'pendientes') matchEstado = !q?.respondida;
+    else if (filterEstadoPregunta === 'respondidas') matchEstado = q?.respondida;
+    else if (filterEstadoPregunta === 'destacadas') matchEstado = q?.destacada;
 
     return matchPonente && matchSearch && matchEstado;
   });
@@ -335,11 +384,23 @@ export default function AdminPanel({
                  <option value="Ponente / Conferencista">Ponente / Conferencista</option>
                  <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
                  <option value="Residente / Posgrado UdeA">Residente / Posgrado UdeA</option>
-                 <option value="Docente / Investigador UdeA">Docente / Investigador</option>
+                 <option value="Docente / Investigador UdeA">Docente / Investigador UdeA</option>
                  <option value="Egresado UdeA">Egresado UdeA</option>
                  <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
                </select>
              </div>
+
+              {asistencias.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-danger-purge"
+                  onClick={handleOpenPurgeModal}
+                  title="Eliminar permanentemente todos los registros de personas de este evento"
+                >
+                  <Trash2 size={15} />
+                  <span>Eliminar Todos los Asistentes ({asistencias.length})</span>
+                </button>
+              )}
            </div>
 
            <div className="table-responsive-container">
@@ -1030,6 +1091,68 @@ export default function AdminPanel({
           isModal={true}
           onClose={() => setSelectedBadgeAttendee(null)}
         />
+      )}
+
+      {/* Modal Seguro para Purgar / Eliminar Todos los Asistentes con cuenta de 3 segundos */}
+      {showPurgeModal && (
+        <div className="modal-overlay" onClick={() => !isPurging && setShowPurgeModal(false)}>
+          <div className="modal-container purge-modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="purge-modal-header">
+              <div className="purge-icon-circle">
+                <AlertCircle size={32} />
+              </div>
+              <h3 className="purge-modal-title">¿Eliminar Todos los Asistentes?</h3>
+              <p className="purge-modal-subtitle">
+                Esta acción eliminará de forma <strong>permanente e irreversible</strong> el registro de las <strong>{asistencias.length} personas</strong> inscritas en <em>"{evento?.titulo || 'este evento'}"</em>.
+              </p>
+            </div>
+
+            <div className="purge-modal-warning-box">
+              <p>⚠️ <strong>Atención de Auditoría:</strong> Se purgarán los comprobantes oficiales de ingreso y asistencias tanto de la base de datos local como de la nube institucional.</p>
+            </div>
+
+            <div className="purge-countdown-indicator">
+              {purgeCountdown > 0 ? (
+                <div className="countdown-pill locked">
+                  <Clock size={16} />
+                  <span>Por seguridad institucional, confirmación habilitada en: <strong>{purgeCountdown}s</strong></span>
+                </div>
+              ) : (
+                <div className="countdown-pill ready">
+                  <CheckCircle size={16} />
+                  <span>✓ Confirmación autorizada. Haga clic en el botón rojo para proceder.</span>
+                </div>
+              )}
+            </div>
+
+            <div className="purge-modal-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowPurgeModal(false)}
+                disabled={isPurging}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={`btn-danger-confirm ${purgeCountdown > 0 || isPurging ? 'disabled' : 'active'}`}
+                onClick={handleConfirmPurgeAll}
+                disabled={purgeCountdown > 0 || isPurging}
+                title={purgeCountdown > 0 ? `Espere ${purgeCountdown} segundos para habilitar la confirmación` : 'Eliminar permanentemente todos los registros'}
+              >
+                <Trash2 size={16} />
+                <span>
+                  {isPurging
+                    ? 'Purgando datos...'
+                    : purgeCountdown > 0
+                    ? `Espere (${purgeCountdown}s)...`
+                    : `Eliminar Definitivamente (${asistencias.length})`}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

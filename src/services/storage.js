@@ -428,6 +428,40 @@ export async function deleteAttendance(attId) {
   return list;
 }
 
+// Elimina todos los registros de asistencia de un evento (o generales)
+export async function deleteAllAttendance(eventId = null) {
+  const all = getAttendance();
+  const toDelete = eventId ? all.filter(a => a.eventoId === eventId) : all;
+  const remaining = eventId ? all.filter(a => a.eventoId !== eventId) : [];
+
+  localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(remaining));
+
+  // Limpiar verificaciones asociadas
+  try {
+    const localVerifs = JSON.parse(localStorage.getItem(STORAGE_KEY_VERIFICATIONS) || '{}');
+    toDelete.forEach(a => {
+      delete localVerifs[a.id];
+    });
+    localStorage.setItem(STORAGE_KEY_VERIFICATIONS, JSON.stringify(localVerifs));
+  } catch (e) {}
+
+  // Si Firestore está activo, purgar los documentos en la nube
+  if (isFirebaseConfigured() && db) {
+    try {
+      for (const item of toDelete) {
+        await deleteDoc(doc(db, 'asistencias', item.id)).catch(() => {});
+        await deleteDoc(doc(db, 'verificaciones', item.id)).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Firestore deleteAllAttendance notice:', err);
+    }
+  }
+
+  // Despachar evento para reactividad inmediata en todos los componentes
+  window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_ATTENDANCE }));
+  return remaining;
+}
+
 // Verifica el código QR de una escarapela digital
 export async function verifyAttendanceRecord(comprobanteId, providedToken = null) {
   if (!comprobanteId || typeof comprobanteId !== 'string') {
