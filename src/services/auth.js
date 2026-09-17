@@ -37,7 +37,7 @@ export function getLockoutRemainingSeconds() {
       return Math.ceil((lockoutUntil - now) / 1000);
     }
     return 0;
-  } catch (e) {
+  } catch {
     return 0;
   }
 }
@@ -54,7 +54,7 @@ function registerFailedAttempt() {
       return LOCKOUT_DURATION_MS / 1000;
     }
     return 0;
-  } catch (e) {
+  } catch {
     return 0;
   }
 }
@@ -64,14 +64,14 @@ function resetFailedAttempts() {
   try {
     sessionStorage.removeItem(ATTEMPTS_STORAGE_KEY);
     sessionStorage.removeItem(LOCKOUT_STORAGE_KEY);
-  } catch (e) {}
+  } catch {}
 }
 
 // Verifica si la sesión actual del administrador está activa
 export function isAdminAuthenticated() {
   try {
     return sessionStorage.getItem(AUTH_STORAGE_KEY) === 'true';
-  } catch (e) {
+  } catch {
     return false;
   }
 }

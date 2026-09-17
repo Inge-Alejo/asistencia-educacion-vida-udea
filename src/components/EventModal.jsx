@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, AlertCircle } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link } from 'lucide-react';
 
 export default function EventModal({ isOpen, onClose, onSave, initialEvent = null }) {
   const [titulo, setTitulo] = useState(initialEvent?.titulo || '');
-  const [fecha, setFecha] = useState(initialEvent?.fecha || new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(() => initialEvent?.fecha || new Date().toISOString().slice(0, 10));
   const [horaInicio, setHoraInicio] = useState(initialEvent?.horaInicio || '08:00');
   const [horaFin, setHoraFin] = useState(initialEvent?.horaFin || '17:00');
   const [lugar, setLugar] = useState(initialEvent?.lugar || 'Auditorio Manuel Uribe Ángel - Facultad de Medicina UdeA');
@@ -11,11 +11,11 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
   const [descripcion, setDescripcion] = useState(initialEvent?.descripcion || '');
   const [microsoftFormsUrl, setMicrosoftFormsUrl] = useState(initialEvent?.microsoftFormsUrl || '');
 
-  const [ponentes, setPonentes] = useState(
-    initialEvent?.ponentes || [
-      { id: `PON-${Date.now()}-1`, nombre: '', titulo: '', temaPonencia: '' }
-    ]
-  );
+  const [ponentes, setPonentes] = useState(() => (
+    initialEvent?.ponentes?.length
+      ? initialEvent.ponentes
+      : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '' }]
+  ));
 
   if (!isOpen) return null;
 
@@ -92,6 +92,21 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               onChange={(e) => setTitulo(e.target.value)}
               placeholder="Ej: Simposio de Actualización en Pediatría y Neonatología"
               required
+            />
+          </div>
+
+          {/* Descripción opcional del Evento */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="event-desc">
+              Descripción / Resumen del Evento (Opcional)
+            </label>
+            <textarea
+              id="event-desc"
+              rows={2}
+              className="form-input"
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              placeholder="Breve información o propósito del evento académico..."
             />
           </div>
 

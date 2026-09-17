@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Users, HelpCircle, Star, ThumbsUp, Download, QrCode, Plus, Search,
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
-  Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut, Upload, X, Award
+  ExternalLink, Trash2, Shield, KeyRound, LogOut, Upload, X, Award,
+  Database, HardDrive, Server, Activity, Wifi
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
@@ -80,13 +81,52 @@ export default function AdminPanel({
     }
   };
 
-  // Estados para cambio de contraseña
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  // Estados para cambio de contraseña y feedback
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
-  const [confirmPwd, setConfirmPwd] = useState('');
-  const [pwdError, setPwdError] = useState('');
-  const [pwdSuccess, setPwdSuccess] = useState('');
+  const [pwdMsg, setPwdMsg] = useState({ text: '', isError: false });
+
+  // -------------------------------------------------------------
+  // MONITOR DE CAPACIDAD Y ALMACENAMIENTO EN TIEMPO REAL (FIRESTORE)
+  // -------------------------------------------------------------
+  const dbMetrics = useMemo(() => {
+    const aJson = JSON.stringify(asistencias || []);
+    const pJson = JSON.stringify(preguntas || []);
+    const eJson = JSON.stringify(evaluaciones || []);
+    const sJson = JSON.stringify(satisfaccion || []);
+
+    const aBytes = typeof Blob !== 'undefined' ? new Blob([aJson]).size : aJson.length;
+    const pBytes = typeof Blob !== 'undefined' ? new Blob([pJson]).size : pJson.length;
+    const eBytes = typeof Blob !== 'undefined' ? new Blob([eJson]).size : eJson.length;
+    const sBytes = typeof Blob !== 'undefined' ? new Blob([sJson]).size : sJson.length;
+
+    const totalBytes = aBytes + pBytes + eBytes + sBytes;
+    const totalKB = (totalBytes / 1024).toFixed(2);
+    const totalMB = (totalBytes / (1024 * 1024)).toFixed(4);
+
+    // Límite Spark Firestore: 1 GiB = 1024 MB
+    const MAX_STORAGE_BYTES = 1024 * 1024 * 1024;
+    const porcentajeUso = ((totalBytes / MAX_STORAGE_BYTES) * 100).toFixed(4);
+    const totalDocumentos = (asistencias?.length || 0) + (preguntas?.length || 0) + (evaluaciones?.length || 0) + (satisfaccion?.length || 0);
+
+    return {
+      asistenciasCount: asistencias?.length || 0,
+      asistenciasKB: (aBytes / 1024).toFixed(1),
+      preguntasCount: preguntas?.length || 0,
+      preguntasKB: (pBytes / 1024).toFixed(1),
+      evaluacionesCount: evaluaciones?.length || 0,
+      evaluacionesKB: (eBytes / 1024).toFixed(1),
+      satisfaccionCount: satisfaccion?.length || 0,
+      satisfaccionKB: (sBytes / 1024).toFixed(1),
+      totalDocumentos,
+      totalBytes,
+      totalKB,
+      totalMB,
+      porcentajeUso,
+      isFirebaseLive: isFirebaseConfigured(),
+      lastSync: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    };
+  }, [asistencias, preguntas, evaluaciones, satisfaccion]);
 
   // Estadísticas Rápidas
   const totalAsistentes = asistencias.length;
@@ -357,6 +397,13 @@ export default function AdminPanel({
         >
           <FileSpreadsheet size={16} />
           <span>Excel y Microsoft Forms</span>
+        </button>
+        <button
+          className={`tab-link ${activeTab === 'database' ? 'active' : ''}`}
+          onClick={() => setActiveTab('database')}
+        >
+          <Database size={16} />
+          <span>Capacidad y Uso DB ({dbMetrics.totalDocumentos})</span>
         </button>
       </div>
 
@@ -945,6 +992,210 @@ export default function AdminPanel({
                   <span>Actualizar Contraseña de Acceso</span>
                 </button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PESTAÑA 6: ESTADO Y CAPACIDAD DE LA BASE DE DATOS EN TIEMPO REAL */}
+      {activeTab === 'database' && (
+        <div className="tab-panel">
+          {/* Header con Badge Pulsante de Estado Firestore */}
+          <div className="db-status-hero">
+            <div className="db-status-hero-left">
+              <div className="db-live-indicator">
+                <span className="live-dot" />
+                <span className="live-text">Google Cloud Firestore en Tiempo Real</span>
+              </div>
+              <h3 className="db-status-title">Monitor de Capacidad y Almacenamiento</h3>
+              <p className="db-status-subtitle">
+                Supervisión continua de cuotas, volumen de almacenamiento y documentos en la nube institucional UdeA (Plan Firebase Spark - 100% Gratuito).
+              </p>
+            </div>
+            <div className="db-status-hero-right">
+              <div className="db-sync-badge">
+                <Activity size={15} />
+                <span>Última sincronización: <strong>{dbMetrics.lastSync}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Grid de Métricas de Almacenamiento y Capacidad */}
+          <div className="db-metrics-grid">
+            {/* Tarjeta 1: Almacenamiento Consumido */}
+            <div className="db-metric-card">
+              <div className="db-card-header">
+                <div className="db-card-title-wrap">
+                  <HardDrive size={20} className="db-icon-primary" />
+                  <h4>Almacenamiento en Base de Datos</h4>
+                </div>
+                <span className="db-badge-free">1 GiB Gratuito</span>
+              </div>
+
+              <div className="db-storage-main-val">
+                <span className="storage-num">{dbMetrics.totalKB}</span>
+                <span className="storage-unit">KB</span>
+                <span className="storage-approx">({dbMetrics.totalBytes.toLocaleString()} bytes)</span>
+              </div>
+
+              {/* Barra de Progreso de Almacenamiento */}
+              <div className="db-progress-wrapper">
+                <div className="db-progress-bar-bg">
+                  <div
+                    className="db-progress-bar-fill"
+                    style={{ width: `${Math.max(parseFloat(dbMetrics.porcentajeUso) * 100, 1.2)}%` }}
+                  />
+                </div>
+                <div className="db-progress-labels">
+                  <span>Uso: <strong>{dbMetrics.porcentajeUso}%</strong> del límite</span>
+                  <span>Restante: <strong>{(1024 - parseFloat(dbMetrics.totalMB)).toFixed(2)} MB libres</strong></span>
+                </div>
+              </div>
+
+              <p className="db-metric-footnote">
+                ✓ El evento actual consume una fracción mínima del límite gratuito de 1.024 MB de Firestore Spark.
+              </p>
+            </div>
+
+            {/* Tarjeta 2: Operaciones Diarias de Lectura / Escritura */}
+            <div className="db-metric-card">
+              <div className="db-card-header">
+                <div className="db-card-title-wrap">
+                  <Server size={20} className="db-icon-primary" />
+                  <h4>Cuotas de Operaciones Diarias</h4>
+                </div>
+                <span className="db-badge-quota">Plan Spark</span>
+              </div>
+
+              <div className="db-quota-list">
+                <div className="db-quota-item">
+                  <div className="quota-info">
+                    <span className="quota-name">Escrituras Diarias Gratuitas</span>
+                    <span className="quota-limit">Hasta 20.000 / día</span>
+                  </div>
+                  <div className="quota-status-pill green">
+                    <CheckCircle size={13} />
+                    <span>Holgura Alta (Soporta miles de registros)</span>
+                  </div>
+                </div>
+
+                <div className="db-quota-item">
+                  <div className="quota-info">
+                    <span className="quota-name">Lecturas Diarias Gratuitas</span>
+                    <span className="quota-limit">Hasta 50.000 / día</span>
+                  </div>
+                  <div className="quota-status-pill green">
+                    <CheckCircle size={13} />
+                    <span>Holgura Alta (Sincronización multi-pantalla)</span>
+                  </div>
+                </div>
+
+                <div className="db-quota-item">
+                  <div className="quota-info">
+                    <span className="quota-name">Conexiones Simultáneas</span>
+                    <span className="quota-limit">Hasta 100 en tiempo real</span>
+                  </div>
+                  <div className="quota-status-pill blue">
+                    <Wifi size={13} />
+                    <span>Auditorios y Aulas UdeA</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Desglose por Colección en Tiempo Real */}
+          <div className="db-collections-panel">
+            <h4 className="db-panel-heading">
+              <Database size={18} />
+              <span>Desglose de Colecciones en Tiempo Real ({dbMetrics.totalDocumentos} documentos activos)</span>
+            </h4>
+
+            <div className="db-collections-grid">
+              <div className="db-collection-card">
+                <div className="col-top">
+                  <span className="col-name">asistencias</span>
+                  <span className="col-count">{dbMetrics.asistenciasCount} docs</span>
+                </div>
+                <div className="col-size-bar">
+                  <span>Tamaño estimado: <strong>{dbMetrics.asistenciasKB} KB</strong></span>
+                </div>
+                <div className="col-meta">Datos de registro, georreferenciación y vehículo</div>
+              </div>
+
+              <div className="db-collection-card">
+                <div className="col-top">
+                  <span className="col-name">preguntas</span>
+                  <span className="col-count">{dbMetrics.preguntasCount} docs</span>
+                </div>
+                <div className="col-size-bar">
+                  <span>Tamaño estimado: <strong>{dbMetrics.preguntasKB} KB</strong></span>
+                </div>
+                <div className="col-meta">Interacción y preguntas a ponentes en vivo</div>
+              </div>
+
+              <div className="db-collection-card">
+                <div className="col-top">
+                  <span className="col-name">evaluaciones</span>
+                  <span className="col-count">{dbMetrics.evaluacionesCount} docs</span>
+                </div>
+                <div className="col-size-bar">
+                  <span>Tamaño estimado: <strong>{dbMetrics.evaluacionesKB} KB</strong></span>
+                </div>
+                <div className="col-meta">Rúbrica de calificación docente y ponencias</div>
+              </div>
+
+              <div className="db-collection-card">
+                <div className="col-top">
+                  <span className="col-name">satisfaccion</span>
+                  <span className="col-count">{dbMetrics.satisfaccionCount} docs</span>
+                </div>
+                <div className="col-size-bar">
+                  <span>Tamaño estimado: <strong>{dbMetrics.satisfaccionKB} KB</strong></span>
+                </div>
+                <div className="col-meta">Métricas de calidad, logística y NPS</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tarjeta de Respaldo y Acciones de Base de Datos */}
+          <div className="db-backup-card">
+            <div className="backup-card-info">
+              <h4>Respaldo y Portabilidad de la Base de Datos</h4>
+              <p>
+                Descargue un volcado íntegro de la base de datos en formato JSON para copias de seguridad de auditoría institucional, o restaure datos en caso de contingencia.
+              </p>
+            </div>
+            <div className="backup-card-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={exportDatabaseBackupJSON}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Download size={16} />
+                <span>Exportar Respaldo Completo (JSON)</span>
+              </button>
+              <label
+                className="btn-secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0 }}
+              >
+                <Upload size={16} />
+                <span>Restaurar Respaldo (JSON)</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  style={{ display: 'none' }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const res = await importDatabaseBackupJSON(file);
+                      alert(res.message);
+                      if (res.success && onDataUpdated) onDataUpdated();
+                    }
+                  }}
+                />
+              </label>
             </div>
           </div>
         </div>

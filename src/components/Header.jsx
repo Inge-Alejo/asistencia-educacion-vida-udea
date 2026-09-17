@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, UserCheck, Settings, QrCode, Lock, LogOut, Calendar } from 'lucide-react';
+import { UserCheck, Settings, QrCode, Lock, LogOut, Calendar } from 'lucide-react';
 
 export default function Header({
   currentView,

@@ -8,12 +8,9 @@ import {
   Clock,
   User,
   CreditCard,
-  Car,
-  Award,
   ArrowLeft,
   Lock,
-  Sparkles,
-  ExternalLink
+  Sparkles
 } from 'lucide-react';
 import { verifyAttendanceRecord, getEvents } from '../services/storage';
 
@@ -22,11 +19,17 @@ export default function VerificationView({
   tokenSeguridad,
   onVolver
 }) {
-  const [loading, setLoading] = useState(true);
-  const [resultado, setResultado] = useState(null);
+  const [loading, setLoading] = useState(() => Boolean(comprobanteId));
+  const [resultado, setResultado] = useState(() => (
+    comprobanteId ? null : {
+      success: false,
+      message: 'No se suministró un código de comprobante para verificar.'
+    }
+  ));
   const [evento, setEvento] = useState(null);
 
   useEffect(() => {
+    if (!comprobanteId) return;
     let isMounted = true;
 
     async function doVerify() {
@@ -54,15 +57,7 @@ export default function VerificationView({
       }
     }
 
-    if (comprobanteId) {
-      doVerify();
-    } else {
-      setLoading(false);
-      setResultado({
-        success: false,
-        message: 'No se suministró un código de comprobante para verificar.'
-      });
-    }
+    doVerify();
 
     return () => {
       isMounted = false;

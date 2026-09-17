@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import AttendeeView from './components/AttendeeView';
 import AdminPanel from './components/AdminPanel';
@@ -20,86 +20,91 @@ import {
 import { isAdminAuthenticated, logoutAdmin } from './services/auth';
 
 export default function App() {
-  const [events, setEvents] = useState([]);
-  const [currentEvent, setCurrentEvent] = useState(null);
-  const [currentView, setCurrentView] = useState('attendee'); // 'attendee' | 'admin'
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [events, setEvents] = useState(() => {
+    initStorage();
+    return getEvents();
+  });
+
+  const [isAdmin, setIsAdmin] = useState(() => isAdminAuthenticated());
+
+  const [currentEvent, setCurrentEvent] = useState(() => {
+    const loaded = getEvents();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlEventId = params.get('evento');
+      if (urlEventId) {
+        const match = loaded.find(e => e.id === urlEventId);
+        if (match) return match;
+      }
+    }
+    return loaded[0] || null;
+  });
+
+  const [currentView, setCurrentView] = useState(() => {
+    if (typeof window === 'undefined') return 'attendee';
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === 'admin' && isAdminAuthenticated() ? 'admin' : 'attendee';
+  });
 
   // Parámetros de verificación cuando se escanea el QR de una escarapela
-  const [verificationParams, setVerificationParams] = useState(null);
+  const [verificationParams, setVerificationParams] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const verifyId = params.get('verificar') || params.get('verify') || params.get('credencial');
+    if (!verifyId) return null;
+    return {
+      comprobanteId: verifyId,
+      token: params.get('token') || ''
+    };
+  });
 
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === 'admin' && !isAdminAuthenticated();
+  });
+
+  const currentEventId = currentEvent?.id || '';
 
   // Estados de datos para el evento actual
-  const [asistencias, setAsistencias] = useState([]);
-  const [preguntas, setPreguntas] = useState([]);
-  const [evaluaciones, setEvaluaciones] = useState([]);
-  const [satisfaccion, setSatisfaccion] = useState([]);
-
-  // Cargar datos iniciales e interpretar parámetros URL (del escaneo del código QR)
-  useEffect(() => {
-    initStorage();
-    const loadedEvents = getEvents();
-    setEvents(loadedEvents);
-
-    const authActive = isAdminAuthenticated();
-    setIsAdmin(authActive);
-
-    // Leer parámetros de la URL: ?evento=EVT-MED-01&view=attendee o ?verificar=ATT-...
-    const params = new URLSearchParams(window.location.search);
-    const verifyId = params.get('verificar') || params.get('verify') || params.get('credencial');
-    if (verifyId) {
-      setVerificationParams({
-        comprobanteId: verifyId,
-        token: params.get('token') || ''
-      });
-    }
-
-    const urlEventId = params.get('evento');
-    const urlView = params.get('view');
-
-    if (urlView === 'admin') {
-      if (authActive) {
-        setCurrentView('admin');
-      } else {
-        setCurrentView('attendee');
-        setIsAuthModalOpen(true);
-      }
-    } else {
-      setCurrentView('attendee');
-    }
-
-    if (urlEventId) {
-      const match = loadedEvents.find(e => e.id === urlEventId);
-      if (match) {
-        setCurrentEvent(match);
-      } else if (loadedEvents.length > 0) {
-        setCurrentEvent(loadedEvents[0]);
-      }
-    } else if (loadedEvents.length > 0) {
-      setCurrentEvent(loadedEvents[0]);
-    }
-  }, []);
+  const [asistencias, setAsistencias] = useState(() => currentEventId ? getAttendance(currentEventId) : []);
+  const [preguntas, setPreguntas] = useState(() => currentEventId ? getQuestions(currentEventId) : []);
+  const [evaluaciones, setEvaluaciones] = useState(() => currentEventId ? getEvaluations(currentEventId) : []);
+  const [satisfaccion, setSatisfaccion] = useState(() => currentEventId ? getSatisfaction(currentEventId) : []);
 
   // Recargar datos reactivos del evento activo
-  const refreshEventData = () => {
-    if (!currentEvent) return;
-    setAsistencias(getAttendance(currentEvent.id));
-    setPreguntas(getQuestions(currentEvent.id));
-    setEvaluaciones(getEvaluations(currentEvent.id));
-    setSatisfaccion(getSatisfaction(currentEvent.id));
-  };
+  const refreshEventData = useCallback(() => {
+    if (!currentEventId) return;
+    setAsistencias(getAttendance(currentEventId));
+    setPreguntas(getQuestions(currentEventId));
+    setEvaluaciones(getEvaluations(currentEventId));
+    setSatisfaccion(getSatisfaction(currentEventId));
+  }, [currentEventId]);
 
   useEffect(() => {
-    refreshEventData();
-    if (!currentEvent?.id) return;
-    const unsubscribe = subscribeToEventData(currentEvent.id, () => {
+    if (!currentEventId) return;
+    const unsubscribe = subscribeToEventData(currentEventId, () => {
       refreshEventData();
     });
     return () => unsubscribe();
-  }, [currentEvent]);
+  }, [currentEventId, refreshEventData]);
+
+  const handleSelectEvent = (event) => {
+    setCurrentEvent(event);
+    if (event?.id) {
+      setAsistencias(getAttendance(event.id));
+      setPreguntas(getQuestions(event.id));
+      setEvaluaciones(getEvaluations(event.id));
+      setSatisfaccion(getSatisfaction(event.id));
+    } else {
+      setAsistencias([]);
+      setPreguntas([]);
+      setEvaluaciones([]);
+      setSatisfaccion([]);
+    }
+  };
 
   // Manejar creación o edición de evento
   const handleSaveEvent = (eventData) => {
@@ -107,7 +112,12 @@ export default function App() {
     const updated = getEvents();
     setEvents(updated);
     setCurrentEvent(eventData);
-    refreshEventData();
+    if (eventData?.id) {
+      setAsistencias(getAttendance(eventData.id));
+      setPreguntas(getQuestions(eventData.id));
+      setEvaluaciones(getEvaluations(eventData.id));
+      setSatisfaccion(getSatisfaction(eventData.id));
+    }
   };
 
   // Manejar eliminación del evento actual
@@ -119,9 +129,9 @@ export default function App() {
       const updated = getEvents();
       setEvents(updated);
       if (updated.length > 0) {
-        setCurrentEvent(updated[0]);
+        handleSelectEvent(updated[0]);
       } else {
-        setCurrentEvent(null);
+        handleSelectEvent(null);
       }
     }
   };
@@ -181,7 +191,7 @@ export default function App() {
         onNavigateView={handleNavigateView}
         currentEvent={currentEvent}
         events={events}
-        onSelectEvent={setCurrentEvent}
+        onSelectEvent={handleSelectEvent}
         onOpenQRModal={() => setIsQRModalOpen(true)}
         isAdmin={isAdmin}
         onLogoutAdmin={handleLogout}

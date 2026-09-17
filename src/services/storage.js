@@ -43,7 +43,7 @@ export async function generateVerificationToken(recordId, eventoId, documento) {
       a = ((a << 5) - a) + b.charCodeAt(0);
       return a & a;
     }, 0)).toString(16).padStart(16, '0');
-  } catch (e) {
+  } catch {
     return Math.abs(`${recordId}${eventoId}${documento}`.split('').reduce((a, b) => {
       a = ((a << 5) - a) + b.charCodeAt(0);
       return a & a;
@@ -264,7 +264,7 @@ export function initStorage() {
       if (updated) {
         localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(storedEvents));
       }
-    } catch (e) {
+    } catch {
       console.warn('Error al verificar migración de eventos:', e);
     }
   }
@@ -288,7 +288,7 @@ export function getEvents() {
   initStorage();
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY_EVENTS) || '[]');
-  } catch (e) {
+  } catch {
     return SEED_EVENTS;
   }
 }
@@ -329,7 +329,7 @@ export async function deleteEvent(eventId) {
   // 6. Limpiar sesión en caché del asistente para este evento
   try {
     localStorage.removeItem(`udea_session_attendee_${eventId}`);
-  } catch (e) {}
+  } catch {}
 
   return events;
 }
@@ -340,7 +340,7 @@ export function getAttendance(eventId = null) {
   try {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEY_ATTENDANCE) || '[]');
     return eventId ? list.filter(a => a.eventoId === eventId) : list;
-  } catch (e) {
+  } catch {
     return [];
   }
 }
@@ -386,7 +386,7 @@ export async function recordAttendance(record) {
       // Guardar también en la colección pública de verificación segura
       await setDoc(doc(db, 'verificaciones', newRecord.id), publicVerification);
       console.info('✓ Asistencia y verificación registradas en Firebase Firestore en vivo:', newRecord.id);
-    } catch (err) {
+    } catch {
       console.error('Error guardando en Firestore:', err);
     }
   }
@@ -399,7 +399,7 @@ export async function recordAttendance(record) {
     const localVerifs = JSON.parse(localStorage.getItem(STORAGE_KEY_VERIFICATIONS) || '{}');
     localVerifs[newRecord.id] = publicVerification;
     localStorage.setItem(STORAGE_KEY_VERIFICATIONS, JSON.stringify(localVerifs));
-  } catch (e) {
+  } catch {
     console.warn('Error guardando verificación en localStorage:', e);
   }
 
@@ -414,13 +414,13 @@ export async function deleteAttendance(attId) {
     const localVerifs = JSON.parse(localStorage.getItem(STORAGE_KEY_VERIFICATIONS) || '{}');
     delete localVerifs[attId];
     localStorage.setItem(STORAGE_KEY_VERIFICATIONS, JSON.stringify(localVerifs));
-  } catch (e) {}
+  } catch {}
 
   if (isFirebaseConfigured() && db) {
     try {
       await deleteDoc(doc(db, 'asistencias', attId));
       await deleteDoc(doc(db, 'verificaciones', attId));
-    } catch (err) {
+    } catch {
       console.warn('Firestore deleteDoc attendance notice:', err);
     }
   }
@@ -443,7 +443,7 @@ export async function deleteAllAttendance(eventId = null) {
       delete localVerifs[a.id];
     });
     localStorage.setItem(STORAGE_KEY_VERIFICATIONS, JSON.stringify(localVerifs));
-  } catch (e) {}
+  } catch {}
 
   // Si Firestore está activo, purgar los documentos en la nube
   if (isFirebaseConfigured() && db) {
@@ -452,7 +452,7 @@ export async function deleteAllAttendance(eventId = null) {
         await deleteDoc(doc(db, 'asistencias', item.id)).catch(() => {});
         await deleteDoc(doc(db, 'verificaciones', item.id)).catch(() => {});
       }
-    } catch (err) {
+    } catch {
       console.warn('Firestore deleteAllAttendance notice:', err);
     }
   }
@@ -484,7 +484,7 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
         }
         return { success: true, record: data, fromCloud: true };
       }
-    } catch (err) {
+    } catch {
       console.warn('Firestore verificación directa notice:', err);
     }
   }
@@ -502,7 +502,7 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
       }
       return { success: true, record: data, fromCloud: false };
     }
-  } catch (e) {}
+  } catch {}
 
   // 3. Fallback a la lista local de asistencias
   const list = getAttendance();
@@ -548,7 +548,7 @@ export function getQuestions(eventId = null) {
   try {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEY_QUESTIONS) || '[]');
     return eventId ? list.filter(q => q.eventoId === eventId) : list;
-  } catch (e) {
+  } catch {
     return [];
   }
 }
@@ -568,7 +568,7 @@ export async function addQuestion(qData) {
   if (isFirebaseConfigured() && db) {
     try {
       await setDoc(doc(db, 'preguntas', newQ.id), newQ);
-    } catch (err) {
+    } catch {
       console.warn('Pregunta local guardada. Firestore sync notice:', err);
     }
   }
@@ -586,7 +586,7 @@ export async function toggleQuestionAnswered(qId) {
     if (isFirebaseConfigured() && db) {
       try {
         await updateDoc(doc(db, 'preguntas', qId), { respondida: item.respondida });
-      } catch (err) {
+      } catch {
         console.warn('Firestore updateDoc notice:', err);
       }
     }
@@ -604,7 +604,7 @@ export async function toggleQuestionFeatured(qId) {
     if (isFirebaseConfigured() && db) {
       try {
         await updateDoc(doc(db, 'preguntas', qId), { destacada: item.destacada });
-      } catch (err) {
+      } catch {
         console.warn('Firestore updateDoc notice:', err);
       }
     }
@@ -619,7 +619,7 @@ export async function deleteQuestion(qId) {
   if (isFirebaseConfigured() && db) {
     try {
       await deleteDoc(doc(db, 'preguntas', qId));
-    } catch (err) {
+    } catch {
       console.warn('Firestore deleteDoc notice:', err);
     }
   }
@@ -633,7 +633,7 @@ export function getEvaluations(eventId = null) {
   try {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEY_EVALUATIONS) || '[]');
     return eventId ? list.filter(ev => ev.eventoId === eventId) : list;
-  } catch (e) {
+  } catch {
     return [];
   }
 }
@@ -651,7 +651,7 @@ export async function recordEvaluation(evalData) {
   if (isFirebaseConfigured() && db) {
     try {
       await setDoc(doc(db, 'evaluaciones', newEval.id), newEval);
-    } catch (err) {
+    } catch {
       console.warn('Firestore eval notice:', err);
     }
   }
@@ -666,7 +666,7 @@ export async function deleteEvaluation(evalId) {
   if (isFirebaseConfigured() && db) {
     try {
       await deleteDoc(doc(db, 'evaluaciones', evalId));
-    } catch (err) {
+    } catch {
       console.warn('Firestore eval delete notice:', err);
     }
   }
@@ -680,7 +680,7 @@ export function getSatisfaction(eventId = null) {
   try {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEY_SATISFACTION) || '[]');
     return eventId ? list.filter(s => s.eventoId === eventId) : list;
-  } catch (e) {
+  } catch {
     return [];
   }
 }
@@ -698,7 +698,7 @@ export async function recordSatisfaction(satData) {
   if (isFirebaseConfigured() && db) {
     try {
       await setDoc(doc(db, 'satisfaccion', newSat.id), newSat);
-    } catch (err) {
+    } catch {
       console.warn('Firestore sat notice:', err);
     }
   }
@@ -713,7 +713,7 @@ export async function deleteSatisfaction(satId) {
   if (isFirebaseConfigured() && db) {
     try {
       await deleteDoc(doc(db, 'satisfaccion', satId));
-    } catch (err) {
+    } catch {
       console.warn('Firestore sat delete notice:', err);
     }
   }
@@ -799,14 +799,14 @@ export function subscribeToEventData(eventId, onUpdate) {
         (err) => console.warn('Firestore satisfaccion snapshot:', err)
       );
       unsubs.push(unsubSat);
-    } catch (err) {
+    } catch {
       console.error('Error al configurar los listeners en vivo de Firestore:', err);
     }
   }
 
   return () => {
     unsubs.forEach(unsub => {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch {}
     });
   };
 }
@@ -872,7 +872,7 @@ export function importDatabaseBackupJSON(jsonString) {
       countEvents: backup.data.events.length,
       countAttendance: backup.data.attendance?.length || 0
     };
-  } catch (err) {
+  } catch {
     return { success: false, message: 'Error al procesar el archivo JSON: ' + err.message };
   }
 }

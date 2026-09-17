@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, KeyRound, Eye, EyeOff, ShieldAlert, CheckCircle2, ArrowLeft, Clock } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, ShieldAlert, ArrowLeft, Clock } from 'lucide-react';
 import { authenticateAdmin, getLockoutRemainingSeconds } from '../services/auth';
 
 export default function AdminAuthModal({ isOpen, onClose, onSuccess }) {
@@ -49,7 +49,7 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }) {
           setLockoutSeconds(res.lockoutSeconds);
         }
       }
-    } catch (err) {
+    } catch {
       setErrorMsg('Ocurrió un error al verificar las credenciales.');
     } finally {
       setIsVerifying(false);

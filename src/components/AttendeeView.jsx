@@ -17,11 +17,35 @@ import {
 } from '../services/storage';
 import { maskFullName, sanitizeText } from '../services/sanitizer';
 
+function getSavedAttendeeSession(eventId) {
+  if (typeof window === 'undefined' || !eventId) return null;
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isReset = urlParams.get('reset') === '1' || urlParams.get('new') === '1';
+    const sessionKey = `udea_session_attendee_${eventId}`;
+
+    if (isReset) {
+      localStorage.removeItem(sessionKey);
+      return null;
+    }
+
+    const saved = localStorage.getItem(sessionKey);
+    if (saved) {
+      const session = JSON.parse(saved);
+      if (session.documento && session.registrado) {
+        return session;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export default function AttendeeView({
   evento,
   asistencias,
   preguntas,
-  evaluaciones,
   onDataUpdated
 }) {
   // Cooldown anti-spam para preguntas en vivo (20s)
@@ -34,10 +58,13 @@ export default function AttendeeView({
     }
   }, [qaCooldown]);
 
+  // Recuperar sesión activa persistente del asistente en este evento
+  const sessionInfo = getSavedAttendeeSession(evento?.id);
+
   // Control del Flujo Secuencial (Pasos 1 a 5)
   // 1: Ubicación GPS, 2: Datos de Asistencia, 3: Preguntas en Vivo, 4: Calificación Ponentes, 5: Microsoft Forms / Satisfacción
-  const [activeStep, setActiveStep] = useState(1);
-  const [maxUnlockedStep, setMaxUnlockedStep] = useState(1);
+  const [activeStep, setActiveStep] = useState(() => (sessionInfo ? 3 : 1));
+  const [maxUnlockedStep, setMaxUnlockedStep] = useState(() => (sessionInfo ? 5 : 1));
 
   // Estado de Geolocalización
   const [geoState, setGeoState] = useState({
@@ -52,30 +79,31 @@ export default function AttendeeView({
   });
 
   // Estado del Formulario de Asistencia
-  const [formData, setFormData] = useState({
-    tipoDocumento: 'CC',
-    documento: '',
-    nombreCompleto: '',
-    correo: '',
-    telefono: '',
-    vinculacion: 'Estudiante Pregrado Medicina UdeA',
-    placaVehiculo: '',
-    habeasDataAceptado: false
-  });
+  const [formData, setFormData] = useState(() => ({
+    tipoDocumento: sessionInfo?.tipoDocumento || 'CC',
+    documento: sessionInfo?.documento || '',
+    nombreCompleto: sessionInfo?.nombreCompleto || '',
+    correo: sessionInfo?.correo || '',
+    telefono: sessionInfo?.telefono || '',
+    vinculacion: sessionInfo?.vinculacion || 'Estudiante Pregrado Medicina UdeA',
+    placaVehiculo: sessionInfo?.placaVehiculo || '',
+    habeasDataAceptado: Boolean(sessionInfo)
+  }));
 
-  const [asistenciaRegistrada, setAsistenciaRegistrada] = useState(false);
-  const [codigoComprobante, setCodigoComprobante] = useState('');
+  const [asistenciaRegistrada, setAsistenciaRegistrada] = useState(() => Boolean(sessionInfo));
+  const [codigoComprobante, setCodigoComprobante] = useState(() => sessionInfo?.comprobanteId || '');
   const [errorAsistencia, setErrorAsistencia] = useState('');
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
 
+  const currentEventId = evento?.id || '';
+  const currentDoc = (formData?.documento || '').trim();
+
   // Registro del participante activo para la Escarapela Digital
   const activeAttendeeRecord = useMemo(() => {
-    if (!codigoComprobante && !formData.documento) return null;
-    const doc = (formData.documento || '').trim();
-    const currentEventId = evento?.id || '';
+    if (!codigoComprobante && !currentDoc) return null;
     const found = (asistencias || []).find(a =>
       (codigoComprobante && a.id === codigoComprobante) ||
-      (a.eventoId === currentEventId && a.documento === doc)
+      (a.eventoId === currentEventId && a.documento === currentDoc)
     );
     if (found) return found;
 
@@ -92,23 +120,22 @@ export default function AttendeeView({
       };
     }
     return null;
-  }, [asistencias, codigoComprobante, formData, evento?.id, asistenciaRegistrada]);
+  }, [asistencias, codigoComprobante, formData, currentEventId, currentDoc, asistenciaRegistrada]);
 
   // Detección en tiempo real de documento previamente registrado en este evento
   const registroExistente = useMemo(() => {
-    const currentEventId = evento?.id || '';
-    if (!formData.documento || !formData.documento.trim() || !currentEventId) return null;
-    const doc = formData.documento.trim();
-    return (asistencias || []).find(a => a.eventoId === currentEventId && a.documento === doc);
-  }, [asistencias, evento?.id, formData.documento]);
+    if (!currentDoc || !currentEventId) return null;
+    return (asistencias || []).find(a => a.eventoId === currentEventId && a.documento === currentDoc);
+  }, [asistencias, currentEventId, currentDoc]);
 
   // Estado de Preguntas a Ponentes
-  const [preguntaForm, setPreguntaForm] = useState({
-    ponenteId: evento?.ponentes?.[0]?.id || '',
+  const defaultPonenteId = evento?.ponentes?.[0]?.id || '';
+  const [preguntaForm, setPreguntaForm] = useState(() => ({
+    ponenteId: defaultPonenteId,
     autor: '',
     esAnonimo: false,
     textoPregunta: ''
-  });
+  }));
   const [preguntaEnviada, setPreguntaEnviada] = useState(false);
 
   // Estado de Evaluaciones de Ponentes (una por ponente)
@@ -124,58 +151,6 @@ export default function AttendeeView({
   });
   const [satisfaccionEnviada, setSatisfaccionEnviada] = useState(false);
   const [showEmbeddedForms, setShowEmbeddedForms] = useState(true);
-
-  // Inicializar estado de ponente seleccionado
-  useEffect(() => {
-    if (evento?.ponentes?.length > 0 && !preguntaForm.ponenteId) {
-      setPreguntaForm(prev => ({ ...prev, ponenteId: evento.ponentes[0].id }));
-    }
-  }, [evento]);
-
-  // Recuperar sesión activa persistente del asistente en este evento
-  // Si ya se registró previamente en este dispositivo, va DIRECTAMENTE al Paso 3 (Preguntas en Vivo)
-  useEffect(() => {
-    if (!evento?.id) return;
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const isReset = urlParams.get('reset') === '1' || urlParams.get('new') === '1';
-      const sessionKey = `udea_session_attendee_${evento.id}`;
-
-      if (isReset) {
-        localStorage.removeItem(sessionKey);
-        setAsistenciaRegistrada(false);
-        setCodigoComprobante('');
-        setActiveStep(1);
-        setMaxUnlockedStep(1);
-        return;
-      }
-
-      const saved = localStorage.getItem(sessionKey);
-      if (saved) {
-        const session = JSON.parse(saved);
-        if (session.documento && session.registrado) {
-          setFormData(prev => ({
-            ...prev,
-            tipoDocumento: session.tipoDocumento || prev.tipoDocumento,
-            documento: session.documento,
-            nombreCompleto: session.nombreCompleto || prev.nombreCompleto,
-            correo: session.correo || prev.correo,
-            telefono: session.telefono || prev.telefono,
-            vinculacion: session.vinculacion || prev.vinculacion,
-            placaVehiculo: session.placaVehiculo || prev.placaVehiculo,
-            habeasDataAceptado: true
-          }));
-          setCodigoComprobante(session.comprobanteId || '');
-          setAsistenciaRegistrada(true);
-          setMaxUnlockedStep(5);
-          // Va directamente a Preguntas en Vivo
-          setActiveStep(3);
-        }
-      }
-    } catch (e) {
-      console.warn('Error al recuperar sesión del asistente:', e);
-    }
-  }, [evento?.id]);
 
   // Manejar cambio de campos del formulario y limpiar errores en tiempo real
   const handleFieldChange = (field, value) => {
@@ -346,7 +321,7 @@ export default function AttendeeView({
           registrado: true,
           fechaRegistro: new Date().toISOString()
         }));
-      } catch (err) {
+      } catch {
         console.warn('Error al guardar sesión del asistente:', err);
       }
 
@@ -544,7 +519,6 @@ export default function AttendeeView({
             const isCompleted = item.step < activeStep || (item.step === 2 && asistenciaRegistrada);
             const isCurrent = item.step === activeStep;
             const isUnlocked = item.step <= maxUnlockedStep;
-            const Icon = item.icon;
 
             return (
               <button
@@ -863,7 +837,7 @@ export default function AttendeeView({
                               comprobanteId: registroExistente.id,
                               registrado: true
                             }));
-                          } catch (e) {}
+                          } catch {}
                           setActiveStep(3);
                         }}
                       >
@@ -1006,7 +980,7 @@ export default function AttendeeView({
                               comprobanteId: compId,
                               registrado: true
                             }));
-                          } catch (e) {}
+                          } catch {}
                           setErrorAsistencia('');
                           setActiveStep(3);
                         }}
