@@ -271,7 +271,12 @@ export default function DigitalBadge({
   };
 
   const handlePrintBadge = () => {
-    window.print();
+    try {
+      window.print();
+    } catch (err) {
+      console.warn('window.print() no disponible en este dispositivo, generando PDF:', err);
+      handleDownloadBadgePDF();
+    }
   };
 
   const badgeContent = (
