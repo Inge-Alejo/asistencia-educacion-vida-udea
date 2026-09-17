@@ -20,6 +20,17 @@ service cloud.firestore {
       allow read, update, delete: if request.auth != null;
     }
 
+    // Colección de Verificaciones Públicas Seguras (Escarapelas Digitales):
+    // Permite que la cámara de cualquier celular verifique la validez de la inscripción
+    // mostrando únicamente datos no sensibles (nombre, documento enmascarado, evento, presencialidad).
+    match /verificaciones/{verificacionId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.id is string &&
+                               request.resource.data.nombreCompleto is string &&
+                               request.resource.data.eventoId is string;
+      allow delete: if request.auth != null;
+    }
+
     // Colección de Preguntas a Ponentes:
     // Abierto para crear preguntas y leer preguntas del auditorio en vivo.
     // Solo administradores o moderadores pueden marcar respondida, destacar o eliminar.

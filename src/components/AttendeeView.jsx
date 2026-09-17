@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import {
   MapPin, CheckCircle2, AlertTriangle, Send, Star, Car, User, Mail,
-  Phone, CreditCard, Sparkles, MessageSquare, ThumbsUp, HelpCircle,
+  Phone, CreditCard, MessageSquare, ThumbsUp, HelpCircle,
   Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check,
-  Navigation, Radio
+  Navigation, Radio, Award
 } from 'lucide-react';
+import DigitalBadge from './DigitalBadge';
 import {
   UDEA_MEDICINA_COORDS,
   calcularDistanciaMetros,
@@ -65,12 +66,40 @@ export default function AttendeeView({
   const [asistenciaRegistrada, setAsistenciaRegistrada] = useState(false);
   const [codigoComprobante, setCodigoComprobante] = useState('');
   const [errorAsistencia, setErrorAsistencia] = useState('');
+  const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
+
+  // Registro del participante activo para la Escarapela Digital
+  const activeAttendeeRecord = useMemo(() => {
+    if (!codigoComprobante && !formData.documento) return null;
+    const doc = (formData.documento || '').trim();
+    const currentEventId = evento?.id || '';
+    const found = (asistencias || []).find(a =>
+      (codigoComprobante && a.id === codigoComprobante) ||
+      (a.eventoId === currentEventId && a.documento === doc)
+    );
+    if (found) return found;
+
+    if (asistenciaRegistrada) {
+      return {
+        id: codigoComprobante || 'ATT-MED-01',
+        eventoId: currentEventId,
+        nombreCompleto: formData.nombreCompleto || 'Participante',
+        tipoDocumento: formData.tipoDocumento || 'CC',
+        documento: formData.documento || '',
+        vinculacion: formData.vinculacion || 'Asistente',
+        placaVehiculo: formData.placaVehiculo || '',
+        fechaRegistro: new Date().toLocaleString('es-CO')
+      };
+    }
+    return null;
+  }, [asistencias, codigoComprobante, formData, evento?.id, asistenciaRegistrada]);
 
   // Detección en tiempo real de documento previamente registrado en este evento
   const registroExistente = useMemo(() => {
-    if (!formData.documento || !formData.documento.trim() || !evento?.id) return null;
+    const currentEventId = evento?.id || '';
+    if (!formData.documento || !formData.documento.trim() || !currentEventId) return null;
     const doc = formData.documento.trim();
-    return (asistencias || []).find(a => a.eventoId === evento.id && a.documento === doc);
+    return (asistencias || []).find(a => a.eventoId === currentEventId && a.documento === doc);
   }, [asistencias, evento?.id, formData.documento]);
 
   // Estado de Preguntas a Ponentes
@@ -272,10 +301,10 @@ export default function AttendeeView({
       return;
     }
 
-    // Placa vehicular: Totalmente OPCIONAL. Máximo 6 caracteres alfanuméricos si se provee.
-    const placaClean = formData.placaVehiculo.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (placaClean.length > 0 && (placaClean.length < 5 || placaClean.length > 6)) {
-      setErrorAsistencia('La placa vehicular debe tener entre 5 y 6 caracteres alfanuméricos (ej: KMW452). Si no cuenta con vehículo o moto, puede dejar este campo vacío.');
+    // Placa vehicular: Totalmente OPCIONAL si el evento la tiene habilitada. Máximo 6 caracteres alfanuméricos si se provee.
+    const placaClean = (formData.placaVehiculo || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (evento.habilitarPlacaVehiculo && placaClean.length > 0 && (placaClean.length < 5 || placaClean.length > 6)) {
+      setErrorAsistencia('La placa vehicular debe tener entre 5 y 6 caracteres alfanuméricos (ej: KMW452 o ABC12D). Si no cuenta con vehículo, puede dejar este campo vacío.');
       return;
     }
 
@@ -462,6 +491,15 @@ export default function AttendeeView({
             >
               <FileText size={15} />
               <span>Ver Comprobante</span>
+            </button>
+            <button
+              type="button"
+              className="btn-session-nav badge-btn-pill"
+              onClick={() => setIsBadgeModalOpen(true)}
+              title="Ver mi Escarapela Digital oficial para ingreso"
+            >
+              <Award size={15} />
+              <span>Mi Escarapela Digital</span>
             </button>
             <button
               type="button"
@@ -723,6 +761,21 @@ export default function AttendeeView({
                 <span>N° Comprobante:</span> <strong>{codigoComprobante}</strong>
               </div>
 
+              {/* Acceso a la Escarapela Digital Oficial con Código QR */}
+              <div className="badge-cta-container">
+                <button
+                  type="button"
+                  className="btn-open-badge-glow pulse"
+                  onClick={() => setIsBadgeModalOpen(true)}
+                >
+                  <Award size={20} />
+                  <span>🏷️ Ver e Imprimir Mi Escarapela Digital</span>
+                </button>
+                <p className="badge-cta-hint">
+                  Incluye tu código QR de verificación oficial para identificarte e ingresar al auditorio.
+                </p>
+              </div>
+
               <div className="post-register-nav-box">
                 <p>Ahora puedes participar con preguntas al ponente o responder las encuestas:</p>
                 <div className="next-steps-buttons">
@@ -879,6 +932,7 @@ export default function AttendeeView({
                     value={formData.vinculacion}
                     onChange={(e) => handleFieldChange('vinculacion', e.target.value)}
                   >
+                    <option value="Ponente / Conferencista">Ponente / Conferencista Invitado</option>
                     <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado Medicina UdeA</option>
                     <option value="Residente / Posgrado UdeA">Residente / Especialidades Médicas UdeA</option>
                     <option value="Docente / Investigador UdeA">Docente / Investigador UdeA</option>
@@ -1436,6 +1490,16 @@ export default function AttendeeView({
             <div></div>
           </div>
         </section>
+      )}
+
+      {/* Modal de la Escarapela Digital Oficial */}
+      {isBadgeModalOpen && activeAttendeeRecord && (
+        <DigitalBadge
+          asistente={activeAttendeeRecord}
+          evento={evento}
+          isModal={true}
+          onClose={() => setIsBadgeModalOpen(false)}
+        />
       )}
     </div>
   );

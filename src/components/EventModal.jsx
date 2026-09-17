@@ -186,7 +186,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                   Habilitar Registro de Placa del Vehículo
                 </label>
                 <p className="toggle-description">
-                  Si se activa, el formulario de asistencia incluirá obligatoriamente el campo para la placa vehicular del participante para coordinar el ingreso al parqueadero de la Facultad.
+                  Si se activa, el formulario de asistencia incluirá el campo opcional para la placa vehicular del participante para coordinar el ingreso al parqueadero de la Facultad.
                 </p>
               </div>
             </div>

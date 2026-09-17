@@ -29,25 +29,39 @@ export default function Header({
             </div>
           </div>
 
-          {/* Selector de Evento Activo en la cabecera */}
-          <div className="header-event-selector">
-            <Calendar size={16} className="selector-icon" />
-            <select
-              value={currentEvent?.id || ''}
-              onChange={(e) => {
-                const found = events.find(ev => ev.id === e.target.value);
-                if (found) onSelectEvent(found);
-              }}
-              className="event-dropdown"
-              aria-label="Seleccionar evento"
-            >
-              {events.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.titulo.length > 45 ? ev.titulo.substring(0, 45) + '...' : ev.titulo} ({ev.fecha})
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Selector de Evento Activo: Solo administradores pueden cambiar de evento */}
+          {isAdmin && currentView === 'admin' ? (
+            <div className="header-event-selector">
+              <Calendar size={16} className="selector-icon" />
+              <select
+                value={currentEvent?.id || ''}
+                onChange={(e) => {
+                  const found = events.find(ev => ev.id === e.target.value);
+                  if (found) onSelectEvent(found);
+                }}
+                className="event-dropdown"
+                aria-label="Seleccionar evento administrativo"
+              >
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.titulo.length > 45 ? ev.titulo.substring(0, 45) + '...' : ev.titulo} ({ev.fecha})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="header-event-locked-badge" title="Evento asignado según código QR escaneado">
+              <span className="locked-pill-tag">🔒 Evento Oficial</span>
+              <div className="locked-text-wrap">
+                <strong className="locked-title">
+                  {currentEvent?.titulo
+                    ? (currentEvent.titulo.length > 38 ? currentEvent.titulo.substring(0, 38) + '...' : currentEvent.titulo)
+                    : 'Evento Académico UdeA'}
+                </strong>
+                <span className="locked-date">{currentEvent?.fecha || ''}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

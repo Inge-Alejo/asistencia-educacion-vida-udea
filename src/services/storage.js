@@ -8,12 +8,13 @@ import {
   collection,
   doc,
   setDoc,
+  getDoc,
   query,
   where,
   onSnapshot,
   updateDoc,
   deleteDoc
-} from './firebase';
+} from './firebase.js';
 
 export { isFirebaseConfigured };
 
@@ -22,6 +23,42 @@ const STORAGE_KEY_ATTENDANCE = 'udea_med_attendance_v1';
 const STORAGE_KEY_QUESTIONS = 'udea_med_questions_v1';
 const STORAGE_KEY_EVALUATIONS = 'udea_med_evaluations_v1';
 const STORAGE_KEY_SATISFACTION = 'udea_med_satisfaction_v1';
+const STORAGE_KEY_VERIFICATIONS = 'udea_med_verifications_v1';
+
+const VERIFICATION_SALT = 'udea_medicina_escarapela_2026_salt_seguridad';
+
+// Generar firma criptográfica para la escarapela digital (anti-falsificación)
+export async function generateVerificationToken(recordId, eventoId, documento) {
+  try {
+    const raw = `${recordId}::${eventoId}::${documento}::${VERIFICATION_SALT}`;
+    const subtle = (typeof window !== 'undefined' && window.crypto?.subtle) ||
+                   (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle);
+    if (subtle) {
+      const msgBuffer = new TextEncoder().encode(raw);
+      const hashBuffer = await subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 24);
+    }
+    return Math.abs(`${recordId}${eventoId}${documento}`.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0)).toString(16).padStart(16, '0');
+  } catch (e) {
+    return Math.abs(`${recordId}${eventoId}${documento}`.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0)).toString(16).padStart(16, '0');
+  }
+}
+
+// Enmascaramiento de documento para protección de datos personales (Habeas Data Ley 1581)
+export function maskDocumento(doc) {
+  if (!doc) return '******';
+  const str = String(doc).trim();
+  if (str.length <= 4) return '•••' + str.slice(-1);
+  if (str.length <= 7) return str.substring(0, 2) + '••••' + str.slice(-2);
+  return str.substring(0, 3) + '••••' + str.slice(-3);
+}
 
 // Coordenadas oficiales de la Facultad de Medicina UdeA (Cra. 51D # 62-29, Medellín - Área de la Salud)
 // Verificado con enlace oficial Google Maps: https://maps.app.goo.gl/968rjfJ1vFJtpDbn7
@@ -316,17 +353,39 @@ export async function recordAttendance(record) {
     return { success: false, message: 'Ya se encuentra registrada la asistencia con este número de documento.' };
   }
 
+  const newId = `ATT-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const tokenSeguridad = await generateVerificationToken(newId, record.eventoId, record.documento);
+
   const newRecord = {
     ...record,
-    id: `ATT-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    id: newId,
+    tokenSeguridad,
     fechaRegistro: new Date().toLocaleString('es-CO')
+  };
+
+  const publicVerification = {
+    id: newRecord.id,
+    token: tokenSeguridad,
+    eventoId: newRecord.eventoId,
+    nombreCompleto: newRecord.nombreCompleto,
+    tipoDocumento: newRecord.tipoDocumento || 'CC',
+    documentoMasked: maskDocumento(newRecord.documento),
+    vinculacion: newRecord.vinculacion || 'Asistente',
+    placaVehiculo: newRecord.placaVehiculo || '',
+    fechaRegistro: newRecord.fechaRegistro,
+    esPresencial: Boolean(newRecord.geolocalizacion?.esPresencial),
+    distanciaSedeMetros: newRecord.geolocalizacion?.distanciaSedeMetros ?? null,
+    estado: 'VALIDO',
+    creadoEn: new Date().toISOString()
   };
 
   // Guardar primero en Cloud Firestore para sincronización multi-dispositivo en vivo
   if (db) {
     try {
       await setDoc(doc(db, 'asistencias', newRecord.id), newRecord);
-      console.info('✓ Asistencia registrada en Firebase Firestore en vivo:', newRecord.id);
+      // Guardar también en la colección pública de verificación segura
+      await setDoc(doc(db, 'verificaciones', newRecord.id), publicVerification);
+      console.info('✓ Asistencia y verificación registradas en Firebase Firestore en vivo:', newRecord.id);
     } catch (err) {
       console.error('Error guardando en Firestore:', err);
     }
@@ -335,6 +394,15 @@ export async function recordAttendance(record) {
   list.unshift(newRecord);
   localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(list));
 
+  // Guardar en caché local de verificaciones
+  try {
+    const localVerifs = JSON.parse(localStorage.getItem(STORAGE_KEY_VERIFICATIONS) || '{}');
+    localVerifs[newRecord.id] = publicVerification;
+    localStorage.setItem(STORAGE_KEY_VERIFICATIONS, JSON.stringify(localVerifs));
+  } catch (e) {
+    console.warn('Error guardando verificación en localStorage:', e);
+  }
+
   return { success: true, record: newRecord };
 }
 
@@ -342,15 +410,102 @@ export async function deleteAttendance(attId) {
   const list = getAttendance().filter(a => a.id !== attId);
   localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(list));
 
+  try {
+    const localVerifs = JSON.parse(localStorage.getItem(STORAGE_KEY_VERIFICATIONS) || '{}');
+    delete localVerifs[attId];
+    localStorage.setItem(STORAGE_KEY_VERIFICATIONS, JSON.stringify(localVerifs));
+  } catch (e) {}
+
   if (isFirebaseConfigured() && db) {
     try {
       await deleteDoc(doc(db, 'asistencias', attId));
+      await deleteDoc(doc(db, 'verificaciones', attId));
     } catch (err) {
       console.warn('Firestore deleteDoc attendance notice:', err);
     }
   }
 
   return list;
+}
+
+// Verifica el código QR de una escarapela digital
+export async function verifyAttendanceRecord(comprobanteId, providedToken = null) {
+  if (!comprobanteId || typeof comprobanteId !== 'string') {
+    return { success: false, message: 'Código de comprobante no proporcionado o inválido.' };
+  }
+
+  const cleanId = comprobanteId.trim();
+
+  // 1. Intentar consultar en Firebase Firestore colección 'verificaciones'
+  if (db) {
+    try {
+      const snap = await getDoc(doc(db, 'verificaciones', cleanId));
+      if (snap.exists()) {
+        const data = snap.data();
+        if (providedToken && data.token && data.token !== providedToken) {
+          return {
+            success: false,
+            message: 'La firma criptográfica de seguridad no coincide. Esta escarapela ha sido modificada o es apócrifa.'
+          };
+        }
+        return { success: true, record: data, fromCloud: true };
+      }
+    } catch (err) {
+      console.warn('Firestore verificación directa notice:', err);
+    }
+  }
+
+  // 2. Fallback a caché local de verificaciones
+  try {
+    const localVerifs = JSON.parse(localStorage.getItem(STORAGE_KEY_VERIFICATIONS) || '{}');
+    if (localVerifs[cleanId]) {
+      const data = localVerifs[cleanId];
+      if (providedToken && data.token && data.token !== providedToken) {
+        return {
+          success: false,
+          message: 'La firma criptográfica de seguridad no coincide con el registro original.'
+        };
+      }
+      return { success: true, record: data, fromCloud: false };
+    }
+  } catch (e) {}
+
+  // 3. Fallback a la lista local de asistencias
+  const list = getAttendance();
+  const found = list.find(a => a.id === cleanId);
+  if (found) {
+    const expectedToken = found.tokenSeguridad || await generateVerificationToken(found.id, found.eventoId, found.documento);
+    if (providedToken && expectedToken !== providedToken) {
+      return {
+        success: false,
+        message: 'La firma criptográfica de seguridad no coincide con el registro original.'
+      };
+    }
+
+    return {
+      success: true,
+      record: {
+        id: found.id,
+        token: expectedToken,
+        eventoId: found.eventoId,
+        nombreCompleto: found.nombreCompleto,
+        tipoDocumento: found.tipoDocumento || 'CC',
+        documentoMasked: maskDocumento(found.documento),
+        vinculacion: found.vinculacion || 'Asistente',
+        placaVehiculo: found.placaVehiculo || '',
+        fechaRegistro: found.fechaRegistro,
+        esPresencial: Boolean(found.geolocalizacion?.esPresencial),
+        distanciaSedeMetros: found.geolocalizacion?.distanciaSedeMetros ?? null,
+        estado: 'VALIDO'
+      },
+      fromCloud: false
+    };
+  }
+
+  return {
+    success: false,
+    message: `No se encontró ningún registro de asistencia con el número de comprobante "${cleanId}".`
+  };
 }
 
 // Métodos de Preguntas en Vivo

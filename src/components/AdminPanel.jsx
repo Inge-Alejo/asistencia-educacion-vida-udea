@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import {
   Users, HelpCircle, Star, ThumbsUp, Download, QrCode, Plus, Search,
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
-  Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut, Upload, X
+  Link, ExternalLink, ChevronRight, MessageSquare, Trash2, Shield, Lock, KeyRound, LogOut, Upload, X, Award
 } from 'lucide-react';
+import DigitalBadge from './DigitalBadge';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
 import {
   toggleQuestionAnswered,
@@ -33,18 +34,18 @@ export default function AdminPanel({
   const [activeTab, setActiveTab] = useState('asistencias');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterVinculacion, setFilterVinculacion] = useState('todos');
-  const [filterPonente, setFilterPonente] = useState('todos');
-  const [searchTermQuestions, setSearchTermQuestions] = useState('');
-  const [filterEstadoPregunta, setFilterEstadoPregunta] = useState('todas');
-  const [msFormsUrl, setMsFormsUrl] = useState(evento.microsoftFormsUrl || '');
   const [selectedGeoRecord, setSelectedGeoRecord] = useState(null);
+  const [selectedBadgeAttendee, setSelectedBadgeAttendee] = useState(null);
 
-  // Estado para cambio de contraseña
+  // Estados para cambio de contraseña
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
-  const [pwdMsg, setPwdMsg] = useState({ text: '', isError: false });
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [pwdError, setPwdError] = useState('');
+  const [pwdSuccess, setPwdSuccess] = useState('');
 
-  // Métricas calculadas
+  // Estadísticas Rápidas
   const totalAsistentes = asistencias.length;
   const presencialesGPS = asistencias.filter(a => a.geolocalizacion?.esPresencial).length;
   const porcentajePresencial = totalAsistentes > 0 ? Math.round((presencialesGPS / totalAsistentes) * 100) : 0;
@@ -317,80 +318,83 @@ export default function AdminPanel({
             <div className="search-box">
               <Search size={16} />
               <input
-                type="text"
-                placeholder="Buscar por nombre, documento o placa..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+                 type="text"
+                 placeholder="Buscar por nombre, documento o placa..."
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+               />
+             </div>
 
-            <div className="filter-box">
-              <Filter size={16} />
-              <select
-                value={filterVinculacion}
-                onChange={(e) => setFilterVinculacion(e.target.value)}
-              >
-                <option value="todos">Todos los roles institucionales</option>
-                <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
-                <option value="Residente / Posgrado UdeA">Residente / Posgrado UdeA</option>
-                <option value="Docente / Investigador UdeA">Docente / Investigador</option>
-                <option value="Egresado UdeA">Egresado UdeA</option>
-                <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
-              </select>
-            </div>
-          </div>
+             <div className="filter-box">
+               <Filter size={16} />
+               <select
+                 value={filterVinculacion}
+                 onChange={(e) => setFilterVinculacion(e.target.value)}
+               >
+                 <option value="todos">Todos los roles institucionales</option>
+                 <option value="Ponente / Conferencista">Ponente / Conferencista</option>
+                 <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
+                 <option value="Residente / Posgrado UdeA">Residente / Posgrado UdeA</option>
+                 <option value="Docente / Investigador UdeA">Docente / Investigador</option>
+                 <option value="Egresado UdeA">Egresado UdeA</option>
+                 <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
+               </select>
+             </div>
+           </div>
 
-          <div className="table-responsive-container">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>N°</th>
-                  <th>Documento</th>
-                  <th>Nombre del Asistente</th>
-                  <th>Correo y Teléfono</th>
-                  <th>Vinculación</th>
-                  <th>Placa Vehicular</th>
-                  <th>Geolocalización GPS</th>
-                  <th>Hora Registro</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {asistenciasFiltradas.length === 0 ? (
-                  <tr>
-                    <td colSpan="9" className="empty-table-row">
-                      No se encontraron registros de asistencia que coincidan con la búsqueda.
-                    </td>
-                  </tr>
-                ) : (
-                  asistenciasFiltradas.map((a, idx) => (
-                    <tr key={a.id || idx}>
-                      <td>{idx + 1}</td>
-                      <td>
-                        <strong>{a.documento}</strong>
-                        <span className="doc-type-badge">{a.tipoDocumento || 'CC'}</span>
-                      </td>
-                      <td className="attendee-name-cell">
-                        <strong>{a.nombreCompleto}</strong>
-                      </td>
-                      <td>
-                        <div className="contact-cell">
-                          <span>{a.correo}</span>
-                          {a.telefono && <small>{a.telefono}</small>}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="role-chip">{a.vinculacion}</span>
-                      </td>
-                      <td>
-                        {a.placaVehiculo ? (
-                          <span className="plate-badge">{a.placaVehiculo}</span>
-                        ) : (
-                          <span className="text-muted">
-                            {evento.habilitarPlacaVehiculo ? 'No registrada' : 'No requería'}
-                          </span>
-                        )}
-                      </td>
+           <div className="table-responsive-container">
+             <table className="admin-table">
+               <thead>
+                 <tr>
+                   <th>N°</th>
+                   <th>Documento</th>
+                   <th>Nombre del Asistente</th>
+                   <th>Correo y Teléfono</th>
+                   <th>Vinculación / Rol</th>
+                   <th>Placa Vehicular</th>
+                   <th>Geolocalización GPS</th>
+                   <th>Hora Registro</th>
+                   <th>Acción</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 {asistenciasFiltradas.length === 0 ? (
+                   <tr>
+                     <td colSpan="9" className="empty-table-row">
+                       No se encontraron registros de asistencia que coincidan con la búsqueda.
+                     </td>
+                   </tr>
+                 ) : (
+                   asistenciasFiltradas.map((a, idx) => (
+                     <tr key={a.id || idx}>
+                       <td>{idx + 1}</td>
+                       <td>
+                         <strong>{a.documento}</strong>
+                         <span className="doc-type-badge">{a.tipoDocumento || 'CC'}</span>
+                       </td>
+                       <td className="attendee-name-cell">
+                         <strong>{a.nombreCompleto}</strong>
+                       </td>
+                       <td>
+                         <div className="contact-cell">
+                           <span>{a.correo}</span>
+                           {a.telefono && <small>{a.telefono}</small>}
+                         </div>
+                       </td>
+                       <td>
+                         <span className={`role-chip ${a.vinculacion?.includes('Ponente') ? 'role-chip-ponente' : ''}`}>
+                           {a.vinculacion}
+                         </span>
+                       </td>
+                       <td>
+                         {a.placaVehiculo ? (
+                           <span className="plate-badge">{a.placaVehiculo}</span>
+                         ) : (
+                           <span className="text-muted">
+                             {evento.habilitarPlacaVehiculo ? 'No registrada' : 'No requería'}
+                           </span>
+                         )}
+                       </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-start' }}>
                           {a.geolocalizacion?.esPresencial ? (
@@ -430,18 +434,39 @@ export default function AdminPanel({
                       </td>
                       <td className="time-cell">{a.fechaRegistro}</td>
                       <td>
-                        <button
-                          className="btn-table-delete"
-                          title={`Eliminar asistencia de ${a.nombreCompleto}`}
-                          onClick={async () => {
-                            if (window.confirm(`¿Eliminar el registro de asistencia de "${a.nombreCompleto}" (Doc: ${a.documento})?`)) {
-                              await deleteAttendance(a.id);
-                              if (onDataUpdated) onDataUpdated();
-                            }
-                          }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        <div className="table-actions-cluster" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn-table-badge"
+                            title={`Ver e imprimir escarapela digital de ${a.nombreCompleto}`}
+                            onClick={() => setSelectedBadgeAttendee(a)}
+                            style={{
+                              background: '#eefbf4',
+                              border: '1px solid #86efac',
+                              color: '#0F5938',
+                              padding: '0.35rem',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <Award size={15} />
+                          </button>
+                          <button
+                            className="btn-table-delete"
+                            title={`Eliminar asistencia de ${a.nombreCompleto}`}
+                            onClick={async () => {
+                              if (window.confirm(`¿Eliminar el registro de asistencia de "${a.nombreCompleto}" (Doc: ${a.documento})?`)) {
+                                await deleteAttendance(a.id);
+                                if (onDataUpdated) onDataUpdated();
+                              }
+                            }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -995,6 +1020,16 @@ export default function AdminPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal para visualizar e imprimir la escarapela digital de cualquier asistente */}
+      {selectedBadgeAttendee && (
+        <DigitalBadge
+          asistente={selectedBadgeAttendee}
+          evento={evento}
+          isModal={true}
+          onClose={() => setSelectedBadgeAttendee(null)}
+        />
       )}
     </div>
   );

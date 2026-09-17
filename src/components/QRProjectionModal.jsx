@@ -67,7 +67,7 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
             />
             <span className="inst-badge">Educación a lo Largo de la Vida</span>
           </div>
-          <button className="btn-close-modal" onClick={onClose} aria-label="Cerrar modal">
+          <button className="btn-close-modal no-print" onClick={onClose} aria-label="Cerrar modal">
             <X size={24} />
           </button>
         </div>
@@ -116,7 +116,7 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
             </div>
 
             {/* Selector del Dominio del Enlace (Permite alternar entre dominio local y Vercel) */}
-            <div className="qr-domain-switcher">
+            <div className="qr-domain-switcher no-print">
               <label className="domain-label">
                 <Globe size={14} /> Dominio destino del QR:
               </label>
@@ -164,7 +164,7 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
 
             <p className="qr-caption">Código QR Oficial de Asistencia</p>
 
-            <div className="qr-link-box">
+            <div className="qr-link-box no-print">
               <span className="qr-url-preview">{qrTargetUrl}</span>
               <button
                 type="button"
@@ -177,7 +177,7 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
             </div>
 
             {/* Botones de acción del proyector */}
-            <div className="projection-action-buttons">
+            <div className="projection-action-buttons no-print">
               <button className="btn-secondary" onClick={handleDownloadQR}>
                 <Download size={16} />
                 <span>Descargar Imagen HD</span>

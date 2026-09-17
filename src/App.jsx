@@ -5,6 +5,7 @@ import AdminPanel from './components/AdminPanel';
 import QRProjectionModal from './components/QRProjectionModal';
 import EventModal from './components/EventModal';
 import AdminAuthModal from './components/AdminAuthModal';
+import VerificationView from './components/VerificationView';
 import {
   initStorage,
   getEvents,
@@ -23,6 +24,9 @@ export default function App() {
   const [currentEvent, setCurrentEvent] = useState(null);
   const [currentView, setCurrentView] = useState('attendee'); // 'attendee' | 'admin'
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // Parámetros de verificación cuando se escanea el QR de una escarapela
+  const [verificationParams, setVerificationParams] = useState(null);
 
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -43,8 +47,16 @@ export default function App() {
     const authActive = isAdminAuthenticated();
     setIsAdmin(authActive);
 
-    // Leer parámetros de la URL: ?evento=EVT-MED-01&view=attendee
+    // Leer parámetros de la URL: ?evento=EVT-MED-01&view=attendee o ?verificar=ATT-...
     const params = new URLSearchParams(window.location.search);
+    const verifyId = params.get('verificar') || params.get('verify') || params.get('credencial');
+    if (verifyId) {
+      setVerificationParams({
+        comprobanteId: verifyId,
+        token: params.get('token') || ''
+      });
+    }
+
     const urlEventId = params.get('evento');
     const urlView = params.get('view');
 
@@ -141,6 +153,26 @@ export default function App() {
     setIsAdmin(false);
     setCurrentView('attendee');
   };
+
+  // Si se está verificando una escarapela escaneada desde un celular
+  if (verificationParams) {
+    return (
+      <VerificationView
+        comprobanteId={verificationParams.comprobanteId}
+        tokenSeguridad={verificationParams.token}
+        onVolver={() => {
+          setVerificationParams(null);
+          const url = new URL(window.location.href);
+          url.searchParams.delete('verificar');
+          url.searchParams.delete('verify');
+          url.searchParams.delete('credencial');
+          url.searchParams.delete('token');
+          const cleanSearch = url.searchParams.toString();
+          window.history.pushState({}, '', url.pathname + (cleanSearch ? `?${cleanSearch}` : ''));
+        }}
+      />
+    );
+  }
 
   return (
     <div className="udea-app-root">
