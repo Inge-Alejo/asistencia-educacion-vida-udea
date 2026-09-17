@@ -3,9 +3,10 @@ import {
   Users, HelpCircle, Star, ThumbsUp, Download, QrCode, Plus, Search,
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
   ExternalLink, Trash2, Shield, KeyRound, LogOut, Upload, X, Award,
-  Database, HardDrive, Server, Activity, Wifi
+  Database, HardDrive, Server, Activity, Wifi, Camera
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
+import QRScannerModal from './QRScannerModal';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
 import {
   toggleQuestionAnswered,
@@ -38,6 +39,7 @@ export default function AdminPanel({
   const [filterVinculacion, setFilterVinculacion] = useState('todos');
   const [selectedGeoRecord, setSelectedGeoRecord] = useState(null);
   const [selectedBadgeAttendee, setSelectedBadgeAttendee] = useState(null);
+  const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
 
   // Estados para filtros de Preguntas en Vivo (corrige error de carga)
   const [searchTermQuestions, setSearchTermQuestions] = useState('');
@@ -223,6 +225,15 @@ export default function AdminPanel({
         </div>
 
         <div className="admin-buttons-group">
+          <button
+            type="button"
+            className="btn-primary-action btn-scanner-action"
+            onClick={() => setIsQRScannerOpen(true)}
+            title="Escanear en vivo con la cámara del celular o webcam para verificar y acreditar credenciales"
+          >
+            <Camera size={16} />
+            <span>Escanear QR en Puerta</span>
+          </button>
           <button className="btn-secondary" onClick={onOpenNewEventModal}>
             <Plus size={16} />
             <span>Crear Evento</span>
@@ -1404,6 +1415,16 @@ export default function AdminPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Escaneo y Acreditación de QR en Puerta con Cámara */}
+      {isQRScannerOpen && (
+        <QRScannerModal
+          isOpen={isQRScannerOpen}
+          onClose={() => setIsQRScannerOpen(false)}
+          eventoActual={evento}
+          onDataUpdated={onDataUpdated}
+        />
       )}
     </div>
   );

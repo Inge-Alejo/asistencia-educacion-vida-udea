@@ -421,7 +421,7 @@ export async function deleteAttendance(attId) {
       await deleteDoc(doc(db, 'asistencias', attId));
       await deleteDoc(doc(db, 'verificaciones', attId));
     } catch {
-      console.warn('Firestore deleteDoc attendance notice:', err);
+      // Firestore sync notice
     }
   }
 
@@ -453,7 +453,7 @@ export async function deleteAllAttendance(eventId = null) {
         await deleteDoc(doc(db, 'verificaciones', item.id)).catch(() => {});
       }
     } catch {
-      console.warn('Firestore deleteAllAttendance notice:', err);
+      // Firestore sync notice
     }
   }
 
@@ -485,7 +485,7 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
         return { success: true, record: data, fromCloud: true };
       }
     } catch {
-      console.warn('Firestore verificación directa notice:', err);
+      // Firestore sync notice
     }
   }
 
@@ -569,7 +569,7 @@ export async function addQuestion(qData) {
     try {
       await setDoc(doc(db, 'preguntas', newQ.id), newQ);
     } catch {
-      console.warn('Pregunta local guardada. Firestore sync notice:', err);
+      // Firestore sync notice
     }
   }
 
@@ -587,7 +587,7 @@ export async function toggleQuestionAnswered(qId) {
       try {
         await updateDoc(doc(db, 'preguntas', qId), { respondida: item.respondida });
       } catch {
-        console.warn('Firestore updateDoc notice:', err);
+        // Firestore sync notice
       }
     }
   }
@@ -605,7 +605,7 @@ export async function toggleQuestionFeatured(qId) {
       try {
         await updateDoc(doc(db, 'preguntas', qId), { destacada: item.destacada });
       } catch {
-        console.warn('Firestore updateDoc notice:', err);
+        // Firestore sync notice
       }
     }
   }
@@ -620,7 +620,7 @@ export async function deleteQuestion(qId) {
     try {
       await deleteDoc(doc(db, 'preguntas', qId));
     } catch {
-      console.warn('Firestore deleteDoc notice:', err);
+      // Firestore sync notice
     }
   }
 
@@ -652,7 +652,7 @@ export async function recordEvaluation(evalData) {
     try {
       await setDoc(doc(db, 'evaluaciones', newEval.id), newEval);
     } catch {
-      console.warn('Firestore eval notice:', err);
+      // Firestore sync notice
     }
   }
 
@@ -667,7 +667,7 @@ export async function deleteEvaluation(evalId) {
     try {
       await deleteDoc(doc(db, 'evaluaciones', evalId));
     } catch {
-      console.warn('Firestore eval delete notice:', err);
+      // Firestore sync notice
     }
   }
 
@@ -699,7 +699,7 @@ export async function recordSatisfaction(satData) {
     try {
       await setDoc(doc(db, 'satisfaccion', newSat.id), newSat);
     } catch {
-      console.warn('Firestore sat notice:', err);
+      // Firestore sync notice
     }
   }
 
@@ -714,7 +714,7 @@ export async function deleteSatisfaction(satId) {
     try {
       await deleteDoc(doc(db, 'satisfaccion', satId));
     } catch {
-      console.warn('Firestore sat delete notice:', err);
+      // Firestore sync notice
     }
   }
 
