@@ -133,8 +133,15 @@ export default function AttendeeView({
   // Estados para Desafío de Seguridad de Correo al autocompletar en nuevo dispositivo
   const [challengeEmail, setChallengeEmail] = useState('');
   const [challengeError, setChallengeError] = useState('');
-  const [challengeSuccess, setChallengeSuccess] = useState(false);
-  const [isDataAutofilledFromPrev, setIsDataAutofilledFromPrev] = useState(false);
+  const [verifiedDoc, setVerifiedDoc] = useState(() => (sessionInfo?.documento ? String(sessionInfo.documento).trim() : null));
+
+  // Determinar si el documento ingresado actualmente está debidamente validado y vinculado
+  const isCurrentDocVerified = useMemo(() => {
+    if (!currentDoc || !registroPrevioEvento) return false;
+    const isDocMatch = verifiedDoc === currentDoc || (sessionInfo && String(sessionInfo.documento).trim() === currentDoc);
+    const isNameMatch = Boolean(formData.nombreCompleto && areNamesMatching(formData.nombreCompleto, registroPrevioEvento.nombreCompleto));
+    return Boolean(isDocMatch && isNameMatch);
+  }, [currentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroPrevioEvento]);
 
   // Función para validar el correo y autocompletar en nuevo dispositivo
   const handleVerifyChallengeEmail = (e) => {
@@ -160,8 +167,7 @@ export default function AttendeeView({
         placaVehiculo: registroPrevioEvento.placaVehiculo || prev.placaVehiculo,
         habeasDataAceptado: true
       }));
-      setChallengeSuccess(true);
-      setIsDataAutofilledFromPrev(true);
+      setVerifiedDoc(currentDoc);
       setChallengeError('');
 
       try {
@@ -178,8 +184,27 @@ export default function AttendeeView({
       } catch {}
     } else {
       setChallengeError('El correo ingresado no coincide con el registrado en jornadas anteriores para este documento.');
-      setChallengeSuccess(false);
     }
+  };
+
+  // Restablecer y limpiar formulario para ingresar con otro documento
+  const handleResetParticipant = () => {
+    setVerifiedDoc(null);
+    setChallengeEmail('');
+    setChallengeError('');
+    setFormData({
+      tipoDocumento: 'CC',
+      documento: '',
+      nombreCompleto: '',
+      correo: '',
+      telefono: '',
+      vinculacion: 'Estudiante Pregrado Medicina UdeA',
+      placaVehiculo: '',
+      habeasDataAceptado: false
+    });
+    try {
+      localStorage.removeItem(`udea_session_attendee_${evento?.id}`);
+    } catch {}
   };
 
   // Asistencia específica para la fecha o sesión de hoy
@@ -270,6 +295,26 @@ export default function AttendeeView({
 
   // Manejar cambio de campos del formulario y limpiar errores en tiempo real
   const handleFieldChange = (field, value) => {
+    if (field === 'documento') {
+      const cleanNewDoc = String(value).trim();
+      // Si el usuario cambia el documento y difiere del previamente verificado, resetear datos previos
+      if (verifiedDoc && cleanNewDoc !== verifiedDoc) {
+        setVerifiedDoc(null);
+        setChallengeEmail('');
+        setChallengeError('');
+        setFormData(prev => ({
+          ...prev,
+          documento: value,
+          nombreCompleto: '',
+          correo: '',
+          telefono: '',
+          placaVehiculo: ''
+        }));
+        if (errorAsistencia) setErrorAsistencia('');
+        return;
+      }
+    }
+
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errorAsistencia) setErrorAsistencia('');
   };
@@ -1057,10 +1102,18 @@ export default function AttendeeView({
                       </button>
                     </div>
                   ) : registroPrevioEvento ? (
-                    formData.nombreCompleto && (challengeSuccess || isDataAutofilledFromPrev || (sessionInfo && sessionInfo.documento === currentDoc)) ? (
+                    isCurrentDocVerified ? (
                       <div className="doc-autofilled-hint animated-step">
                         <CheckCircle2 size={14} color="#059669" />
-                        <span>Datos vinculados con éxito de tu registro inicial ({maskFullName(registroPrevioEvento.nombreCompleto)})</span>
+                        <span>Datos vinculados de tu registro inicial ({maskFullName(registroPrevioEvento.nombreCompleto)})</span>
+                        <button
+                          type="button"
+                          className="btn-change-participant-mini"
+                          onClick={handleResetParticipant}
+                          title="Limpiar campos para ingresar con otro documento"
+                        >
+                          Cambiar
+                        </button>
                       </div>
                     ) : (
                       <div className="security-challenge-card animated-step">
@@ -1092,7 +1145,6 @@ export default function AttendeeView({
                           </button>
                         </div>
                         {challengeError && <p className="challenge-err-text">{challengeError}</p>}
-                        {challengeSuccess && <p className="challenge-ok-text">✓ Identidad confirmada. Tus datos han sido autocompletados.</p>}
                       </div>
                     )
                   ) : (

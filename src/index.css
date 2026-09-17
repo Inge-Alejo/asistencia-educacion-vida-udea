@@ -6586,5 +6586,24 @@ input:checked + .slider::before {
   font-weight: 500;
   padding: 0.35rem 0.75rem;
   border-radius: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-change-participant-mini {
+  background: none;
+  border: 1px solid #059669;
+  color: #065F46;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 0.4rem;
+  transition: all 0.15s ease;
+}
+
+.btn-change-participant-mini:hover {
+  background: #D1FAE5;
+  color: #047857;
 }
 
