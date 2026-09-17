@@ -110,7 +110,7 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }) {
 
           <div className="auth-security-notice">
             <p>
-              🔒 <strong>Acceso Seguro Institucional:</strong> Protegido con cifrado SHA-256 local y limitador contra intentos de fuerza bruta.
+              🔒 <strong>Acceso Institucional Protegido:</strong> Uso exclusivo para el equipo organizador y directivas de la Facultad de Medicina.
             </p>
           </div>
 

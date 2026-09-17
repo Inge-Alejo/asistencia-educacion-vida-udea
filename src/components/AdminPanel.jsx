@@ -438,7 +438,7 @@ export default function AdminPanel({
                           <button
                             type="button"
                             className="btn-table-badge"
-                            title={`Ver e imprimir escarapela digital de ${a.nombreCompleto}`}
+                            title={`Ver pase digital oficial de ${a.nombreCompleto}`}
                             onClick={() => setSelectedBadgeAttendee(a)}
                             style={{
                               background: '#eefbf4',
@@ -1022,7 +1022,7 @@ export default function AdminPanel({
         </div>
       )}
 
-      {/* Modal para visualizar e imprimir la escarapela digital de cualquier asistente */}
+      {/* Modal para visualizar el pase digital oficial de cualquier asistente */}
       {selectedBadgeAttendee && (
         <DigitalBadge
           asistente={selectedBadgeAttendee}

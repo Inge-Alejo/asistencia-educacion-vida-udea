@@ -1,24 +1,19 @@
 import React, { useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { X, Download, Printer, Sparkles, MapPin, Calendar, Clock, Car, Globe, Check, Users } from 'lucide-react';
+import { X, Download, Sparkles, MapPin, Calendar, Clock, Car, Check, Users } from 'lucide-react';
 import { ESCUDO_UDEA_QR_BASE64 } from '../assets/escudoQrBase64';
 
 export default function QRProjectionModal({ isOpen, onClose, evento, asistencias = [] }) {
   const qrRef = useRef(null);
   const [copied, setCopied] = useState(false);
 
-  // Determinar la URL base oficial: Por defecto Producción Vercel para asegurar que cualquier teléfono móvil abra la versión oficial en vivo
-  const officialProdDomain = 'https://asistencia-educacion-vida-udea.vercel.app';
-  const detectedOrigin = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1'))
-    ? window.location.origin
-    : officialProdDomain;
-
-  const [baseUrl, setBaseUrl] = useState(officialProdDomain);
+  // Dominio oficial de producción para escaneo móvil en vivo
+  const baseUrl = 'https://asistencia-educacion-vida-udea.vercel.app';
 
   if (!isOpen || !evento) return null;
 
   // URL absoluta y limpia con parámetro de versión/actualización (?v=2.2) para obligar a los móviles a cargar la versión más reciente sin caché vieja
-  const qrTargetUrl = `${baseUrl.replace(/\/$/, '')}/?evento=${encodeURIComponent(evento.id)}&view=attendee&v=2.2`;
+  const qrTargetUrl = `${baseUrl}/?evento=${encodeURIComponent(evento.id)}&view=attendee&v=2.2`;
 
   const handleDownloadQR = () => {
     const svgElement = qrRef.current.querySelector('svg');
@@ -50,10 +45,6 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
     navigator.clipboard.writeText(qrTargetUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   return (
@@ -116,30 +107,6 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
               </div>
             </div>
 
-            {/* Selector del Dominio del Enlace (Permite alternar entre dominio local y Vercel) */}
-            <div className="qr-domain-switcher no-print">
-              <label className="domain-label">
-                <Globe size={14} /> Dominio destino del QR:
-              </label>
-              <div className="domain-buttons">
-                <button
-                  type="button"
-                  className={`btn-domain-choice ${baseUrl === officialProdDomain ? 'active' : ''}`}
-                  onClick={() => setBaseUrl(officialProdDomain)}
-                >
-                  Producción Vercel (.app)
-                </button>
-                {detectedOrigin !== officialProdDomain && (
-                  <button
-                    type="button"
-                    className={`btn-domain-choice ${baseUrl === detectedOrigin ? 'active' : ''}`}
-                    onClick={() => setBaseUrl(detectedOrigin)}
-                  >
-                    Origen Actual ({detectedOrigin.replace(/https?:\/\//, '')})
-                  </button>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Tarjeta del Código QR de Gran Tamaño */}
@@ -182,10 +149,6 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
               <button className="btn-secondary" onClick={handleDownloadQR}>
                 <Download size={16} />
                 <span>Descargar Imagen HD</span>
-              </button>
-              <button className="btn-secondary" onClick={handlePrint}>
-                <Printer size={16} />
-                <span>Imprimir Afiche</span>
               </button>
             </div>
           </div>

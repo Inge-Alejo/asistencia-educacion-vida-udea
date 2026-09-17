@@ -103,7 +103,7 @@ export default function VerificationView({
           <div className="verification-loading-card">
             <div className="loading-spinner-udea"></div>
             <h3>Consultando Registro Oficial en Tiempo Real...</h3>
-            <p>Validando firma criptográfica en los servidores de la Facultad de Medicina.</p>
+            <p>Consultando base oficial de la Facultad de Medicina...</p>
           </div>
         ) : resultado?.success ? (
           <div className="verification-card-success">
@@ -115,7 +115,7 @@ export default function VerificationView({
               <div className="status-text">
                 <span className="badge-official-text">DOCUMENTO AUTÉNTICO • REGISTRO ACTIVO</span>
                 <h2>Inscripción y Asistencia Oficialmente Confirmadas</h2>
-                <p>Verificado satisfactoriamente con firma de seguridad digital.</p>
+                <p>Verificado satisfactoriamente en el sistema oficial de la Facultad de Medicina.</p>
               </div>
             </div>
 
@@ -192,7 +192,7 @@ export default function VerificationView({
                 {resultado.record.token && (
                   <div className="security-tag-pill token-tag">
                     <Sparkles size={14} />
-                    <span>Firma SHA-256: <code>{resultado.record.token.substring(0, 16)}...</code></span>
+                    <span>Validación Oficial: <code>{resultado.record.token.substring(0, 10).toUpperCase()}</code></span>
                   </div>
                 )}
                 <div className="security-tag-pill source-tag">
@@ -240,7 +240,7 @@ export default function VerificationView({
               <ul className="error-reasons-list">
                 <li>El código QR escaneado pudo haber sido alterado o manipulado.</li>
                 <li>La asistencia aún no ha sido registrada o fue eliminada por la organización.</li>
-                <li>El enlace corresponde a una prueba o no contiene la firma criptográfica requerida.</li>
+                <li>El enlace corresponde a una prueba o no cuenta con la validación requerida.</li>
               </ul>
 
               <div className="verification-actions">

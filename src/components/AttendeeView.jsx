@@ -769,7 +769,7 @@ export default function AttendeeView({
                   onClick={() => setIsBadgeModalOpen(true)}
                 >
                   <Award size={20} />
-                  <span>🏷️ Ver e Imprimir Mi Escarapela Digital</span>
+                  <span>🏷️ Ver Mi Pase Digital Oficial</span>
                 </button>
                 <p className="badge-cta-hint">
                   Incluye tu código QR de verificación oficial para identificarte e ingresar al auditorio.

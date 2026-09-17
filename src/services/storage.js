@@ -445,7 +445,7 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
         if (providedToken && data.token && data.token !== providedToken) {
           return {
             success: false,
-            message: 'La firma criptográfica de seguridad no coincide. Esta escarapela ha sido modificada o es apócrifa.'
+            message: 'El código de verificación no coincide con el registro oficial. Este pase digital ha sido modificado o no es válido.'
           };
         }
         return { success: true, record: data, fromCloud: true };
@@ -463,7 +463,7 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
       if (providedToken && data.token && data.token !== providedToken) {
         return {
           success: false,
-          message: 'La firma criptográfica de seguridad no coincide con el registro original.'
+          message: 'El código de verificación no coincide con el registro original.'
         };
       }
       return { success: true, record: data, fromCloud: false };
@@ -478,7 +478,7 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
     if (providedToken && expectedToken !== providedToken) {
       return {
         success: false,
-        message: 'La firma criptográfica de seguridad no coincide con el registro original.'
+        message: 'El código de verificación no coincide con el registro original.'
       };
     }
 

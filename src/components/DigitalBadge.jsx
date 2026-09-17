@@ -241,7 +241,7 @@ export default function DigitalBadge({
       pdf.save(`Pase_Digital_UdeA_${cleanDoc}_${eventIdClean}.pdf`);
     } catch (err) {
       console.error('Error al generar el PDF del pase digital:', err);
-      alert('Hubo un inconveniente al generar el PDF. Puedes utilizar la opción de guardar imagen PNG o imprimir.');
+      alert('Hubo un inconveniente al generar el PDF. Puedes utilizar la opción de guardar imagen PNG en tu dispositivo.');
     } finally {
       setDownloading(false);
     }
