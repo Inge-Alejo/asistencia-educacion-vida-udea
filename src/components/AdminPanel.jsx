@@ -596,11 +596,6 @@ export default function AdminPanel({
                               Día {a.diaNumero || 1} {a.fechaDia ? `(${a.fechaDia})` : ''}
                             </span>
                           )}
-                          {a.fechaVerificadaInternet && (
-                            <span style={{ fontSize: '0.68rem', color: '#059669', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                              🌐 Hora Red Verificada
-                            </span>
-                          )}
                         </div>
                       </td>
                       <td>

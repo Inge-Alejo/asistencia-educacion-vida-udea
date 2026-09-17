@@ -4,7 +4,7 @@ import {
   MapPin, CheckCircle2, AlertTriangle, Send, Star, Car, User, Mail,
   Phone, CreditCard, MessageSquare, ThumbsUp, HelpCircle,
   Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check,
-  Navigation, Radio, Award, Calendar
+  Navigation, Radio, Award, Calendar, KeyRound
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import {
@@ -15,7 +15,7 @@ import {
   recordEvaluation,
   recordSatisfaction
 } from '../services/storage';
-import { maskFullName, sanitizeText } from '../services/sanitizer';
+import { maskFullName, maskEmail, areNamesMatching, sanitizeText } from '../services/sanitizer';
 import { getOfficialColombiaTime, getEventDaysList, checkEventDayStatus } from '../services/networkTime';
 
 function getSavedAttendeeSession(eventId) {
@@ -121,6 +121,66 @@ export default function AttendeeView({
       a.eventoId === currentEventId && String(a.documento).trim() === currentDoc
     );
   }, [asistencias, currentEventId, currentDoc]);
+
+  // Registro previo baseline de este documento en el evento (para autocompletado seguro y validación de coherencia)
+  const registroPrevioEvento = useMemo(() => {
+    if (!currentDoc || !currentEventId) return null;
+    return (asistencias || []).find(a =>
+      a.eventoId === currentEventId && String(a.documento).trim() === currentDoc
+    ) || null;
+  }, [asistencias, currentEventId, currentDoc]);
+
+  // Estados para Desafío de Seguridad de Correo al autocompletar en nuevo dispositivo
+  const [challengeEmail, setChallengeEmail] = useState('');
+  const [challengeError, setChallengeError] = useState('');
+  const [challengeSuccess, setChallengeSuccess] = useState(false);
+  const [isDataAutofilledFromPrev, setIsDataAutofilledFromPrev] = useState(false);
+
+  // Función para validar el correo y autocompletar en nuevo dispositivo
+  const handleVerifyChallengeEmail = (e) => {
+    e?.preventDefault();
+    if (!registroPrevioEvento) return;
+
+    const inputEmail = challengeEmail.trim().toLowerCase();
+    const targetEmail = (registroPrevioEvento.correo || '').trim().toLowerCase();
+
+    if (!inputEmail) {
+      setChallengeError('Por favor ingrese su correo registrado para validar su identidad.');
+      return;
+    }
+
+    if (inputEmail === targetEmail) {
+      setFormData(prev => ({
+        ...prev,
+        tipoDocumento: registroPrevioEvento.tipoDocumento || prev.tipoDocumento,
+        nombreCompleto: registroPrevioEvento.nombreCompleto || prev.nombreCompleto,
+        correo: registroPrevioEvento.correo || prev.correo,
+        telefono: registroPrevioEvento.telefono || prev.telefono,
+        vinculacion: registroPrevioEvento.vinculacion || prev.vinculacion,
+        placaVehiculo: registroPrevioEvento.placaVehiculo || prev.placaVehiculo,
+        habeasDataAceptado: true
+      }));
+      setChallengeSuccess(true);
+      setIsDataAutofilledFromPrev(true);
+      setChallengeError('');
+
+      try {
+        localStorage.setItem(`udea_session_attendee_${evento?.id}`, JSON.stringify({
+          tipoDocumento: registroPrevioEvento.tipoDocumento,
+          documento: registroPrevioEvento.documento,
+          nombreCompleto: registroPrevioEvento.nombreCompleto,
+          correo: registroPrevioEvento.correo,
+          telefono: registroPrevioEvento.telefono,
+          vinculacion: registroPrevioEvento.vinculacion,
+          placaVehiculo: registroPrevioEvento.placaVehiculo,
+          registrado: true
+        }));
+      } catch {}
+    } else {
+      setChallengeError('El correo ingresado no coincide con el registrado en jornadas anteriores para este documento.');
+      setChallengeSuccess(false);
+    }
+  };
 
   // Asistencia específica para la fecha o sesión de hoy
   const asistenciaHoy = useMemo(() => {
@@ -330,6 +390,17 @@ export default function AttendeeView({
     if (!telClean || telClean.length < 7 || telClean.length > 10) {
       setErrorAsistencia('Por favor ingrese un número de teléfono o celular válido (de 7 a 10 dígitos, ej: 3124567890).');
       return;
+    }
+
+    // Validación Estricta de Identidad Anti-Suplantación con jornadas previas del mismo evento
+    if (registroPrevioEvento) {
+      const isNameValid = areNamesMatching(nombre, registroPrevioEvento.nombreCompleto);
+      if (!isNameValid) {
+        setErrorAsistencia(
+          `Por seguridad e integridad institucional, el documento ${doc} ya cuenta con registros previos en este evento a nombre de "${maskFullName(registroPrevioEvento.nombreCompleto)}". El nombre ingresado debe coincidir con el registrado inicialmente.`
+        );
+        return;
+      }
     }
 
     // Placa vehicular: Totalmente OPCIONAL si el evento la tiene habilitada. Máximo 6 caracteres alfanuméricos si se provee.
@@ -784,7 +855,7 @@ export default function AttendeeView({
             </div>
           </div>
 
-          {/* Tarjeta de Jornada Multidía y Fecha Verificada por Internet */}
+          {/* Tarjeta de Jornada Multidía */}
           {evento?.esMultidia && (
             <div className="attendee-day-selector-card">
               <div className="attendee-day-title">
@@ -792,9 +863,6 @@ export default function AttendeeView({
                   <Calendar size={16} color="#006633" />
                   <span>Jornada Multidía: {dayStatus.diaNumero ? `Día ${dayStatus.diaNumero} de ${dayStatus.totalDias}` : 'Sesión Especial'}</span>
                 </h4>
-                <span className={`internet-time-pill ${officialTime.esVerificadaInternet ? 'verified' : 'local'}`} title={`Fuente: ${officialTime.fuente}`}>
-                  {officialTime.esVerificadaInternet ? '🌐 Hora Oficial por Internet' : '🕒 Hora Local'} ({officialTime.horaStr})
-                </span>
               </div>
 
               <div className="days-progress-tracker">
@@ -950,7 +1018,7 @@ export default function AttendeeView({
                     <div className="doc-duplicate-alert animated-step">
                       <div className="doc-duplicate-header">
                         <AlertTriangle size={15} className="warn-icon" />
-                        <span>Este documento ya registró asistencia en este evento:</span>
+                        <span>Este documento ya registró asistencia en la jornada de hoy:</span>
                       </div>
                       <div className="doc-duplicate-details">
                         <strong>{maskFullName(registroExistente.nombreCompleto)}</strong> (Comprobante: <code>{registroExistente.id}</code>)
@@ -988,6 +1056,45 @@ export default function AttendeeView({
                         <ChevronRight size={14} />
                       </button>
                     </div>
+                  ) : registroPrevioEvento ? (
+                    formData.nombreCompleto && (challengeSuccess || isDataAutofilledFromPrev || (sessionInfo && sessionInfo.documento === currentDoc)) ? (
+                      <div className="doc-autofilled-hint animated-step">
+                        <CheckCircle2 size={14} color="#059669" />
+                        <span>Datos vinculados con éxito de tu registro inicial ({maskFullName(registroPrevioEvento.nombreCompleto)})</span>
+                      </div>
+                    ) : (
+                      <div className="security-challenge-card animated-step">
+                        <div className="security-challenge-header">
+                          <ShieldCheck size={16} color="#006633" />
+                          <span>Registro previo detectado: <strong>{maskFullName(registroPrevioEvento.nombreCompleto)}</strong> ({maskEmail(registroPrevioEvento.correo)})</span>
+                        </div>
+                        <p className="security-challenge-desc">
+                          Por seguridad y protección de datos personales (Ley 1581), para autocompletar automáticamente tu formulario en este dispositivo, confirma tu correo electrónico:
+                        </p>
+                        <div className="security-challenge-form-row">
+                          <input
+                            type="email"
+                            className="form-input challenge-input"
+                            placeholder="Confirma tu correo registrado..."
+                            value={challengeEmail}
+                            onChange={(e) => {
+                              setChallengeEmail(e.target.value);
+                              setChallengeError('');
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn-challenge-action"
+                            onClick={handleVerifyChallengeEmail}
+                          >
+                            <KeyRound size={14} />
+                            <span>Validar y Autocompletar</span>
+                          </button>
+                        </div>
+                        {challengeError && <p className="challenge-err-text">{challengeError}</p>}
+                        {challengeSuccess && <p className="challenge-ok-text">✓ Identidad confirmada. Tus datos han sido autocompletados.</p>}
+                      </div>
+                    )
                   ) : (
                     formData.documento.trim().length >= 4 && (
                       <div className="doc-available-hint">

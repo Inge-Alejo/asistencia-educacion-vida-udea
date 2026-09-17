@@ -17,6 +17,51 @@ export function maskFullName(fullName) {
 }
 
 /**
+ * Enmascara un correo electrónico para protección de datos (Habeas Data)
+ * Ejemplo: "alejandro.perez@udea.edu.co" -> "a*********z@udea.edu.co"
+ */
+export function maskEmail(email) {
+  if (!email || typeof email !== 'string') return '';
+  const parts = email.trim().split('@');
+  if (parts.length !== 2) return '***@***';
+  const [user, domain] = parts;
+  if (user.length <= 2) {
+    return `${user[0] || '*'}***@${domain}`;
+  }
+  const maskedUser = user[0] + '*'.repeat(Math.min(user.length - 2, 6)) + user.slice(-1);
+  return `${maskedUser}@${domain}`;
+}
+
+/**
+ * Valida si dos nombres corresponden a la misma persona (coincidencia de nombres/apellidos)
+ * Tolera diferencias en tildes, mayúsculas y omisión de segundo nombre.
+ */
+export function areNamesMatching(nameA, nameB) {
+  if (!nameA || !nameB) return false;
+  const clean = (str) =>
+    String(str)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const cA = clean(nameA);
+  const cB = clean(nameB);
+  if (cA === cB) return true;
+
+  const wordsA = cA.split(' ').filter((w) => w.length >= 3);
+  const wordsB = cB.split(' ').filter((w) => w.length >= 3);
+
+  const common = wordsA.filter((w) => wordsB.includes(w));
+  if (wordsA.length >= 2 && wordsB.length >= 2) {
+    return common.length >= 2 || (common.length >= 1 && (cA.includes(cB) || cB.includes(cA)));
+  }
+  return common.length >= 1;
+}
+
+/**
  * Sanitiza una cadena de texto para evitar inyección de código HTML / XSS.
  * Remueve etiquetas potencialmente peligrosas y caracteres de escape.
  */
