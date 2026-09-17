@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
+import { ESCUDO_UDEA_QR_BASE64 } from '../assets/escudoQrBase64';
 import {
   FileDown,
   Image as ImageIcon,
@@ -161,8 +162,17 @@ export default function DigitalBadge({
           ctx.stroke();
 
           ctx.drawImage(img, width / 2 - 110, 450, 220, 220);
-          resolve();
+
+          // Asegurar que el escudo quede nítido y perfecto en el centro del QR en el Canvas
+          const emblemImg = new Image();
+          emblemImg.onload = () => {
+            ctx.drawImage(emblemImg, width / 2 - 26, 450 + 110 - 26, 52, 52);
+            resolve();
+          };
+          emblemImg.onerror = () => resolve();
+          emblemImg.src = ESCUDO_UDEA_QR_BASE64;
         };
+        img.onerror = () => resolve();
         img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
       });
     }
@@ -327,11 +337,11 @@ export default function DigitalBadge({
               fgColor="#0F5938"
               bgColor="#FFFFFF"
               imageSettings={{
-                src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%230F5938'/%3E%3Cpath d='M50 20 v60 M20 50 h60' stroke='%23C59B27' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E",
+                src: ESCUDO_UDEA_QR_BASE64,
                 x: undefined,
                 y: undefined,
-                height: 32,
-                width: 32,
+                height: 34,
+                width: 34,
                 excavate: true,
               }}
             />

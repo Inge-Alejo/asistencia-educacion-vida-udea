@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Download, Printer, Sparkles, MapPin, Calendar, Clock, Car, Globe, Check, Users } from 'lucide-react';
+import { ESCUDO_UDEA_QR_BASE64 } from '../assets/escudoQrBase64';
 
 export default function QRProjectionModal({ isOpen, onClose, evento, asistencias = [] }) {
   const qrRef = useRef(null);
@@ -152,11 +153,11 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
                 fgColor="#0F5938" // Verde UdeA
                 bgColor="#FFFFFF"
                 imageSettings={{
-                  src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%230F5938'/%3E%3Cpath d='M50 20 v60 M20 50 h60' stroke='%23C59B27' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E",
+                  src: ESCUDO_UDEA_QR_BASE64,
                   x: undefined,
                   y: undefined,
-                  height: 56,
-                  width: 56,
+                  height: 64,
+                  width: 64,
                   excavate: true,
                 }}
               />
