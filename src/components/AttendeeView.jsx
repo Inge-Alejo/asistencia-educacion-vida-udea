@@ -4,7 +4,7 @@ import {
   MapPin, CheckCircle2, AlertTriangle, Send, Star, Car, User, Mail,
   Phone, CreditCard, MessageSquare, ThumbsUp, HelpCircle,
   Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check,
-  Navigation, Radio, Award
+  Navigation, Radio, Award, Calendar
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import {
@@ -16,6 +16,7 @@ import {
   recordSatisfaction
 } from '../services/storage';
 import { maskFullName, sanitizeText } from '../services/sanitizer';
+import { getOfficialColombiaTime, getEventDaysList, checkEventDayStatus } from '../services/networkTime';
 
 function getSavedAttendeeSession(eventId) {
   if (typeof window === 'undefined' || !eventId) return null;
@@ -78,6 +79,27 @@ export default function AttendeeView({
     esPresencial: false
   });
 
+  // Estado de Fecha y Hora Oficial de Colombia vía Internet
+  const [officialTime, setOfficialTime] = useState({
+    fechaStr: new Date().toISOString().slice(0, 10),
+    horaStr: '08:00',
+    esVerificadaInternet: false,
+    fuente: 'Reloj Local'
+  });
+
+  // Sincronizar fecha y hora con internet al cargar el componente
+  useEffect(() => {
+    let isMounted = true;
+    getOfficialColombiaTime().then(res => {
+      if (isMounted) setOfficialTime(res);
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  const currentEventId = evento?.id || '';
+  const eventDays = useMemo(() => getEventDaysList(evento), [evento]);
+  const dayStatus = useMemo(() => checkEventDayStatus(evento, officialTime.fechaStr), [evento, officialTime.fechaStr]);
+
   // Estado del Formulario de Asistencia
   const [formData, setFormData] = useState(() => ({
     tipoDocumento: sessionInfo?.tipoDocumento || 'CC',
@@ -90,24 +112,53 @@ export default function AttendeeView({
     habeasDataAceptado: Boolean(sessionInfo)
   }));
 
-  const [asistenciaRegistrada, setAsistenciaRegistrada] = useState(() => Boolean(sessionInfo));
+  const currentDoc = (formData?.documento || '').trim();
+
+  // Historial de asistencias registradas por este participante en este evento (todas las sesiones)
+  const misAsistenciasEvento = useMemo(() => {
+    if (!currentDoc || !currentEventId) return [];
+    return (asistencias || []).filter(a =>
+      a.eventoId === currentEventId && String(a.documento).trim() === currentDoc
+    );
+  }, [asistencias, currentEventId, currentDoc]);
+
+  // Asistencia específica para la fecha o sesión de hoy
+  const asistenciaHoy = useMemo(() => {
+    if (misAsistenciasEvento.length === 0) return null;
+    return misAsistenciasEvento.find(a =>
+      a.fechaDia === officialTime.fechaStr ||
+      (dayStatus.diaNumero && a.diaNumero === dayStatus.diaNumero)
+    ) || null;
+  }, [misAsistenciasEvento, officialTime.fechaStr, dayStatus.diaNumero]);
+
+  const yaRegistroHoy = Boolean(asistenciaHoy);
+
+  const [asistenciaRegistrada, setAsistenciaRegistrada] = useState(() => {
+    if (!sessionInfo) return false;
+    // Si el evento es multidía, validar si la sesión guardada corresponde al día de hoy
+    if (evento?.esMultidia) {
+      return sessionInfo.fechaDia === new Date().toISOString().slice(0, 10);
+    }
+    return Boolean(sessionInfo.registrado);
+  });
+
   const [codigoComprobante, setCodigoComprobante] = useState(() => sessionInfo?.comprobanteId || '');
   const [errorAsistencia, setErrorAsistencia] = useState('');
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
 
-  const currentEventId = evento?.id || '';
-  const currentDoc = (formData?.documento || '').trim();
-
-  // Registro del participante activo para la Escarapela Digital
+  // Registro del participante activo para la Escarapela Digital (prioriza la sesión actual)
   const activeAttendeeRecord = useMemo(() => {
+    if (asistenciaHoy) return asistenciaHoy;
+    if (misAsistenciasEvento.length > 0) return misAsistenciasEvento[0];
+
     if (!codigoComprobante && !currentDoc) return null;
     const found = (asistencias || []).find(a =>
       (codigoComprobante && a.id === codigoComprobante) ||
-      (a.eventoId === currentEventId && a.documento === currentDoc)
+      (a.eventoId === currentEventId && String(a.documento).trim() === currentDoc)
     );
     if (found) return found;
 
-    if (asistenciaRegistrada) {
+    if (asistenciaRegistrada || yaRegistroHoy) {
       return {
         id: codigoComprobante || 'ATT-MED-01',
         eventoId: currentEventId,
@@ -116,17 +167,22 @@ export default function AttendeeView({
         documento: formData.documento || '',
         vinculacion: formData.vinculacion || 'Asistente',
         placaVehiculo: formData.placaVehiculo || '',
+        diaNumero: dayStatus.diaNumero || 1,
+        fechaDia: officialTime.fechaStr,
         fechaRegistro: new Date().toLocaleString('es-CO')
       };
     }
     return null;
-  }, [asistencias, codigoComprobante, formData, currentEventId, currentDoc, asistenciaRegistrada]);
+  }, [asistenciaHoy, misAsistenciasEvento, asistencias, codigoComprobante, formData, currentEventId, currentDoc, asistenciaRegistrada, yaRegistroHoy, dayStatus.diaNumero, officialTime.fechaStr]);
 
-  // Detección en tiempo real de documento previamente registrado en este evento
+  // Detección en tiempo real de registro existente (en multidía, verifica si ya llenó el día de hoy)
   const registroExistente = useMemo(() => {
     if (!currentDoc || !currentEventId) return null;
-    return (asistencias || []).find(a => a.eventoId === currentEventId && a.documento === currentDoc);
-  }, [asistencias, currentEventId, currentDoc]);
+    if (evento?.esMultidia) {
+      return yaRegistroHoy ? asistenciaHoy : null;
+    }
+    return (asistencias || []).find(a => a.eventoId === currentEventId && String(a.documento).trim() === currentDoc);
+  }, [currentDoc, currentEventId, evento, yaRegistroHoy, asistenciaHoy, asistencias]);
 
   // Estado de Preguntas a Ponentes
   const defaultPonenteId = evento?.ponentes?.[0]?.id || '';
@@ -290,6 +346,10 @@ export default function AttendeeView({
 
     const payload = {
       eventoId: evento.id,
+      diaNumero: dayStatus.diaNumero || 1,
+      fechaDia: officialTime.fechaStr,
+      fechaVerificadaInternet: officialTime.esVerificadaInternet,
+      fuenteTiempo: officialTime.fuente,
       tipoDocumento: formData.tipoDocumento,
       documento: sanitizeText(doc, 20),
       nombreCompleto: sanitizeText(nombre, 100),
@@ -317,6 +377,8 @@ export default function AttendeeView({
       try {
         localStorage.setItem(`udea_session_attendee_${evento.id}`, JSON.stringify({
           ...payload,
+          fechaDia: officialTime.fechaStr,
+          diaNumero: dayStatus.diaNumero || 1,
           comprobanteId: res.record.id,
           registrado: true,
           fechaRegistro: new Date().toISOString()
@@ -722,14 +784,69 @@ export default function AttendeeView({
             </div>
           </div>
 
-          {asistenciaRegistrada ? (
+          {/* Tarjeta de Jornada Multidía y Fecha Verificada por Internet */}
+          {evento?.esMultidia && (
+            <div className="attendee-day-selector-card">
+              <div className="attendee-day-title">
+                <h4>
+                  <Calendar size={16} color="#006633" />
+                  <span>Jornada Multidía: {dayStatus.diaNumero ? `Día ${dayStatus.diaNumero} de ${dayStatus.totalDias}` : 'Sesión Especial'}</span>
+                </h4>
+                <span className={`internet-time-pill ${officialTime.esVerificadaInternet ? 'verified' : 'local'}`} title={`Fuente: ${officialTime.fuente}`}>
+                  {officialTime.esVerificadaInternet ? '🌐 Hora Oficial por Internet' : '🕒 Hora Local'} ({officialTime.horaStr})
+                </span>
+              </div>
+
+              <div className="days-progress-tracker">
+                {eventDays.map((dStr, idx) => {
+                  const attendedForThisDay = misAsistenciasEvento.find(a => a.fechaDia === dStr || a.diaNumero === (idx + 1));
+                  const isToday = dStr === officialTime.fechaStr;
+                  return (
+                    <div
+                      key={dStr}
+                      className={`day-progress-step ${attendedForThisDay ? 'attended' : ''} ${isToday ? 'today' : ''}`}
+                    >
+                      <div className="step-day-label">
+                        <span>Día {idx + 1}</span>
+                        {attendedForThisDay ? (
+                          <CheckCircle2 size={14} color="#10B981" />
+                        ) : isToday ? (
+                          <span style={{ fontSize: '0.68rem', background: '#006633', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>HOY</span>
+                        ) : null}
+                      </div>
+                      <span className="step-day-date">{dStr}</span>
+                      <span className={`step-status-tag ${attendedForThisDay ? 'ok' : 'pending'}`}>
+                        {attendedForThisDay ? '✓ Registrado' : (isToday ? 'Por Registrar' : 'Pendiente')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {yaRegistroHoy && (
+                <div style={{ marginTop: '0.75rem', background: '#ECFDF5', border: '1px solid #A7F3D0', padding: '0.65rem 0.85rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#065F46', fontSize: '0.85rem' }}>
+                  <CheckCircle2 size={16} color="#10B981" />
+                  <span><strong>¡Asistencia de hoy ({officialTime.fechaStr}) registrada!</strong> Tienes tu acreditación lista para la sesión actual.</span>
+                </div>
+              )}
+
+              {!dayStatus.esDiaActivo && (
+                <div style={{ marginTop: '0.75rem', background: '#FFFBEB', border: '1px solid #FCD34D', padding: '0.65rem 0.85rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#92400E', fontSize: '0.82rem' }}>
+                  <AlertTriangle size={16} color="#D97706" />
+                  <span>Aviso: La fecha oficial de hoy ({officialTime.fechaStr}) no corresponde al calendario programado de sesiones de este evento. Sin embargo, puedes registrarte si estás asistiendo a una jornada extraordinaria.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(asistenciaRegistrada && (!evento?.esMultidia || yaRegistroHoy)) ? (
             <div className="success-attendance-box">
               <div className="success-icon-circle">
                 <CheckCircle2 size={40} className="check-icon" />
               </div>
               <h3 className="success-title">¡Asistencia Oficial Registrada!</h3>
               <p className="success-text">
-                Gracias, <strong>{formData.nombreCompleto}</strong>. Tu registro ha sido procesado exitosamente.
+                Gracias, <strong>{formData.nombreCompleto}</strong>. Tu registro {evento?.esMultidia && dayStatus.diaNumero ? `para la sesión del Día ${dayStatus.diaNumero} (${officialTime.fechaStr})` : ''} ha sido procesado exitosamente.
               </p>
               <div className="comprobante-chip">
                 <span>N° Comprobante:</span> <strong>{codigoComprobante}</strong>
@@ -774,6 +891,14 @@ export default function AttendeeView({
             </div>
           ) : (
             <form onSubmit={handleRegistrarAsistencia} className="attendance-form">
+              {evento?.esMultidia && !yaRegistroHoy && misAsistenciasEvento.length > 0 && (
+                <div style={{ background: '#F0FDF4', border: '1.5px solid #86EFAC', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534', fontSize: '0.88rem' }}>
+                  <CheckCircle2 size={18} color="#006633" />
+                  <span>
+                    Ya registraste asistencia en {misAsistenciasEvento.length} {misAsistenciasEvento.length === 1 ? 'sesión previa' : 'sesiones previas'}. Tus datos han sido precargados para registrar la asistencia del <strong>Día {dayStatus.diaNumero || 1} ({officialTime.fechaStr})</strong>.
+                  </span>
+                </div>
+              )}
               <div className="form-grid-2">
                 <div className="form-group">
                   <label className="form-label">Tipo de Documento</label>
@@ -1004,7 +1129,11 @@ export default function AttendeeView({
                 </button>
 
                 <button type="submit" className="btn-primary-action">
-                  <span>Confirmar Asistencia al Evento</span>
+                  <span>
+                    {evento?.esMultidia
+                      ? `Confirmar Asistencia Día ${dayStatus.diaNumero || 1} (${officialTime.fechaStr})`
+                      : 'Confirmar Asistencia al Evento'}
+                  </span>
                   <ChevronRight size={18} />
                 </button>
               </div>

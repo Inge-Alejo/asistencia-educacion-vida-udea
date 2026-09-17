@@ -1,21 +1,57 @@
-import React, { useState } from 'react';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2 } from 'lucide-react';
+import { getEventDaysList } from '../services/networkTime';
 
 export default function EventModal({ isOpen, onClose, onSave, initialEvent = null }) {
+  const [prevEventId, setPrevEventId] = useState(initialEvent?.id || null);
+
   const [titulo, setTitulo] = useState(initialEvent?.titulo || '');
+  const [descripcion, setDescripcion] = useState(initialEvent?.descripcion || '');
+  const [esMultidia, setEsMultidia] = useState(Boolean(initialEvent?.esMultidia));
   const [fecha, setFecha] = useState(() => initialEvent?.fecha || new Date().toISOString().slice(0, 10));
+  const [fechaInicio, setFechaInicio] = useState(() => initialEvent?.fechaInicio || initialEvent?.fecha || new Date().toISOString().slice(0, 10));
+  const [fechaFin, setFechaFin] = useState(() => initialEvent?.fechaFin || initialEvent?.fecha || new Date().toISOString().slice(0, 10));
   const [horaInicio, setHoraInicio] = useState(initialEvent?.horaInicio || '08:00');
   const [horaFin, setHoraFin] = useState(initialEvent?.horaFin || '17:00');
   const [lugar, setLugar] = useState(initialEvent?.lugar || 'Auditorio Manuel Uribe Ángel - Facultad de Medicina UdeA');
   const [habilitarPlacaVehiculo, setHabilitarPlacaVehiculo] = useState(initialEvent?.habilitarPlacaVehiculo ?? true);
-  const [descripcion, setDescripcion] = useState(initialEvent?.descripcion || '');
   const [microsoftFormsUrl, setMicrosoftFormsUrl] = useState(initialEvent?.microsoftFormsUrl || '');
 
   const [ponentes, setPonentes] = useState(() => (
     initialEvent?.ponentes?.length
       ? initialEvent.ponentes
-      : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '' }]
+      : [{ id: `PON-INIT-1`, nombre: '', titulo: '', temaPonencia: '' }]
   ));
+
+  // Sincronizar estado si cambia el evento a editar o se abre en modo creación
+  if ((initialEvent?.id || null) !== prevEventId) {
+    setPrevEventId(initialEvent?.id || null);
+    setTitulo(initialEvent?.titulo || '');
+    setDescripcion(initialEvent?.descripcion || '');
+    setEsMultidia(Boolean(initialEvent?.esMultidia));
+    setFecha(initialEvent?.fecha || new Date().toISOString().slice(0, 10));
+    setFechaInicio(initialEvent?.fechaInicio || initialEvent?.fecha || new Date().toISOString().slice(0, 10));
+    setFechaFin(initialEvent?.fechaFin || initialEvent?.fecha || new Date().toISOString().slice(0, 10));
+    setHoraInicio(initialEvent?.horaInicio || '08:00');
+    setHoraFin(initialEvent?.horaFin || '17:00');
+    setLugar(initialEvent?.lugar || 'Auditorio Manuel Uribe Ángel - Facultad de Medicina UdeA');
+    setHabilitarPlacaVehiculo(initialEvent?.habilitarPlacaVehiculo ?? true);
+    setMicrosoftFormsUrl(initialEvent?.microsoftFormsUrl || '');
+    setPonentes(initialEvent?.ponentes?.length
+      ? initialEvent.ponentes
+      : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '' }]
+    );
+  }
+
+  // Lista calculada de días para eventos multidía
+  const computedDaysList = useMemo(() => {
+    if (!esMultidia) return [fecha];
+    return getEventDaysList({
+      esMultidia: true,
+      fechaInicio,
+      fechaFin
+    });
+  }, [esMultidia, fecha, fechaInicio, fechaFin]);
 
   if (!isOpen) return null;
 
@@ -45,17 +81,26 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       return;
     }
 
+    if (esMultidia && fechaInicio > fechaFin) {
+      alert('La fecha de inicio no puede ser posterior a la fecha de finalización.');
+      return;
+    }
+
     const eventPayload = {
-      id: initialEvent?.id || `EVT-MED-${Date.now().toString().slice(-4)}`,
-      titulo,
-      fecha,
+      id: initialEvent?.id || `EVT-MED-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      titulo: titulo.trim(),
+      descripcion: descripcion.trim(),
+      esMultidia: Boolean(esMultidia),
+      fecha: esMultidia ? fechaInicio : fecha,
+      fechaInicio: esMultidia ? fechaInicio : fecha,
+      fechaFin: esMultidia ? fechaFin : fecha,
+      diasEvento: computedDaysList,
       horaInicio,
       horaFin,
       lugar,
-      coordenadas: { lat: 6.261341, lng: -75.566464 },
+      coordenadas: initialEvent?.coordenadas || { lat: 6.261341, lng: -75.566464 },
       habilitarPlacaVehiculo,
-      descripcion,
-      microsoftFormsUrl,
+      microsoftFormsUrl: microsoftFormsUrl.trim(),
       ponentes: ponentes.filter(p => p.nombre.trim() !== '')
     };
 
@@ -95,6 +140,148 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             />
           </div>
 
+          {/* Selector de Duración: 1 Día o Multidía */}
+          <div className="event-duration-type-selector">
+            <label className="form-label">
+              <Layers size={15} /> Modalidad de Duración del Evento
+            </label>
+            <div className="duration-pill-group">
+              <button
+                type="button"
+                className={`duration-pill-btn ${!esMultidia ? 'active' : ''}`}
+                onClick={() => setEsMultidia(false)}
+              >
+                <Calendar size={14} />
+                <span>Jornada de 1 Solo Día</span>
+              </button>
+              <button
+                type="button"
+                className={`duration-pill-btn ${esMultidia ? 'active' : ''}`}
+                onClick={() => setEsMultidia(true)}
+              >
+                <Layers size={14} />
+                <span>Evento Multidía (Varios Días)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Fila de Fecha y Horarios según modalidad */}
+          {!esMultidia ? (
+            <div className="form-row-3">
+              <div className="form-group">
+                <label className="form-label">
+                  <Calendar size={15} /> Fecha de la Jornada
+                </label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={fecha}
+                  onChange={(e) => setFecha(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">
+                  <Clock size={15} /> Hora Inicio
+                </label>
+                <input
+                  type="time"
+                  className="form-input"
+                  value={horaInicio}
+                  onChange={(e) => setHoraInicio(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">
+                  <Clock size={15} /> Hora Fin
+                </label>
+                <input
+                  type="time"
+                  className="form-input"
+                  value={horaFin}
+                  onChange={(e) => setHoraFin(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="multiday-config-box">
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label className="form-label">
+                    <Calendar size={15} /> Fecha de Inicio (Día 1)
+                  </label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={fechaInicio}
+                    onChange={(e) => setFechaInicio(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">
+                    <Calendar size={15} /> Fecha de Finalización
+                  </label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={fechaFin}
+                    min={fechaInicio}
+                    onChange={(e) => setFechaFin(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label className="form-label">
+                    <Clock size={15} /> Horario Diario de Inicio
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={horaInicio}
+                    onChange={(e) => setHoraInicio(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">
+                    <Clock size={15} /> Horario Diario de Cierre
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={horaFin}
+                    onChange={(e) => setHoraFin(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Vista previa de los días calculados */}
+              <div className="days-preview-container">
+                <span className="days-preview-title">
+                  <CheckCircle2 size={14} color="#006633" />
+                  Sesiones programadas ({computedDaysList.length} {computedDaysList.length === 1 ? 'día' : 'días'}):
+                </span>
+                <div className="days-tags-wrap">
+                  {computedDaysList.map((dStr, idx) => (
+                    <span key={dStr} className="day-badge-tag">
+                      <strong>Día {idx + 1}:</strong> {dStr}
+                    </span>
+                  ))}
+                </div>
+                <p className="days-preview-note">
+                  El sistema verificará la fecha legal de Colombia por internet y exigirá que el participante registre su asistencia en cada uno de estos días de forma individual.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Descripción opcional del Evento */}
           <div className="form-group">
             <label className="form-label" htmlFor="event-desc">
@@ -108,46 +295,6 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               onChange={(e) => setDescripcion(e.target.value)}
               placeholder="Breve información o propósito del evento académico..."
             />
-          </div>
-
-          {/* Fila de Fecha y Horarios */}
-          <div className="form-row-3">
-            <div className="form-group">
-              <label className="form-label">
-                <Calendar size={15} /> Fecha
-              </label>
-              <input
-                type="date"
-                className="form-input"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <Clock size={15} /> Hora Inicio
-              </label>
-              <input
-                type="time"
-                className="form-input"
-                value={horaInicio}
-                onChange={(e) => setHoraInicio(e.target.value)}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <Clock size={15} /> Hora Fin
-              </label>
-              <input
-                type="time"
-                className="form-input"
-                value={horaFin}
-                onChange={(e) => setHoraFin(e.target.value)}
-                required
-              />
-            </div>
           </div>
 
           {/* Lugar y Auditorio */}
@@ -310,7 +457,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               Cancelar
             </button>
             <button type="submit" className="btn-primary-action">
-              {initialEvent ? 'Guardar Cambios' : 'Crear Evento y Generar QR'}
+              {initialEvent ? 'Guardar Cambios del Evento' : 'Crear Evento y Generar QR'}
             </button>
           </div>
         </form>

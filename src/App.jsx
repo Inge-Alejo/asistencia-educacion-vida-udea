@@ -15,7 +15,8 @@ import {
   getQuestions,
   getEvaluations,
   getSatisfaction,
-  subscribeToEventData
+  subscribeToEventData,
+  subscribeToEvents
 } from './services/storage';
 import { isAdminAuthenticated, logoutAdmin } from './services/auth';
 
@@ -60,6 +61,7 @@ export default function App() {
 
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
@@ -67,6 +69,21 @@ export default function App() {
   });
 
   const currentEventId = currentEvent?.id || '';
+
+  // Sincronización en tiempo real de eventos multi-dispositivo (Firestore + LocalStorage)
+  useEffect(() => {
+    const unsub = subscribeToEvents((cloudOrLocalEvents) => {
+      if (cloudOrLocalEvents && cloudOrLocalEvents.length > 0) {
+        setEvents(cloudOrLocalEvents);
+        setCurrentEvent((prev) => {
+          if (!prev) return cloudOrLocalEvents[0];
+          const found = cloudOrLocalEvents.find(e => e.id === prev.id);
+          return found || cloudOrLocalEvents[0];
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
 
   // Estados de datos para el evento actual
   const [asistencias, setAsistencias] = useState(() => currentEventId ? getAttendance(currentEventId) : []);
@@ -106,9 +123,19 @@ export default function App() {
     }
   };
 
+  const handleOpenNewEvent = () => {
+    setEditingEvent(null);
+    setIsEventModalOpen(true);
+  };
+
+  const handleOpenEditEvent = (evtToEdit) => {
+    setEditingEvent(evtToEdit || currentEvent);
+    setIsEventModalOpen(true);
+  };
+
   // Manejar creación o edición de evento
-  const handleSaveEvent = (eventData) => {
-    saveEvent(eventData);
+  const handleSaveEvent = async (eventData) => {
+    await saveEvent(eventData);
     const updated = getEvents();
     setEvents(updated);
     setCurrentEvent(eventData);
@@ -118,6 +145,8 @@ export default function App() {
       setEvaluaciones(getEvaluations(eventData.id));
       setSatisfaccion(getSatisfaction(eventData.id));
     }
+    setIsEventModalOpen(false);
+    setEditingEvent(null);
   };
 
   // Manejar eliminación del evento actual
@@ -215,7 +244,8 @@ export default function App() {
               evaluaciones={evaluaciones}
               satisfaccion={satisfaccion}
               onOpenQRModal={() => setIsQRModalOpen(true)}
-              onOpenNewEventModal={() => setIsEventModalOpen(true)}
+              onOpenNewEventModal={handleOpenNewEvent}
+              onOpenEditEventModal={handleOpenEditEvent}
               onDeleteEvent={handleDeleteCurrentEvent}
               onDataUpdated={refreshEventData}
               onLogout={handleLogout}
@@ -225,7 +255,7 @@ export default function App() {
           <div className="empty-state-banner">
             <h2>No se ha seleccionado ningún evento</h2>
             <p>Seleccione o cree un nuevo evento académico para continuar.</p>
-            <button className="btn-primary-action" onClick={() => setIsEventModalOpen(true)}>
+            <button className="btn-primary-action" onClick={handleOpenNewEvent}>
               Crear Primer Evento
             </button>
           </div>
@@ -242,8 +272,13 @@ export default function App() {
 
       {/* Modal de Creación / Configuración de Evento */}
       <EventModal
+        key={editingEvent?.id || (isEventModalOpen ? 'create-new-evt' : 'closed-evt')}
         isOpen={isEventModalOpen}
-        onClose={() => setIsEventModalOpen(false)}
+        initialEvent={editingEvent}
+        onClose={() => {
+          setIsEventModalOpen(false);
+          setEditingEvent(null);
+        }}
         onSave={handleSaveEvent}
       />
 

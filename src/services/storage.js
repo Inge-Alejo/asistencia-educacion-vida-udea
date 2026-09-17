@@ -264,8 +264,8 @@ export function initStorage() {
       if (updated) {
         localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(storedEvents));
       }
-    } catch {
-      console.warn('Error al verificar migración de eventos:', e);
+    } catch (err) {
+      console.warn('Error al verificar migración de eventos:', err);
     }
   }
 
@@ -293,7 +293,7 @@ export function getEvents() {
   }
 }
 
-export function saveEvent(eventData) {
+export async function saveEvent(eventData) {
   const events = getEvents();
   const index = events.findIndex(e => e.id === eventData.id);
   if (index >= 0) {
@@ -302,13 +302,36 @@ export function saveEvent(eventData) {
     events.unshift(eventData);
   }
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(events));
+
+  // Sincronizar inmediatamente con Cloud Firestore en la colección 'eventos'
+  if (isFirebaseConfigured() && db) {
+    try {
+      await setDoc(doc(db, 'eventos', eventData.id), eventData);
+      console.info('✓ Evento sincronizado en Cloud Firestore en vivo:', eventData.id);
+    } catch (err) {
+      console.error('Error al guardar evento en Firestore:', err);
+    }
+  }
+
+  // Notificar cambios para reactividad en todas las pestañas y componentes
+  window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_EVENTS }));
   return eventData;
 }
 
 export async function deleteEvent(eventId) {
-  // 1. Eliminar evento de la lista
+  // 1. Eliminar evento de la lista local
   const events = getEvents().filter(e => e.id !== eventId);
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(events));
+
+  // Eliminar de Cloud Firestore
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'eventos', eventId));
+      console.info('✓ Evento eliminado de Cloud Firestore:', eventId);
+    } catch (err) {
+      console.error('Error eliminando evento de Firestore:', err);
+    }
+  }
 
   // 2. Purgar asistencias del evento
   const remainingAtt = getAttendance().filter(a => a.eventoId !== eventId);
@@ -331,7 +354,52 @@ export async function deleteEvent(eventId) {
     localStorage.removeItem(`udea_session_attendee_${eventId}`);
   } catch {}
 
+  window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_EVENTS }));
   return events;
+}
+
+// Suscripción reactiva a eventos en tiempo real multi-dispositivo
+export function subscribeToEvents(onUpdate) {
+  const unsubs = [];
+
+  const storageHandler = (e) => {
+    if (e.key === STORAGE_KEY_EVENTS) {
+      if (onUpdate) onUpdate(getEvents());
+    }
+  };
+  window.addEventListener('storage', storageHandler);
+  unsubs.push(() => window.removeEventListener('storage', storageHandler));
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      const unsubFirestore = onSnapshot(collection(db, 'eventos'), (snapshot) => {
+        const cloudEvents = [];
+        snapshot.forEach(docSnap => cloudEvents.push(docSnap.data()));
+
+        if (cloudEvents.length > 0) {
+          const localEvents = getEvents();
+          const map = new Map();
+          localEvents.forEach(ev => map.set(ev.id, ev));
+          cloudEvents.forEach(ev => map.set(ev.id, ev));
+
+          const merged = Array.from(map.values());
+          localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(merged));
+          if (onUpdate) onUpdate(merged);
+        }
+      }, (err) => {
+        console.warn('Aviso sincronización Firestore eventos:', err?.message);
+      });
+      unsubs.push(unsubFirestore);
+    } catch (err) {
+      console.warn('Error al suscribir eventos en Firestore:', err);
+    }
+  }
+
+  return () => {
+    unsubs.forEach(fn => {
+      try { fn(); } catch {}
+    });
+  };
 }
 
 // Métodos de Asistencia
@@ -347,10 +415,23 @@ export function getAttendance(eventId = null) {
 
 export async function recordAttendance(record) {
   const list = getAttendance();
-  // Evitar duplicados por cédula y evento
-  const existe = list.find(a => a.eventoId === record.eventoId && a.documento === record.documento);
+
+  // Fecha de la sesión (formato ISO YYYY-MM-DD)
+  const fechaDia = record.fechaDia || (record.fechaRegistro ? String(record.fechaRegistro).slice(0, 10) : new Date().toISOString().slice(0, 10));
+
+  // Evitar duplicados por cédula, evento y día específico (soporta multidía)
+  const existe = list.find(a =>
+    a.eventoId === record.eventoId &&
+    String(a.documento).trim() === String(record.documento).trim() &&
+    (a.fechaDia ? a.fechaDia === fechaDia : (record.diaNumero ? a.diaNumero === record.diaNumero : true))
+  );
+
   if (existe) {
-    return { success: false, message: 'Ya se encuentra registrada la asistencia con este número de documento.' };
+    const diaDesc = record.diaNumero ? `Día ${record.diaNumero} (${fechaDia})` : fechaDia;
+    return {
+      success: false,
+      message: `Ya se encuentra registrada la asistencia con el documento ${record.documento} para la sesión del ${diaDesc}.`
+    };
   }
 
   const newId = `ATT-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -359,8 +440,13 @@ export async function recordAttendance(record) {
   const newRecord = {
     ...record,
     id: newId,
+    fechaDia,
+    diaNumero: record.diaNumero || 1,
     tokenSeguridad,
-    fechaRegistro: new Date().toLocaleString('es-CO')
+    fechaRegistro: record.fechaRegistro || new Date().toLocaleString('es-CO'),
+    horaRegistro: record.horaRegistro || new Date().toLocaleTimeString('es-CO'),
+    fechaVerificadaInternet: Boolean(record.fechaVerificadaInternet),
+    fuenteTiempo: record.fuenteTiempo || 'Local'
   };
 
   const publicVerification = {
@@ -373,6 +459,8 @@ export async function recordAttendance(record) {
     vinculacion: newRecord.vinculacion || 'Asistente',
     placaVehiculo: newRecord.placaVehiculo || '',
     fechaRegistro: newRecord.fechaRegistro,
+    fechaDia: newRecord.fechaDia,
+    diaNumero: newRecord.diaNumero,
     esPresencial: Boolean(newRecord.geolocalizacion?.esPresencial),
     distanciaSedeMetros: newRecord.geolocalizacion?.distanciaSedeMetros ?? null,
     estado: 'VALIDO',

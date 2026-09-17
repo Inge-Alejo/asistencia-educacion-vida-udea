@@ -354,7 +354,13 @@ export default function DigitalBadge({
           <div className="security-stamp-text">
             <strong>ASISTENCIA OFICIAL CONFIRMADA</strong>
             <span>Comprobante: {asistente.id}</span>
-            <span>Registrado: {asistente.fechaRegistro}</span>
+            <span>
+              Registrado: {asistente.fechaRegistro}
+              {asistente.diaNumero ? ` (Día ${asistente.diaNumero})` : ''}
+            </span>
+            {asistente.fechaVerificadaInternet && (
+              <span style={{ color: '#006633', fontWeight: 600 }}>🌐 Verificado con Hora Legal de Colombia</span>
+            )}
           </div>
         </div>
 

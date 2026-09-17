@@ -3,7 +3,7 @@ import {
   Users, HelpCircle, Star, ThumbsUp, Download, QrCode, Plus, Search,
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
   ExternalLink, Trash2, Shield, KeyRound, LogOut, Upload, X, Award,
-  Database, HardDrive, Server, Activity, Wifi, Camera
+  Database, HardDrive, Server, Activity, Wifi, Camera, Edit3
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import QRScannerModal from './QRScannerModal';
@@ -31,6 +31,7 @@ export default function AdminPanel({
   satisfaccion = [],
   onOpenQRModal,
   onOpenNewEventModal,
+  onOpenEditEventModal,
   onDeleteEvent,
   onDataUpdated,
   onLogout
@@ -260,6 +261,15 @@ export default function AdminPanel({
           <button className="btn-secondary" onClick={onOpenNewEventModal}>
             <Plus size={16} />
             <span>Crear Evento</span>
+          </button>
+          <button
+            type="button"
+            className="btn-edit-event"
+            onClick={() => onOpenEditEventModal && onOpenEditEventModal(evento)}
+            title="Editar la configuración, fechas o ponentes de este evento"
+          >
+            <Edit3 size={16} />
+            <span>Editar Evento Actual</span>
           </button>
           <button className="btn-secondary" onClick={onOpenQRModal}>
             <QrCode size={16} />
@@ -574,7 +584,21 @@ export default function AdminPanel({
                           )}
                         </div>
                       </td>
-                      <td className="time-cell">{a.fechaRegistro}</td>
+                      <td className="time-cell">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <span>{a.fechaRegistro}</span>
+                          {(evento.esMultidia || a.diaNumero) && (
+                            <span className="day-badge-tag" style={{ alignSelf: 'flex-start' }}>
+                              Día {a.diaNumero || 1} {a.fechaDia ? `(${a.fechaDia})` : ''}
+                            </span>
+                          )}
+                          {a.fechaVerificadaInternet && (
+                            <span style={{ fontSize: '0.68rem', color: '#059669', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                              🌐 Hora Red Verificada
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td>
                         <div className="table-actions-cluster" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                           <button
