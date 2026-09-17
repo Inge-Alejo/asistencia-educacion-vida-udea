@@ -321,7 +321,7 @@ export default function AttendeeView({
           registrado: true,
           fechaRegistro: new Date().toISOString()
         }));
-      } catch {
+      } catch (err) {
         console.warn('Error al guardar sesión del asistente:', err);
       }
 

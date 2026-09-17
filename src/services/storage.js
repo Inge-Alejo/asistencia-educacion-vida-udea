@@ -386,7 +386,7 @@ export async function recordAttendance(record) {
       // Guardar también en la colección pública de verificación segura
       await setDoc(doc(db, 'verificaciones', newRecord.id), publicVerification);
       console.info('✓ Asistencia y verificación registradas en Firebase Firestore en vivo:', newRecord.id);
-    } catch {
+    } catch (err) {
       console.error('Error guardando en Firestore:', err);
     }
   }
@@ -399,7 +399,7 @@ export async function recordAttendance(record) {
     const localVerifs = JSON.parse(localStorage.getItem(STORAGE_KEY_VERIFICATIONS) || '{}');
     localVerifs[newRecord.id] = publicVerification;
     localStorage.setItem(STORAGE_KEY_VERIFICATIONS, JSON.stringify(localVerifs));
-  } catch {
+  } catch (e) {
     console.warn('Error guardando verificación en localStorage:', e);
   }
 
@@ -799,7 +799,7 @@ export function subscribeToEventData(eventId, onUpdate) {
         (err) => console.warn('Firestore satisfaccion snapshot:', err)
       );
       unsubs.push(unsubSat);
-    } catch {
+    } catch (err) {
       console.error('Error al configurar los listeners en vivo de Firestore:', err);
     }
   }
@@ -872,8 +872,8 @@ export function importDatabaseBackupJSON(jsonString) {
       countEvents: backup.data.events.length,
       countAttendance: backup.data.attendance?.length || 0
     };
-  } catch {
-    return { success: false, message: 'Error al procesar el archivo JSON: ' + err.message };
+  } catch (err) {
+    return { success: false, message: 'Error al procesar el archivo JSON: ' + (err?.message || 'Formato no válido') };
   }
 }
 

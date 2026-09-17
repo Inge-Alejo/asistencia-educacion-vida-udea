@@ -2,54 +2,79 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Función de validación de campos mínimos requeridos para asistencia
+    // Función de validación de campos mínimos y límites de tamaño (Protección contra DoS y Type Confusion)
     function isValidAttendance() {
       return request.resource.data.documento is string &&
              request.resource.data.documento.size() >= 4 &&
+             request.resource.data.documento.size() <= 25 &&
              request.resource.data.nombreCompleto is string &&
+             request.resource.data.nombreCompleto.size() >= 2 &&
+             request.resource.data.nombreCompleto.size() <= 120 &&
              request.resource.data.correo is string &&
-             request.resource.data.eventoId is string;
+             request.resource.data.correo.size() <= 120 &&
+             request.resource.data.eventoId is string &&
+             request.resource.data.eventoId.size() <= 50;
     }
 
     // Colección de Asistencias:
     // Los asistentes pueden registrar su asistencia (create), pero NO pueden listar ni leer
-    // las cédulas, teléfonos ni correos de los demás participantes.
+    // las cédulas, teléfonos ni correos de los demás participantes (Protección Habeas Data).
     match /asistencias/{asistenciaId} {
       allow create: if isValidAttendance();
-      // Lectura y borrado solo permitido a administradores autorizados
+      // Lectura, actualización y borrado solo permitido a administradores autorizados
       allow read, update, delete: if request.auth != null;
+    }
+
+    // Función de validación para escarapela / credencial digital pública
+    function isValidVerification() {
+      return request.resource.data.id is string &&
+             request.resource.data.id.size() <= 60 &&
+             request.resource.data.nombreCompleto is string &&
+             request.resource.data.nombreCompleto.size() <= 120 &&
+             request.resource.data.eventoId is string &&
+             request.resource.data.eventoId.size() <= 50;
     }
 
     // Colección de Verificaciones Públicas Seguras (Escarapelas Digitales):
     // Permite que la cámara de cualquier celular verifique la validez de la inscripción
     // mostrando únicamente datos no sensibles (nombre, documento enmascarado, evento, presencialidad).
+    // Se previene sobreescritura maliciosa limitando 'update' y 'delete' solo a administradores.
     match /verificaciones/{verificacionId} {
       allow read: if true;
-      allow create, update: if request.resource.data.id is string &&
-                               request.resource.data.nombreCompleto is string &&
-                               request.resource.data.eventoId is string;
-      allow delete: if request.auth != null;
+      allow create: if isValidVerification();
+      allow update, delete: if request.auth != null;
+    }
+
+    // Validación de preguntas para el auditorio
+    function isValidQuestion() {
+      return request.resource.data.pregunta is string &&
+             request.resource.data.pregunta.size() >= 3 &&
+             request.resource.data.pregunta.size() <= 500 &&
+             request.resource.data.eventoId is string &&
+             request.resource.data.eventoId.size() <= 50;
     }
 
     // Colección de Preguntas a Ponentes:
-    // Abierto para crear preguntas y leer preguntas del auditorio en vivo.
+    // Abierto para crear preguntas acotadas y leer preguntas del auditorio en vivo.
     // Solo administradores o moderadores pueden marcar respondida, destacar o eliminar.
     match /preguntas/{preguntaId} {
-      allow read, create: if true;
+      allow read: if true;
+      allow create: if isValidQuestion();
       allow update, delete: if request.auth != null;
     }
 
     // Colección de Evaluaciones de Ponentes:
     // Los asistentes pueden calificar (create), pero solo el comité académico puede ver los consolidados.
     match /evaluaciones/{evalId} {
-      allow create: if true;
+      allow create: if request.resource.data.eventoId is string &&
+                       request.resource.data.ponenteId is string;
       allow read, update, delete: if request.auth != null;
     }
 
     // Colección de Encuestas de Satisfacción:
-    // Creación abierta, lectura restringida a administradores.
+    // Creación abierta con control de evento, lectura restringida a administradores.
     match /satisfaccion/{satId} {
-      allow create: if true;
+      allow create: if request.resource.data.eventoId is string;
       allow read, update, delete: if request.auth != null;
     }
 
