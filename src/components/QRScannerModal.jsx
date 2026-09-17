@@ -14,7 +14,8 @@ import {
   Volume2,
   VolumeX,
   RefreshCw,
-  Award
+  Award,
+  Loader2
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { verifyAttendanceRecord, getEvents } from '../services/storage';
@@ -30,8 +31,8 @@ function playBeep(isSuccess = true) {
 
     if (isSuccess) {
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime); // Nota La (A5)
-      osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.12); // Octava alta (A6)
+      osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+      osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.12); // A6
       gain.gain.setValueAtTime(0.18, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18);
       osc.connect(gain);
@@ -50,7 +51,7 @@ function playBeep(isSuccess = true) {
       osc.stop(ctx.currentTime + 0.22);
     }
   } catch {
-    // AudioContext puede estar restringido por política del navegador hasta el primer clic
+    // AudioContext silencioso en caso de bloqueo por política de navegador
   }
 }
 
@@ -65,6 +66,7 @@ export default function QRScannerModal({
   const streamRef = useRef(null);
   const animFrameIdRef = useRef(null);
 
+  const [isLoadingCamera, setIsLoadingCamera] = useState(true);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [cameraError, setCameraError] = useState('');
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' | 'user'
@@ -86,14 +88,18 @@ export default function QRScannerModal({
     }
   });
 
-  // Detener la cámara de manera segura
+  // Detener la cámara y sus tracks de hardware
   const stopCamera = useCallback(() => {
     if (animFrameIdRef.current) {
       cancelAnimationFrame(animFrameIdRef.current);
       animFrameIdRef.current = null;
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      try {
+        streamRef.current.getTracks().forEach(track => {
+          track.stop();
+        });
+      } catch {}
       streamRef.current = null;
     }
     if (videoRef.current) {
@@ -101,14 +107,14 @@ export default function QRScannerModal({
     }
   }, []);
 
-  // Reanudar escaneo para el siguiente participante
+  // Reanudar escaneo para el siguiente asistente
   const handleResumeScan = useCallback(() => {
     setVerificationResult(null);
     setAutoResumeCountdown(0);
     setIsScanning(true);
   }, []);
 
-  // Procesar código QR decodificado
+  // Procesar código QR detectado
   const handleDecodedQR = useCallback(async (rawText) => {
     if (!rawText) return;
     setIsScanning(false);
@@ -117,7 +123,7 @@ export default function QRScannerModal({
     let token = '';
 
     try {
-      // Caso 1: URL completa: https://.../?verificar=ATT-123&token=abc
+      // Caso 1: Formato URL (?verificar=ATT-123&token=xyz)
       if (rawText.includes('verificar=') || rawText.includes('verify=') || rawText.includes('credencial=')) {
         const urlMatch = rawText.match(/[?&](?:verificar|verify|credencial)=([^&]+)/i);
         if (urlMatch && urlMatch[1]) {
@@ -128,15 +134,15 @@ export default function QRScannerModal({
           token = decodeURIComponent(tokenMatch[1]);
         }
       } else {
-        // Caso 2: Texto directo (ej: ATT-1726543210-9876)
+        // Caso 2: Texto o ID directo (ATT-1726543210-9876)
         compId = rawText.trim();
       }
 
       if (!compId) {
-        throw new Error('El código escaneado no contiene un formato de acreditación válido de la Facultad de Medicina UdeA.');
+        throw new Error('El código QR escaneado no corresponde a una credencial válida de la Facultad de Medicina UdeA.');
       }
 
-      // Validar registro en la base de datos
+      // Validar registro en storage (Firestore / Local)
       const result = await verifyAttendanceRecord(compId, token);
 
       if (result.success) {
@@ -147,7 +153,7 @@ export default function QRScannerModal({
       } else {
         if (soundEnabled) playBeep(false);
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          try { navigator.vibrate([150]); } catch {}
+          try { navigator.vibrate([160]); } catch {}
         }
       }
 
@@ -158,7 +164,6 @@ export default function QRScannerModal({
 
       if (onDataUpdated) onDataUpdated();
 
-      // Si autoResume está habilitado, iniciar cuenta regresiva para escanear al siguiente
       if (autoResume) {
         setAutoResumeCountdown(4);
       }
@@ -175,110 +180,190 @@ export default function QRScannerModal({
     }
   }, [soundEnabled, autoResume, onDataUpdated]);
 
-  // Bucle de escaneo continuo con requestAnimationFrame
+  // Bucle de escaneo fotograma a fotograma
   const startScanLoop = useCallback(() => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (animFrameIdRef.current) {
+      cancelAnimationFrame(animFrameIdRef.current);
+      animFrameIdRef.current = null;
+    }
 
     const tick = () => {
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+
+      if (!video || !canvas) {
+        animFrameIdRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      // Verificar que el video tenga dimensiones y datos listos (vital para iOS Safari)
+      if (
+        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+        video.videoWidth > 0 &&
+        video.videoHeight > 0
+      ) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'dontInvert'
-        });
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert'
+          });
 
-        if (code && code.data) {
-          handleDecodedQR(code.data);
-          return; // Detiene el bucle hasta reanudar
+          if (code && code.data) {
+            handleDecodedQR(code.data);
+            return; // Detener bucle hasta que se reanude
+          }
         }
       }
+
       animFrameIdRef.current = requestAnimationFrame(tick);
     };
 
     animFrameIdRef.current = requestAnimationFrame(tick);
   }, [handleDecodedQR]);
 
-  // Iniciar flujo de cámara al abrir o cambiar de lente
-  useEffect(() => {
-    if (!isOpen) {
-      stopCamera();
+  // Función principal para iniciar la cámara compatible con iOS Safari y Android
+  const startCamera = useCallback(async () => {
+    stopCamera();
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setIsLoadingCamera(false);
+      setHasCameraPermission(false);
+      setCameraError('Su navegador no permite el acceso a la cámara. Por favor use Safari en iOS o Chrome en Android con conexión HTTPS.');
       return;
     }
 
-    let isMounted = true;
-
-    async function initCamera() {
-      stopCamera();
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        if (isMounted) {
-          setCameraError('Su navegador o dispositivo no soporta acceso directo a la cámara web.');
-          setHasCameraPermission(false);
+    // Variantes de configuración en cascada para compatibilidad total con Apple iOS y Android
+    const constraintsList = [
+      // 1: Configuración preferida con resolución y facingMode ideal
+      {
+        audio: false,
+        video: {
+          facingMode: facingMode === 'user' ? 'user' : { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         }
-        return;
+      },
+      // 2: Configuración sin resolución fija (algunos WebViews de Android e iOS)
+      {
+        audio: false,
+        video: {
+          facingMode: facingMode === 'user' ? 'user' : 'environment'
+        }
+      },
+      // 3: Fallback general a cualquier cámara activa
+      {
+        audio: false,
+        video: true
       }
+    ];
 
+    let stream = null;
+    let finalError = null;
+
+    for (const constraints of constraintsList) {
       try {
-        const constraints = {
-          video: {
-            facingMode: { ideal: facingMode },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        if (!isMounted) {
-          stream.getTracks().forEach(t => t.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-          if (isMounted) {
-            setHasCameraPermission(true);
-            setCameraError('');
-            startScanLoop();
-          }
-        }
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (stream) break;
       } catch (err) {
-        if (!isMounted) return;
-        setHasCameraPermission(false);
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          setCameraError('Permiso de cámara denegado. Autorice el acceso a la cámara en su navegador para escanear.');
-        } else {
-          setCameraError('No fue posible activar la cámara: ' + err.message);
-        }
+        finalError = err;
       }
     }
 
-    initCamera();
+    if (!stream) {
+      setIsLoadingCamera(false);
+      setHasCameraPermission(false);
+      if (finalError?.name === 'NotAllowedError' || finalError?.name === 'PermissionDeniedError') {
+        setCameraError('Permiso de cámara denegado. En iOS vaya a Ajustes > Safari > Cámara > Permitir. En Android autorice el permiso del sitio.');
+      } else {
+        setCameraError(`No se pudo activar la cámara: ${finalError?.message || 'Dispositivo no disponible'}`);
+      }
+      return;
+    }
+
+    streamRef.current = stream;
+
+    const video = videoRef.current;
+    if (!video) {
+      setIsLoadingCamera(false);
+      return;
+    }
+
+    // Atributos obligatorios para iOS Safari para evitar pantalla completa nativa
+    video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
+    video.setAttribute('autoplay', 'true');
+    video.setAttribute('muted', 'true');
+    video.muted = true;
+    video.srcObject = stream;
+
+    const onPlayReady = async () => {
+      try {
+        await video.play();
+      } catch (e) {
+        console.warn('Video play deferred:', e);
+      }
+      setIsLoadingCamera(false);
+      setHasCameraPermission(true);
+      setCameraError('');
+      startScanLoop();
+    };
+
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      onPlayReady();
+    } else {
+      video.onloadedmetadata = () => {
+        onPlayReady();
+      };
+      // Timeout de respaldo por si onloadedmetadata se retrasa en Safari
+      setTimeout(() => {
+        if (streamRef.current) {
+          onPlayReady();
+        }
+      }, 500);
+    }
+  }, [facingMode, stopCamera, startScanLoop]);
+
+  // Inicializar cámara cuando el modal se abre
+  useEffect(() => {
+    let active = true;
+
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        if (active) {
+          setIsLoadingCamera(true);
+          setCameraError('');
+          startCamera();
+        }
+      }, 0);
+
+      return () => {
+        active = false;
+        clearTimeout(timer);
+        stopCamera();
+      };
+    } else {
+      stopCamera();
+    }
 
     return () => {
-      isMounted = false;
+      active = false;
       stopCamera();
     };
-  }, [isOpen, facingMode, stopCamera, startScanLoop]);
+  }, [isOpen, startCamera, stopCamera]);
 
-  // Efecto cuando el estado isScanning vuelve a true
+  // Reanudar escaneo cuando el estado isScanning vuelve a ser true
   useEffect(() => {
     if (isOpen && isScanning && hasCameraPermission) {
       startScanLoop();
     }
   }, [isOpen, isScanning, hasCameraPermission, startScanLoop]);
 
-  // Manejar cuenta regresiva de auto-reanudación
+  // Temporizador de auto-reanudación tras escaneo exitoso
   useEffect(() => {
     if (isScanning || !autoResume || !verificationResult) return;
 
@@ -297,7 +382,7 @@ export default function QRScannerModal({
     }
   }, [autoResumeCountdown, isScanning, autoResume, verificationResult, handleResumeScan]);
 
-  // Alternar entre cámara frontal y trasera
+  // Alternar entre cámara trasera y frontal
   const handleToggleFacingMode = () => {
     setFacingMode(prev => (prev === 'environment' ? 'user' : 'environment'));
   };
@@ -310,8 +395,12 @@ export default function QRScannerModal({
 
   return (
     <div className="modal-overlay qr-scanner-modal-overlay" onClick={onClose}>
-      <div className="modal-container qr-scanner-modal-dialog" onClick={(e) => e.stopPropagation()}>
-        
+      <div
+        className="qr-scanner-modal-dialog"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         {/* Cabecera del Escáner */}
         <div className="scanner-modal-header">
           <div className="scanner-header-left">
@@ -321,7 +410,7 @@ export default function QRScannerModal({
             <div>
               <h3 className="scanner-modal-title">Acreditación y Verificación QR en Puerta</h3>
               <p className="scanner-modal-subtitle">
-                Facultad de Medicina UdeA {eventoActual ? `• ${eventoActual.titulo}` : ''}
+                Facultad de Medicina UdeA {eventoActual?.titulo ? `• ${eventoActual.titulo}` : ''}
               </p>
             </div>
           </div>
@@ -332,7 +421,8 @@ export default function QRScannerModal({
               type="button"
               className={`scanner-tool-btn ${soundEnabled ? 'active' : ''}`}
               onClick={() => setSoundEnabled(prev => !prev)}
-              title={soundEnabled ? 'Sonido de confirmación activado' : 'Sonido desactivado'}
+              title={soundEnabled ? 'Sonido activado' : 'Sonido silenciado'}
+              aria-label="Alternar sonido"
             >
               {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
             </button>
@@ -343,6 +433,7 @@ export default function QRScannerModal({
               className="scanner-tool-btn"
               onClick={handleToggleFacingMode}
               title="Cambiar entre cámara trasera y frontal"
+              aria-label="Cambiar cámara"
             >
               <RefreshCw size={18} />
             </button>
@@ -350,9 +441,10 @@ export default function QRScannerModal({
             {/* Cerrar Modal */}
             <button
               type="button"
-              className="btn-close-modal"
+              className="scanner-tool-btn scanner-close-btn"
               onClick={onClose}
               title="Cerrar escáner"
+              aria-label="Cerrar ventana"
             >
               <X size={20} />
             </button>
@@ -361,59 +453,66 @@ export default function QRScannerModal({
 
         {/* Cuerpo del Visor de la Cámara / Resultados */}
         <div className="scanner-modal-body">
-          {/* Canvas oculto para procesamiento de frames de imagen */}
+          {/* Canvas oculto para decodificación de imagen */}
           <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-          {/* Estado de error de cámara */}
-          {cameraError && (
-            <div className="scanner-camera-error-box">
-              <AlertTriangle size={36} className="error-icon" />
-              <h4>Acceso a la Cámara No Disponible</h4>
-              <p>{cameraError}</p>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={startCamera}
-                style={{ marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
-              >
-                <RefreshCw size={16} />
-                <span>Reintentar Conexión</span>
-              </button>
-            </div>
-          )}
+          {/* Visor de Video en Vivo: SIEMPRE montado para mantener la referencia */}
+          <div className="scanner-viewport-wrapper">
+            <video
+              ref={videoRef}
+              playsInline
+              webkit-playsinline="true"
+              autoPlay
+              muted
+              className={`scanner-video-element ${!isScanning ? 'paused' : ''}`}
+            />
 
-          {/* Visor de Video en Vivo mientras se está escaneando */}
-          {hasCameraPermission && !cameraError && (
-            <div className="scanner-viewport-wrapper">
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                className={`scanner-video-element ${!isScanning ? 'paused' : ''}`}
-              />
+            {/* Indicador de Carga mientras la cámara inicia en iOS/Android */}
+            {isLoadingCamera && !cameraError && (
+              <div className="scanner-loading-overlay">
+                <Loader2 size={36} className="spinner-rotate" />
+                <span>Iniciando sensor de cámara...</span>
+                <small>Permita el acceso si su navegador lo solicita</small>
+              </div>
+            )}
 
-              {/* Mira de Escaneo Láser Animada */}
-              {isScanning && (
-                <div className="scanner-targeting-overlay">
-                  <div className="targeting-box">
-                    <span className="corner-bracket top-left" />
-                    <span className="corner-bracket top-right" />
-                    <span className="corner-bracket bottom-left" />
-                    <span className="corner-bracket bottom-right" />
-                    <div className="scanner-laser-line" />
-                  </div>
-                  <p className="scanner-instruction-text">
-                    Apunte la cámara hacia el código QR de la credencial o escarapela
-                  </p>
+            {/* Error de Permiso de Cámara */}
+            {cameraError && (
+              <div className="scanner-camera-error-box">
+                <AlertTriangle size={36} className="error-icon" />
+                <h4>Cámara No Disponible</h4>
+                <p>{cameraError}</p>
+                <button
+                  type="button"
+                  className="btn-retry-camera"
+                  onClick={startCamera}
+                >
+                  <RefreshCw size={16} />
+                  <span>Reintentar Acceso</span>
+                </button>
+              </div>
+            )}
+
+            {/* Mira y Guía Láser de Escaneo */}
+            {isScanning && !isLoadingCamera && !cameraError && (
+              <div className="scanner-targeting-overlay">
+                <div className="targeting-box">
+                  <span className="corner-bracket top-left" />
+                  <span className="corner-bracket top-right" />
+                  <span className="corner-bracket bottom-left" />
+                  <span className="corner-bracket bottom-right" />
+                  <div className="scanner-laser-line" />
                 </div>
-              )}
-            </div>
-          )}
+                <p className="scanner-instruction-text">
+                  Apunte la cámara al código QR de la escarapela digital
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* FICHA DE RESULTADOS DE LA VERIFICACIÓN */}
           {verificationResult && (
             <div className={`scanner-result-card ${verificationResult.success ? (isTargetEvent ? 'success' : 'warning') : 'error'}`}>
-              
               <div className="result-card-header">
                 <div className="result-status-wrap">
                   {verificationResult.success ? (
@@ -423,7 +522,7 @@ export default function QRScannerModal({
                           <CheckCircle2 size={24} />
                         </div>
                         <div>
-                          <span className="status-pill-badge green">✓ Pase Digital Oficial Verificado</span>
+                          <span className="status-pill-badge green">✓ Pase Digital Verificado</span>
                           <h4 className="result-attendee-name">{record?.nombreCompleto || 'Participante'}</h4>
                         </div>
                       </>
@@ -459,7 +558,7 @@ export default function QRScannerModal({
 
               {verificationResult.success && record ? (
                 <div className="result-details-grid">
-                  {/* Documento y Vinculación */}
+                  {/* Documento */}
                   <div className="detail-item">
                     <span className="detail-label">
                       <CreditCard size={14} /> Documento de Identidad
@@ -469,6 +568,7 @@ export default function QRScannerModal({
                     </span>
                   </div>
 
+                  {/* Vinculación */}
                   <div className="detail-item">
                     <span className="detail-label">
                       <User size={14} /> Vinculación UdeA
@@ -478,41 +578,41 @@ export default function QRScannerModal({
                     </span>
                   </div>
 
-                  {/* Placa de Vehículo */}
+                  {/* Placa Vehicular */}
                   <div className="detail-item">
                     <span className="detail-label">
                       <Car size={14} /> Placa Vehicular / Parqueadero
                     </span>
                     <span className={`detail-value ${record.placaVehiculo && record.placaVehiculo !== 'No registrada' ? 'has-plate' : 'no-plate'}`}>
                       {record.placaVehiculo && record.placaVehiculo !== 'No registrada'
-                        ? `🚗 ${record.placaVehiculo} (Ingreso Autorizado)`
+                        ? `🚗 ${record.placaVehiculo} (Autorizado)`
                         : 'Sin vehículo registrado'}
                     </span>
                   </div>
 
-                  {/* Estado de Presencialidad GPS */}
+                  {/* Geolocalización */}
                   <div className="detail-item">
                     <span className="detail-label">
                       <MapPin size={14} /> Geolocalización en Sede
                     </span>
                     <span className={`detail-value ${record.geolocalizacion?.esPresencial ? 'gps-ok' : 'gps-external'}`}>
                       {record.geolocalizacion?.esPresencial
-                        ? `✓ En Sede Facultad (${record.geolocalizacion.distanciaMetros || 0} m)`
-                        : 'Registro remoto / GPS no presencial'}
+                        ? `✓ En Sede (${record.geolocalizacion.distanciaMetros || 0} m)`
+                        : 'Registro remoto / Fuera de sede'}
                     </span>
                   </div>
 
-                  {/* Evento Académico */}
+                  {/* Evento */}
                   <div className="detail-item full-span">
                     <span className="detail-label">
-                      <Calendar size={14} /> Evento Correspondiente
+                      <Calendar size={14} /> Evento Académico
                     </span>
                     <span className="detail-value">
                       {eventoAsociado?.titulo || record.eventoId || 'Facultad de Medicina UdeA'}
                     </span>
                   </div>
 
-                  {/* Código Comprobante */}
+                  {/* Comprobante ID */}
                   <div className="detail-item full-span code-footer">
                     <span className="detail-label">
                       <Award size={14} /> Comprobante Oficial:
@@ -526,7 +626,7 @@ export default function QRScannerModal({
                 </div>
               )}
 
-              {/* Barra de Acciones y Auto-reanudación */}
+              {/* Acciones del Resultado */}
               <div className="scanner-result-actions">
                 <div className="auto-resume-toggle">
                   <label className="checkbox-label" title="Reanudar la cámara automáticamente tras 4 segundos">
@@ -536,7 +636,7 @@ export default function QRScannerModal({
                       onChange={(e) => setAutoResume(e.target.checked)}
                     />
                     <span>
-                      Reanudar automático {autoResume && autoResumeCountdown > 0 ? `(${autoResumeCountdown}s)` : ''}
+                      Continuar escaneando {autoResume && autoResumeCountdown > 0 ? `(${autoResumeCountdown}s)` : ''}
                     </span>
                   </label>
                 </div>
