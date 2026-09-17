@@ -20,8 +20,8 @@ import {
 import jsQR from 'jsqr';
 import { verifyAttendanceRecord, getEvents } from '../services/storage';
 
-// Generador de audio sintetizado armónico con múltiples perfiles sonoros
-function playNotificationSound(profile = 'chime', isSuccess = true) {
+// Generador de audio sintetizado: Pop Suave moderno para confirmación y tono sutil de advertencia
+function playPopSound(isSuccess = true) {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
@@ -31,8 +31,24 @@ function playNotificationSound(profile = 'chime', isSuccess = true) {
     }
     const now = ctx.currentTime;
 
-    // Sonido suave de advertencia / no encontrado (sin estridencia)
-    if (!isSuccess) {
+    if (isSuccess) {
+      // Pop suave y orgánico (barrido 440 Hz -> 920 Hz con decaimiento percusivo agradable)
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(920, now + 0.06);
+
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.14);
+    } else {
+      // Tono suave de advertencia para credencial no válida
       const osc1 = ctx.createOscillator();
       const osc2 = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -47,7 +63,7 @@ function playNotificationSound(profile = 'chime', isSuccess = true) {
       osc2.frequency.setValueAtTime(146.83, now + 0.1);
 
       gain.gain.setValueAtTime(0.18, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
 
       osc1.connect(gain);
       osc2.connect(gain);
@@ -55,113 +71,8 @@ function playNotificationSound(profile = 'chime', isSuccess = true) {
 
       osc1.start(now);
       osc2.start(now);
-      osc1.stop(now + 0.32);
-      osc2.stop(now + 0.32);
-      return;
-    }
-
-    // Perfil 1: 'chime' (Doble campana armónica cristalina estilo Apple Pay / Check-in de lujo)
-    if (profile === 'chime') {
-      // Primera campanilla: La5 (880 Hz)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(880, now);
-      gain1.gain.setValueAtTime(0.2, now);
-      gain1.gain.exponentialRampToValueAtTime(0.005, now + 0.15);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.16);
-
-      // Segunda campanilla más alta: Mi6 (1318.5 Hz) con sobretono de brillo
-      const osc2 = ctx.createOscillator();
-      const oscShimmer = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      const gainShimmer = ctx.createGain();
-
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(1318.5, now + 0.07);
-      gain2.gain.setValueAtTime(0.001, now);
-      gain2.gain.setValueAtTime(0.26, now + 0.07);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
-
-      oscShimmer.type = 'sine';
-      oscShimmer.frequency.setValueAtTime(2637, now + 0.07); // Armónico brillo
-      gainShimmer.gain.setValueAtTime(0.001, now);
-      gainShimmer.gain.setValueAtTime(0.04, now + 0.07);
-      gainShimmer.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
-
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      oscShimmer.connect(gainShimmer);
-      gainShimmer.connect(ctx.destination);
-
-      osc2.start(now + 0.07);
-      osc2.stop(now + 0.38);
-      oscShimmer.start(now + 0.07);
-      oscShimmer.stop(now + 0.28);
-      return;
-    }
-
-    // Perfil 2: 'melodic' (Acorde musical mayor en arpegio cálido: Fa#5 -> La#5 -> Do#6)
-    if (profile === 'melodic') {
-      const triad = [739.99, 932.33, 1108.73];
-      triad.forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        const noteTime = now + idx * 0.05;
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, noteTime);
-
-        gain.gain.setValueAtTime(0.001, now);
-        gain.gain.setValueAtTime(0.18, noteTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.22);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(noteTime);
-        osc.stop(noteTime + 0.22);
-      });
-      return;
-    }
-
-    // Perfil 3: 'pop' (Burbuja / Pop sutil y orgánico)
-    if (profile === 'pop') {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, now);
-      osc.frequency.exponentialRampToValueAtTime(920, now + 0.06);
-
-      gain.gain.setValueAtTime(0.25, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.12);
-      return;
-    }
-
-    // Perfil 4: 'pos' (Beep digital de lector de código clásico pero afinado y sutil)
-    if (profile === 'pos') {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1174.66, now); // D6
-
-      gain.gain.setValueAtTime(0.18, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.06);
-      return;
+      osc1.stop(now + 0.3);
+      osc2.stop(now + 0.3);
     }
   } catch {
     // AudioContext silencioso en caso de restricciones del navegador
@@ -186,13 +97,6 @@ export default function QRScannerModal({
   const [isScanning, setIsScanning] = useState(true);
   const [verificationResult, setVerificationResult] = useState(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [soundProfile, setSoundProfile] = useState(() => {
-    try {
-      return localStorage.getItem('udea_scanner_sound_profile') || 'chime';
-    } catch {
-      return 'chime';
-    }
-  });
   const [autoResume, setAutoResume] = useState(true);
   const [autoResumeCountdown, setAutoResumeCountdown] = useState(0);
 
@@ -234,16 +138,6 @@ export default function QRScannerModal({
     setIsScanning(true);
   }, []);
 
-  // Cambiar perfil de sonido con prueba acústica inmediata
-  const handleChangeSoundProfile = (profile) => {
-    setSoundProfile(profile);
-    setSoundEnabled(true);
-    try {
-      localStorage.setItem('udea_scanner_sound_profile', profile);
-    } catch {}
-    playNotificationSound(profile, true);
-  };
-
   // Procesar código QR detectado
   const handleDecodedQR = useCallback(async (rawText) => {
     if (!rawText) return;
@@ -276,12 +170,12 @@ export default function QRScannerModal({
       const result = await verifyAttendanceRecord(compId, token);
 
       if (result.success) {
-        if (soundEnabled) playNotificationSound(soundProfile, true);
+        if (soundEnabled) playPopSound(true);
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           try { navigator.vibrate([60, 40, 60]); } catch {}
         }
       } else {
-        if (soundEnabled) playNotificationSound(soundProfile, false);
+        if (soundEnabled) playPopSound(false);
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           try { navigator.vibrate([160]); } catch {}
         }
@@ -294,21 +188,22 @@ export default function QRScannerModal({
 
       if (onDataUpdated) onDataUpdated();
 
+      // Temporizador de 10 segundos para continuar escaneando
       if (autoResume) {
-        setAutoResumeCountdown(4);
+        setAutoResumeCountdown(10);
       }
     } catch (err) {
-      if (soundEnabled) playNotificationSound(soundProfile, false);
+      if (soundEnabled) playPopSound(false);
       setVerificationResult({
         success: false,
         message: err.message || 'Error al validar el código QR escaneado.',
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
       if (autoResume) {
-        setAutoResumeCountdown(4);
+        setAutoResumeCountdown(10);
       }
     }
-  }, [soundEnabled, soundProfile, autoResume, onDataUpdated]);
+  }, [soundEnabled, autoResume, onDataUpdated]);
 
   // Bucle de escaneo fotograma a fotograma
   const startScanLoop = useCallback(() => {
@@ -488,7 +383,7 @@ export default function QRScannerModal({
     }
   }, [isOpen, isScanning, hasCameraPermission, startScanLoop]);
 
-  // Temporizador de auto-reanudación tras escaneo exitoso
+  // Temporizador de auto-reanudación tras escaneo exitoso (10 segundos)
   useEffect(() => {
     if (isScanning || !autoResume || !verificationResult) return;
 
@@ -548,9 +443,9 @@ export default function QRScannerModal({
               onClick={() => {
                 const next = !soundEnabled;
                 setSoundEnabled(next);
-                if (next) playNotificationSound(soundProfile, true);
+                if (next) playPopSound(true);
               }}
-              title={soundEnabled ? 'Silenciar sonido' : 'Activar sonido'}
+              title={soundEnabled ? 'Silenciar sonido' : 'Activar sonido Pop'}
               aria-label="Alternar sonido"
             >
               {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
@@ -584,47 +479,6 @@ export default function QRScannerModal({
         <div className="scanner-modal-body">
           {/* Canvas oculto para decodificación de imagen */}
           <canvas ref={canvasRef} style={{ display: 'none' }} />
-
-          {/* Barra Selectora de Perfil de Sonido con Prueba Instantánea */}
-          <div className="scanner-sound-bar">
-            <span className="sound-bar-title">
-              <Volume2 size={13} /> Timbre de Acreditación:
-            </span>
-            <div className="sound-chips-group">
-              <button
-                type="button"
-                className={`sound-chip ${soundProfile === 'chime' ? 'active' : ''}`}
-                onClick={() => handleChangeSoundProfile('chime')}
-                title="Tono campana suave estilo Apple Pay"
-              >
-                🔔 Chime Cristalino
-              </button>
-              <button
-                type="button"
-                className={`sound-chip ${soundProfile === 'melodic' ? 'active' : ''}`}
-                onClick={() => handleChangeSoundProfile('melodic')}
-                title="Acorde armónico ascendente Do-Mi-Sol"
-              >
-                🎵 Acorde Armónico
-              </button>
-              <button
-                type="button"
-                className={`sound-chip ${soundProfile === 'pop' ? 'active' : ''}`}
-                onClick={() => handleChangeSoundProfile('pop')}
-                title="Pop cálido y suave"
-              >
-                🫧 Pop Suave
-              </button>
-              <button
-                type="button"
-                className={`sound-chip ${soundProfile === 'pos' ? 'active' : ''}`}
-                onClick={() => handleChangeSoundProfile('pos')}
-                title="Beep sutil de lector de código"
-              >
-                ⚡ Lector
-              </button>
-            </div>
-          </div>
 
           {/* Visor de Video en Vivo: SIEMPRE montado para mantener la referencia */}
           <div className="scanner-viewport-wrapper">
@@ -796,10 +650,10 @@ export default function QRScannerModal({
                 </div>
               )}
 
-              {/* Acciones del Resultado */}
+              {/* Acciones del Resultado con Temporizador de 10 Segundos */}
               <div className="scanner-result-actions">
                 <div className="auto-resume-toggle">
-                  <label className="checkbox-label" title="Reanudar la cámara automáticamente tras 4 segundos">
+                  <label className="checkbox-label" title="Reanudar la cámara automáticamente tras 10 segundos">
                     <input
                       type="checkbox"
                       checked={autoResume}

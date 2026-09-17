@@ -5417,62 +5417,6 @@ input:checked + .slider::before {
   gap: 1rem !important;
 }
 
-/* Barra Selectora de Sonido y Prueba */
-.scanner-sound-bar {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 0.4rem !important;
-  background: rgba(255, 255, 255, 0.04) !important;
-  border: 1px solid rgba(52, 211, 153, 0.18) !important;
-  border-radius: 10px !important;
-  padding: 0.5rem 0.75rem !important;
-}
-
-.sound-bar-title {
-  font-size: 0.72rem !important;
-  font-weight: 600 !important;
-  color: #94A3B8 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 0.35rem !important;
-}
-
-.sound-chips-group {
-  display: flex !important;
-  align-items: center !important;
-  gap: 0.4rem !important;
-  flex-wrap: wrap !important;
-}
-
-.sound-chip {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: #D1FAE5 !important;
-  border-radius: 999px !important;
-  padding: 0.28rem 0.65rem !important;
-  font-size: 0.74rem !important;
-  font-weight: 600 !important;
-  cursor: pointer !important;
-  transition: all 0.15s ease !important;
-  user-select: none !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 0.25rem !important;
-}
-
-.sound-chip:hover {
-  background: rgba(16, 185, 129, 0.2) !important;
-  border-color: #34D399 !important;
-  color: #FFFFFF !important;
-}
-
-.sound-chip.active {
-  background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
-  border-color: #34D399 !important;
-  color: #FFFFFF !important;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35) !important;
-}
-
 /* Visor de Video de la Cámara */
 .scanner-viewport-wrapper {
   position: relative !important;
