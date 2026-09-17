@@ -18,7 +18,8 @@ import {
   deleteSatisfaction,
   isFirebaseConfigured,
   exportDatabaseBackupJSON,
-  importDatabaseBackupJSON
+  importDatabaseBackupJSON,
+  saveEvent
 } from '../services/storage';
 import { changeAdminPassword } from '../services/auth';
 
@@ -45,6 +46,18 @@ export default function AdminPanel({
   const [searchTermQuestions, setSearchTermQuestions] = useState('');
   const [filterPonente, setFilterPonente] = useState('todos');
   const [filterEstadoPregunta, setFilterEstadoPregunta] = useState('todas');
+
+  // Estados para Microsoft Forms institucional
+  const [prevEventId, setPrevEventId] = useState(evento?.id);
+  const [msFormsUrl, setMsFormsUrl] = useState(evento?.microsoftFormsUrl || '');
+  const [isSavingFormsUrl, setIsSavingFormsUrl] = useState(false);
+  const [formsUrlFeedback, setFormsUrlFeedback] = useState('');
+
+  // Sincronizar URL de Microsoft Forms si cambia el evento seleccionado (patrón oficial React)
+  if (evento?.id !== prevEventId) {
+    setPrevEventId(evento?.id);
+    setMsFormsUrl(evento?.microsoftFormsUrl || '');
+  }
 
   // Estados para eliminación masiva de datos con cuenta regresiva de 3s
   const [showPurgeModal, setShowPurgeModal] = useState(false);
@@ -188,21 +201,31 @@ export default function AdminPanel({
   });
 
   const handleDescargarExcel = () => {
-    exportEventDataToExcel({
-      evento,
-      asistencias,
-      preguntas,
-      evaluaciones,
-      satisfaccion
-    });
+    try {
+      exportEventDataToExcel({
+        evento,
+        asistencias,
+        preguntas,
+        evaluaciones,
+        satisfaccion
+      });
+    } catch (err) {
+      console.error('Error al exportar Excel:', err);
+      alert('Hubo un inconveniente al generar el libro de Excel: ' + (err?.message || 'Error desconocido'));
+    }
   };
 
   const handleDescargarMsForms = () => {
-    exportMicrosoftFormsFormat({
-      evento,
-      asistencias,
-      satisfaccion
-    });
+    try {
+      exportMicrosoftFormsFormat({
+        evento,
+        asistencias,
+        satisfaccion
+      });
+    } catch (err) {
+      console.error('Error al exportar Microsoft Forms:', err);
+      alert('Hubo un inconveniente al generar el formato de Microsoft Forms: ' + (err?.message || 'Error desconocido'));
+    }
   };
 
   return (
@@ -912,13 +935,48 @@ export default function AdminPanel({
 
               <div className="form-group">
                 <label className="form-label">URL del Formulario de Microsoft Forms Vinculado:</label>
-                <input
-                  type="url"
-                  className="form-input"
-                  placeholder="https://forms.office.com/r/..."
-                  value={msFormsUrl}
-                  onChange={(e) => setMsFormsUrl(e.target.value)}
-                />
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    type="url"
+                    className="form-input"
+                    placeholder="https://forms.office.com/r/..."
+                    value={msFormsUrl}
+                    onChange={(e) => setMsFormsUrl(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ whiteSpace: 'nowrap', padding: '9px 14px' }}
+                    disabled={isSavingFormsUrl}
+                    onClick={async () => {
+                      if (!evento?.id) {
+                        alert('No hay un evento seleccionado para vincular.');
+                        return;
+                      }
+                      setIsSavingFormsUrl(true);
+                      try {
+                        const updated = { ...evento, microsoftFormsUrl: msFormsUrl.trim() };
+                        saveEvent(updated);
+                        if (onDataUpdated) onDataUpdated();
+                        setFormsUrlFeedback('¡Enlace guardado en el evento con éxito!');
+                        setTimeout(() => setFormsUrlFeedback(''), 3500);
+                      } catch (err) {
+                        console.error('Error guardando enlace Forms:', err);
+                        alert('Error al guardar el enlace: ' + (err?.message || 'Error'));
+                      } finally {
+                        setIsSavingFormsUrl(false);
+                      }
+                    }}
+                  >
+                    {isSavingFormsUrl ? 'Guardando...' : 'Guardar Enlace'}
+                  </button>
+                </div>
+                {formsUrlFeedback && (
+                  <p style={{ color: '#006633', fontSize: '0.85rem', marginTop: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <CheckCircle size={14} /> {formsUrlFeedback}
+                  </p>
+                )}
               </div>
 
               <div className="msforms-actions">
@@ -933,7 +991,7 @@ export default function AdminPanel({
                     <span>Abrir Formulario de Microsoft Forms</span>
                   </a>
                 ) : (
-                  <p className="no-url-notice">Puede pegar el enlace de su formulario de Microsoft Forms institucional arriba para acceso rápido.</p>
+                  <p className="no-url-notice">Puede pegar el enlace de su formulario de Microsoft Forms institucional arriba y hacer clic en &quot;Guardar Enlace&quot; para vincularlo al evento.</p>
                 )}
 
                 <button className="btn-secondary full-width" onClick={handleDescargarMsForms}>

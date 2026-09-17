@@ -5,11 +5,23 @@
 import * as XLSX from 'xlsx';
 import { sanitizeExcelFormula } from './sanitizer';
 
-export function exportEventDataToExcel({ evento, asistencias, preguntas, evaluaciones, satisfaccion }) {
+export function exportEventDataToExcel({
+  evento = {},
+  asistencias = [],
+  preguntas = [],
+  evaluaciones = [],
+  satisfaccion = []
+} = {}) {
   const wb = XLSX.utils.book_new();
 
+  const safeAsistencias = Array.isArray(asistencias) ? asistencias : [];
+  const safePreguntas = Array.isArray(preguntas) ? preguntas : [];
+  const safeEvaluaciones = Array.isArray(evaluaciones) ? evaluaciones : [];
+  const safeSatisfaccion = Array.isArray(satisfaccion) ? satisfaccion : [];
+  const safeEvento = evento || {};
+
   // 1. Hoja de Asistencias y Geolocalización
-  const asistenciasData = asistencias.map((a, index) => ({
+  const asistenciasData = safeAsistencias.map((a, index) => ({
     'N°': index + 1,
     'Código Asistencia': sanitizeExcelFormula(a.id),
     'Tipo Doc.': sanitizeExcelFormula(a.tipoDocumento || 'CC'),
@@ -35,8 +47,8 @@ export function exportEventDataToExcel({ evento, asistencias, preguntas, evaluac
   XLSX.utils.book_append_sheet(wb, wsAsistencias, '1_Asistencias_y_GPS');
 
   // 2. Hoja de Preguntas a Ponentes (Q&A en Vivo)
-  const preguntasData = preguntas.map((q, index) => {
-    const ponente = evento.ponentes?.find(p => p.id === q.ponenteId);
+  const preguntasData = safePreguntas.map((q, index) => {
+    const ponente = (safeEvento.ponentes || []).find(p => p.id === q.ponenteId);
     return {
       'N°': index + 1,
       'Código Pregunta': sanitizeExcelFormula(q.id),
@@ -56,19 +68,19 @@ export function exportEventDataToExcel({ evento, asistencias, preguntas, evaluac
   XLSX.utils.book_append_sheet(wb, wsPreguntas, '2_Preguntas_Ponentes');
 
   // 3. Hoja de Evaluaciones de Ponentes
-  const evaluacionesData = evaluaciones.map((ev, index) => {
-    const ponente = evento.ponentes?.find(p => p.id === ev.ponenteId);
-    const prom = ((ev.dominio + ev.claridad + ev.aplicabilidad) / 3).toFixed(1);
+  const evaluacionesData = safeEvaluaciones.map((ev, index) => {
+    const ponente = (safeEvento.ponentes || []).find(p => p.id === ev.ponenteId);
+    const prom = (((ev.dominio || 0) + (ev.claridad || 0) + (ev.aplicabilidad || 0)) / 3).toFixed(1);
     return {
       'N°': index + 1,
       'Código Evaluación': sanitizeExcelFormula(ev.id),
       'Ponente Evaluado': sanitizeExcelFormula(ponente ? ponente.nombre : ev.ponenteId),
-      'Dominio del Tema (1-5)': ev.dominio,
-      'Claridad Pedagógica (1-5)': ev.claridad,
-      'Aplicabilidad Médica (1-5)': ev.aplicabilidad,
+      'Dominio del Tema (1-5)': ev.dominio ?? 5,
+      'Claridad Pedagógica (1-5)': ev.claridad ?? 5,
+      'Aplicabilidad Médica (1-5)': ev.aplicabilidad ?? 5,
       'Promedio Ponente': Number(prom),
       'Comentarios y Observaciones': sanitizeExcelFormula(ev.comentario || 'Sin comentarios'),
-      'Fecha': ev.fecha
+      'Fecha': ev.fecha || ''
     };
   });
 
@@ -78,14 +90,14 @@ export function exportEventDataToExcel({ evento, asistencias, preguntas, evaluac
   XLSX.utils.book_append_sheet(wb, wsEvaluaciones, '3_Evaluacion_Ponentes');
 
   // 4. Hoja de Satisfacción General del Evento
-  const satisfaccionData = satisfaccion.map((sat, index) => ({
+  const satisfaccionData = safeSatisfaccion.map((sat, index) => ({
     'N°': index + 1,
     'Código Encuesta': sanitizeExcelFormula(sat.id),
-    'Cumplimiento de Expectativas (1-5)': sat.cumplimientoObjetivos,
-    'Organización y Logística (1-5)': sat.organizacionLogistica,
-    'Net Promoter Score (NPS 0-10)': sat.npsRecomendacion,
+    'Cumplimiento de Expectativas (1-5)': sat.cumplimientoObjetivos ?? 5,
+    'Organización y Logística (1-5)': sat.organizacionLogistica ?? 5,
+    'Net Promoter Score (NPS 0-10)': sat.npsRecomendacion ?? 10,
     'Sugerencias Futuros Cursos UdeA': sanitizeExcelFormula(sat.sugerencias || 'Sin sugerencias'),
-    'Fecha Envío': sat.fecha
+    'Fecha Envío': sat.fecha || ''
   }));
 
   const wsSatisfaccion = XLSX.utils.json_to_sheet(satisfaccionData.length > 0 ? satisfaccionData : [
@@ -95,18 +107,18 @@ export function exportEventDataToExcel({ evento, asistencias, preguntas, evaluac
 
   // 5. Hoja Resumen Ejecutivo / Metadatos del Evento
   const resumenEvento = [
-    { 'Parámetro': 'Evento Académico', 'Detalle': sanitizeExcelFormula(evento.titulo) },
+    { 'Parámetro': 'Evento Académico', 'Detalle': sanitizeExcelFormula(safeEvento.titulo || 'Evento Académico UdeA') },
     { 'Parámetro': 'Organizador', 'Detalle': 'Educación a lo Largo de la Vida - Facultad de Medicina UdeA' },
-    { 'Parámetro': 'Fecha del Evento', 'Detalle': `${evento.fecha} (${evento.horaInicio} - ${evento.horaFin})` },
-    { 'Parámetro': 'Lugar / Auditorio', 'Detalle': sanitizeExcelFormula(evento.lugar) },
-    { 'Parámetro': 'Registro Vehicular Habilitado', 'Detalle': evento.habilitarPlacaVehiculo ? 'SÍ (Parqueadero Activo)' : 'NO' },
-    { 'Parámetro': 'Total Asistentes Registrados', 'Detalle': asistencias.length },
-    { 'Parámetro': 'Asistencias Validadas Presenciales GPS', 'Detalle': asistencias.filter(a => a.geolocalizacion?.esPresencial).length },
-    { 'Parámetro': 'Total Preguntas a Ponentes', 'Detalle': preguntas.length },
-    { 'Parámetro': 'Total Evaluaciones de Ponentes', 'Detalle': evaluaciones.length },
-    { 'Parámetro': 'Total Encuestas de Satisfacción', 'Detalle': satisfaccion.length },
+    { 'Parámetro': 'Fecha del Evento', 'Detalle': `${safeEvento.fecha || 'N/A'} (${safeEvento.horaInicio || 'N/A'} - ${safeEvento.horaFin || 'N/A'})` },
+    { 'Parámetro': 'Lugar / Auditorio', 'Detalle': sanitizeExcelFormula(safeEvento.lugar || 'Facultad de Medicina') },
+    { 'Parámetro': 'Registro Vehicular Habilitado', 'Detalle': safeEvento.habilitarPlacaVehiculo ? 'SÍ (Parqueadero Activo)' : 'NO' },
+    { 'Parámetro': 'Total Asistentes Registrados', 'Detalle': safeAsistencias.length },
+    { 'Parámetro': 'Asistencias Validadas Presenciales GPS', 'Detalle': safeAsistencias.filter(a => a.geolocalizacion?.esPresencial).length },
+    { 'Parámetro': 'Total Preguntas a Ponentes', 'Detalle': safePreguntas.length },
+    { 'Parámetro': 'Total Evaluaciones de Ponentes', 'Detalle': safeEvaluaciones.length },
+    { 'Parámetro': 'Total Encuestas de Satisfacción', 'Detalle': safeSatisfaccion.length },
     { 'Parámetro': 'Fecha de Generación del Reporte', 'Detalle': new Date().toLocaleString('es-CO') },
-    { 'Parámetro': 'Enlace Microsoft Forms Institucional', 'Detalle': sanitizeExcelFormula(evento.microsoftFormsUrl || 'No configurado') }
+    { 'Parámetro': 'Enlace Microsoft Forms Institucional', 'Detalle': sanitizeExcelFormula(safeEvento.microsoftFormsUrl || 'No configurado') }
   ];
   const wsResumen = XLSX.utils.json_to_sheet(resumenEvento);
   XLSX.utils.book_append_sheet(wb, wsResumen, '0_Ficha_Tecnica');
@@ -116,21 +128,33 @@ export function exportEventDataToExcel({ evento, asistencias, preguntas, evaluac
   wsAsistencias['!cols'] = wscols;
 
   // Generar y disparar descarga
-  const fileName = `Reporte_${evento.id}_UdeA_Medicina_${new Date().toISOString().slice(0,10)}.xlsx`;
-  XLSX.writeFile(wb, fileName);
+  const eventId = safeEvento.id || 'Evento_UdeA';
+  const fileName = `Reporte_${eventId}_UdeA_Medicina_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+  try {
+    XLSX.writeFile(wb, fileName);
+  } catch (err) {
+    console.warn('XLSX.writeFile falló, recurriendo a descarga por Blob:', err);
+    triggerBlobDownload(wb, fileName);
+  }
+
   return fileName;
 }
 
 // Exportación con el esquema exacto que produce Microsoft Forms (compatible con Power Automate)
-export function exportMicrosoftFormsFormat({ evento, asistencias, satisfaccion }) {
+export function exportMicrosoftFormsFormat({ evento = {}, asistencias = [], satisfaccion = [] } = {}) {
   const wb = XLSX.utils.book_new();
 
-  const msFormsData = asistencias.map((a, index) => {
-    const sat = satisfaccion[index] || {};
+  const safeAsistencias = Array.isArray(asistencias) ? asistencias : [];
+  const safeSatisfaccion = Array.isArray(satisfaccion) ? satisfaccion : [];
+  const safeEvento = evento || {};
+
+  const msFormsData = safeAsistencias.map((a, index) => {
+    const sat = safeSatisfaccion[index] || {};
     return {
       'Id.': index + 1,
-      'Hora de inicio': a.fechaRegistro,
-      'Hora de finalización': a.fechaRegistro,
+      'Hora de inicio': a.fechaRegistro || '',
+      'Hora de finalización': a.fechaRegistro || '',
       'Correo electrónico': sanitizeExcelFormula(a.correo),
       'Nombre': sanitizeExcelFormula(a.nombreCompleto),
       'Documento de Identidad': sanitizeExcelFormula(a.documento),
@@ -138,9 +162,9 @@ export function exportMicrosoftFormsFormat({ evento, asistencias, satisfaccion }
       'Teléfono': sanitizeExcelFormula(a.telefono),
       'Placa Vehículo': sanitizeExcelFormula(a.placaVehiculo || 'N/A'),
       'Validación Presencial GPS': a.geolocalizacion?.esPresencial ? 'En Sede' : 'Remoto',
-      'Distancia a la Sede (Metros)': a.geolocalizacion?.distanciaSedeMetros || 'N/A',
+      'Distancia a la Sede (Metros)': a.geolocalizacion?.distanciaSedeMetros ?? 'N/A',
       'Calificación General Evento (1-5)': sat.cumplimientoObjetivos || 'Sin respuesta',
-      'Recomendación NPS (0-10)': sat.npsRecomendacion || 'Sin respuesta',
+      'Recomendación NPS (0-10)': sat.npsRecomendacion ?? 'Sin respuesta',
       'Comentarios y Sugerencias': sanitizeExcelFormula(sat.sugerencias || 'Sin respuesta')
     };
   });
@@ -150,7 +174,31 @@ export function exportMicrosoftFormsFormat({ evento, asistencias, satisfaccion }
   ]);
 
   XLSX.utils.book_append_sheet(wb, ws, 'Microsoft_Forms_Export');
-  const fileName = `MicrosoftForms_Formato_${evento.id}_UdeA.xlsx`;
-  XLSX.writeFile(wb, fileName);
+  const eventId = safeEvento.id || 'Evento_UdeA';
+  const fileName = `MicrosoftForms_Formato_${eventId}_UdeA.xlsx`;
+
+  try {
+    XLSX.writeFile(wb, fileName);
+  } catch (err) {
+    console.warn('XLSX.writeFile falló, recurriendo a descarga por Blob:', err);
+    triggerBlobDownload(wb, fileName);
+  }
+
   return fileName;
+}
+
+// Función auxiliar para forzar descarga mediante Blob (compatible con móviles, Safari e iOS)
+function triggerBlobDownload(wb, fileName) {
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
