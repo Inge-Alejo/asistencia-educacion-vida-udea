@@ -52,15 +52,21 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
       <div className="modal-container qr-projection-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="projection-header">
           <div className="projection-branding">
-            <img
-              src="/logo-udea-horizontal.png"
-              alt="Universidad de Antioquia - Facultad de Medicina"
-              className="projection-official-logo"
-            />
-            <span className="inst-badge">Educación a lo Largo de la Vida</span>
+            <div className="projection-logo-card">
+              <img
+                src="/logo-udea-horizontal.png"
+                alt="Universidad de Antioquia - Facultad de Medicina"
+                className="projection-official-logo"
+              />
+            </div>
+            <div className="projection-brand-divider"></div>
+            <div className="projection-brand-text">
+              <span className="projection-inst-badge">Educación a lo Largo de la Vida</span>
+              <span className="projection-inst-subtitle">Facultad de Medicina • Universidad de Antioquia</span>
+            </div>
           </div>
-          <button className="btn-close-modal no-print" onClick={onClose} aria-label="Cerrar modal">
-            <X size={24} />
+          <button className="btn-close-modal projection-close-btn no-print" onClick={onClose} aria-label="Cerrar modal">
+            <X size={20} />
           </button>
         </div>
 
@@ -133,7 +139,7 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
             <p className="qr-caption">Código QR Oficial de Asistencia</p>
 
             <div className="qr-link-box no-print">
-              <span className="qr-url-preview">{qrTargetUrl}</span>
+              <span className="qr-url-preview" title={qrTargetUrl}>{qrTargetUrl}</span>
               <button
                 type="button"
                 className="btn-copy-link"
@@ -146,8 +152,8 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
 
             {/* Botones de acción del proyector */}
             <div className="projection-action-buttons no-print">
-              <button className="btn-secondary" onClick={handleDownloadQR}>
-                <Download size={16} />
+              <button className="btn-projection-download" onClick={handleDownloadQR}>
+                <Download size={17} />
                 <span>Descargar Imagen HD</span>
               </button>
             </div>
