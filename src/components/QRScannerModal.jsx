@@ -20,38 +20,151 @@ import {
 import jsQR from 'jsqr';
 import { verifyAttendanceRecord, getEvents } from '../services/storage';
 
-// Generador de sonido sintético Web Audio API para confirmación auditiva en puerta
-function playBeep(isSuccess = true) {
+// Generador de audio sintetizado armónico con múltiples perfiles sonoros
+function playNotificationSound(profile = 'chime', isSuccess = true) {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const now = ctx.currentTime;
 
-    if (isSuccess) {
+    // Sonido suave de advertencia / no encontrado (sin estridencia)
+    if (!isSuccess) {
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'triangle';
+      osc2.type = 'sine';
+
+      osc1.frequency.setValueAtTime(370, now); // F#4
+      osc1.frequency.setValueAtTime(293.66, now + 0.1); // D4
+
+      osc2.frequency.setValueAtTime(185, now);
+      osc2.frequency.setValueAtTime(146.83, now + 0.1);
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.32);
+      osc2.stop(now + 0.32);
+      return;
+    }
+
+    // Perfil 1: 'chime' (Doble campana armónica cristalina estilo Apple Pay / Check-in de lujo)
+    if (profile === 'chime') {
+      // Primera campanilla: La5 (880 Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.2, now);
+      gain1.gain.exponentialRampToValueAtTime(0.005, now + 0.15);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.16);
+
+      // Segunda campanilla más alta: Mi6 (1318.5 Hz) con sobretono de brillo
+      const osc2 = ctx.createOscillator();
+      const oscShimmer = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      const gainShimmer = ctx.createGain();
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1318.5, now + 0.07);
+      gain2.gain.setValueAtTime(0.001, now);
+      gain2.gain.setValueAtTime(0.26, now + 0.07);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+      oscShimmer.type = 'sine';
+      oscShimmer.frequency.setValueAtTime(2637, now + 0.07); // Armónico brillo
+      gainShimmer.gain.setValueAtTime(0.001, now);
+      gainShimmer.gain.setValueAtTime(0.04, now + 0.07);
+      gainShimmer.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      oscShimmer.connect(gainShimmer);
+      gainShimmer.connect(ctx.destination);
+
+      osc2.start(now + 0.07);
+      osc2.stop(now + 0.38);
+      oscShimmer.start(now + 0.07);
+      oscShimmer.stop(now + 0.28);
+      return;
+    }
+
+    // Perfil 2: 'melodic' (Acorde musical mayor en arpegio cálido: Fa#5 -> La#5 -> Do#6)
+    if (profile === 'melodic') {
+      const triad = [739.99, 932.33, 1108.73];
+      triad.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const noteTime = now + idx * 0.05;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, noteTime);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.setValueAtTime(0.18, noteTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.22);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(noteTime);
+        osc.stop(noteTime + 0.22);
+      });
+      return;
+    }
+
+    // Perfil 3: 'pop' (Burbuja / Pop sutil y orgánico)
+    if (profile === 'pop') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
-      osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.12); // A6
-      gain.gain.setValueAtTime(0.18, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18);
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(920, now + 0.06);
+
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.18);
-    } else {
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(280, ctx.currentTime);
-      osc.frequency.setValueAtTime(180, ctx.currentTime + 0.12);
-      gain.gain.setValueAtTime(0.22, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.22);
+      osc.start(now);
+      osc.stop(now + 0.12);
+      return;
+    }
+
+    // Perfil 4: 'pos' (Beep digital de lector de código clásico pero afinado y sutil)
+    if (profile === 'pos') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1174.66, now); // D6
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.22);
+      osc.start(now);
+      osc.stop(now + 0.06);
+      return;
     }
   } catch {
-    // AudioContext silencioso en caso de bloqueo por política de navegador
+    // AudioContext silencioso en caso de restricciones del navegador
   }
 }
 
@@ -73,6 +186,13 @@ export default function QRScannerModal({
   const [isScanning, setIsScanning] = useState(true);
   const [verificationResult, setVerificationResult] = useState(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundProfile, setSoundProfile] = useState(() => {
+    try {
+      return localStorage.getItem('udea_scanner_sound_profile') || 'chime';
+    } catch {
+      return 'chime';
+    }
+  });
   const [autoResume, setAutoResume] = useState(true);
   const [autoResumeCountdown, setAutoResumeCountdown] = useState(0);
 
@@ -114,6 +234,16 @@ export default function QRScannerModal({
     setIsScanning(true);
   }, []);
 
+  // Cambiar perfil de sonido con prueba acústica inmediata
+  const handleChangeSoundProfile = (profile) => {
+    setSoundProfile(profile);
+    setSoundEnabled(true);
+    try {
+      localStorage.setItem('udea_scanner_sound_profile', profile);
+    } catch {}
+    playNotificationSound(profile, true);
+  };
+
   // Procesar código QR detectado
   const handleDecodedQR = useCallback(async (rawText) => {
     if (!rawText) return;
@@ -146,12 +276,12 @@ export default function QRScannerModal({
       const result = await verifyAttendanceRecord(compId, token);
 
       if (result.success) {
-        if (soundEnabled) playBeep(true);
+        if (soundEnabled) playNotificationSound(soundProfile, true);
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           try { navigator.vibrate([60, 40, 60]); } catch {}
         }
       } else {
-        if (soundEnabled) playBeep(false);
+        if (soundEnabled) playNotificationSound(soundProfile, false);
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           try { navigator.vibrate([160]); } catch {}
         }
@@ -168,7 +298,7 @@ export default function QRScannerModal({
         setAutoResumeCountdown(4);
       }
     } catch (err) {
-      if (soundEnabled) playBeep(false);
+      if (soundEnabled) playNotificationSound(soundProfile, false);
       setVerificationResult({
         success: false,
         message: err.message || 'Error al validar el código QR escaneado.',
@@ -178,7 +308,7 @@ export default function QRScannerModal({
         setAutoResumeCountdown(4);
       }
     }
-  }, [soundEnabled, autoResume, onDataUpdated]);
+  }, [soundEnabled, soundProfile, autoResume, onDataUpdated]);
 
   // Bucle de escaneo fotograma a fotograma
   const startScanLoop = useCallback(() => {
@@ -196,7 +326,7 @@ export default function QRScannerModal({
         return;
       }
 
-      // Verificar que el video tenga dimensiones y datos listos (vital para iOS Safari)
+      // Verificar que el video tenga dimensiones y datos listos
       if (
         video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
         video.videoWidth > 0 &&
@@ -237,9 +367,8 @@ export default function QRScannerModal({
       return;
     }
 
-    // Variantes de configuración en cascada para compatibilidad total con Apple iOS y Android
+    // Variantes de configuración en cascada para compatibilidad total
     const constraintsList = [
-      // 1: Configuración preferida con resolución y facingMode ideal
       {
         audio: false,
         video: {
@@ -248,14 +377,12 @@ export default function QRScannerModal({
           height: { ideal: 720 }
         }
       },
-      // 2: Configuración sin resolución fija (algunos WebViews de Android e iOS)
       {
         audio: false,
         video: {
           facingMode: facingMode === 'user' ? 'user' : 'environment'
         }
       },
-      // 3: Fallback general a cualquier cámara activa
       {
         audio: false,
         video: true
@@ -293,7 +420,6 @@ export default function QRScannerModal({
       return;
     }
 
-    // Atributos obligatorios para iOS Safari para evitar pantalla completa nativa
     video.setAttribute('playsinline', 'true');
     video.setAttribute('webkit-playsinline', 'true');
     video.setAttribute('autoplay', 'true');
@@ -319,7 +445,6 @@ export default function QRScannerModal({
       video.onloadedmetadata = () => {
         onPlayReady();
       };
-      // Timeout de respaldo por si onloadedmetadata se retrasa en Safari
       setTimeout(() => {
         if (streamRef.current) {
           onPlayReady();
@@ -420,8 +545,12 @@ export default function QRScannerModal({
             <button
               type="button"
               className={`scanner-tool-btn ${soundEnabled ? 'active' : ''}`}
-              onClick={() => setSoundEnabled(prev => !prev)}
-              title={soundEnabled ? 'Sonido activado' : 'Sonido silenciado'}
+              onClick={() => {
+                const next = !soundEnabled;
+                setSoundEnabled(next);
+                if (next) playNotificationSound(soundProfile, true);
+              }}
+              title={soundEnabled ? 'Silenciar sonido' : 'Activar sonido'}
               aria-label="Alternar sonido"
             >
               {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
@@ -455,6 +584,47 @@ export default function QRScannerModal({
         <div className="scanner-modal-body">
           {/* Canvas oculto para decodificación de imagen */}
           <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+          {/* Barra Selectora de Perfil de Sonido con Prueba Instantánea */}
+          <div className="scanner-sound-bar">
+            <span className="sound-bar-title">
+              <Volume2 size={13} /> Timbre de Acreditación:
+            </span>
+            <div className="sound-chips-group">
+              <button
+                type="button"
+                className={`sound-chip ${soundProfile === 'chime' ? 'active' : ''}`}
+                onClick={() => handleChangeSoundProfile('chime')}
+                title="Tono campana suave estilo Apple Pay"
+              >
+                🔔 Chime Cristalino
+              </button>
+              <button
+                type="button"
+                className={`sound-chip ${soundProfile === 'melodic' ? 'active' : ''}`}
+                onClick={() => handleChangeSoundProfile('melodic')}
+                title="Acorde armónico ascendente Do-Mi-Sol"
+              >
+                🎵 Acorde Armónico
+              </button>
+              <button
+                type="button"
+                className={`sound-chip ${soundProfile === 'pop' ? 'active' : ''}`}
+                onClick={() => handleChangeSoundProfile('pop')}
+                title="Pop cálido y suave"
+              >
+                🫧 Pop Suave
+              </button>
+              <button
+                type="button"
+                className={`sound-chip ${soundProfile === 'pos' ? 'active' : ''}`}
+                onClick={() => handleChangeSoundProfile('pos')}
+                title="Beep sutil de lector de código"
+              >
+                ⚡ Lector
+              </button>
+            </div>
+          </div>
 
           {/* Visor de Video en Vivo: SIEMPRE montado para mantener la referencia */}
           <div className="scanner-viewport-wrapper">
