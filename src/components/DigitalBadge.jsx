@@ -5,7 +5,6 @@ import { ESCUDO_UDEA_QR_BASE64 } from '../assets/escudoQrBase64';
 import {
   FileDown,
   Image as ImageIcon,
-  Printer,
   ShieldCheck,
   Calendar,
   MapPin,
@@ -270,15 +269,6 @@ export default function DigitalBadge({
     }
   };
 
-  const handlePrintBadge = () => {
-    try {
-      window.print();
-    } catch (err) {
-      console.warn('window.print() no disponible en este dispositivo, generando PDF:', err);
-      handleDownloadBadgePDF();
-    }
-  };
-
   const badgeContent = (
     <div className="digital-badge-wrapper printable-badge-root">
       <div className="digital-badge-card modern-digital-pass" ref={badgeCardRef}>
@@ -421,16 +411,6 @@ export default function DigitalBadge({
               <span>Imagen (PNG)</span>
             </button>
 
-            <button
-              type="button"
-              className="btn-action-print-ghost"
-              onClick={handlePrintBadge}
-              title="Imprimir credencial física si lo necesita"
-            >
-              <Printer size={16} />
-              <span>Imprimir</span>
-            </button>
-
             <a
               href={verificationUrl}
               target="_blank"
@@ -468,14 +448,6 @@ export default function DigitalBadge({
         >
           <ImageIcon size={16} />
           <span>Imagen (PNG)</span>
-        </button>
-        <button
-          type="button"
-          className="btn-action-print-ghost"
-          onClick={handlePrintBadge}
-        >
-          <Printer size={16} />
-          <span>Imprimir</span>
         </button>
       </div>
     </div>
