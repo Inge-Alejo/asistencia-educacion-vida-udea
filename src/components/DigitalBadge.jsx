@@ -321,7 +321,7 @@ export default function DigitalBadge({
           <div className="badge-qr-container">
             <QRCodeSVG
               value={verificationUrl}
-              size={180}
+              size={145}
               level="H"
               includeMargin={true}
               fgColor="#0F5938"
@@ -330,8 +330,8 @@ export default function DigitalBadge({
                 src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%230F5938'/%3E%3Cpath d='M50 20 v60 M20 50 h60' stroke='%23C59B27' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E",
                 x: undefined,
                 y: undefined,
-                height: 38,
-                width: 38,
+                height: 32,
+                width: 32,
                 excavate: true,
               }}
             />
