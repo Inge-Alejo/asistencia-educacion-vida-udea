@@ -3530,17 +3530,33 @@ input:checked + .slider::before {
   background: #FFFFFF;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 25px 50px -12px rgba(15, 89, 56, 0.35);
-  border: 1px solid rgba(15, 89, 56, 0.2);
+  max-width: 480px !important;
+  width: 95% !important;
+  max-height: 92vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 25px 60px -15px rgba(10, 38, 23, 0.35) !important;
+  border: 1px solid rgba(15, 89, 56, 0.25) !important;
+  animation: modalFadeIn 0.25s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .badge-modal-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   padding: 0.85rem 1.25rem;
-  background: #F4F9F5;
+  background: #FFFFFF;
   border-bottom: 1px solid #E2E8F0;
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .badge-modal-title {
@@ -3557,57 +3573,44 @@ input:checked + .slider::before {
 }
 
 .badge-modal-body {
-  padding: 1.25rem;
-  background: #F8FAFC;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.25rem 1rem 1.75rem 1rem;
+  background: #F1F5F9;
   display: flex;
   justify-content: center;
 }
 
+/* Contenedor del Pase */
 .digital-badge-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
   width: 100%;
 }
 
-.digital-badge-card {
+.digital-badge-card.modern-digital-pass {
   width: 100%;
   max-width: 380px;
   background: #FFFFFF;
-  border-radius: 16px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  border-radius: 24px;
+  box-shadow: 0 16px 36px rgba(10, 38, 23, 0.12);
   border: 2px solid #0F5938;
   overflow: hidden;
   position: relative;
   text-align: center;
-}
-
-.badge-lanyard-hanger {
-  height: 22px;
-  background: #F1F5F9;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-bottom: 1px solid #E2E8F0;
-}
-
-.lanyard-hole {
-  width: 50px;
-  height: 8px;
-  background: #CBD5E1;
-  border-radius: 4px;
-  border: 1px solid #94A3B8;
+  margin: 0 auto;
 }
 
 .badge-header-band {
   background: #0F5938;
-  padding: 1rem 1rem 0.75rem 1rem;
+  padding: 1.15rem 1rem 0.85rem 1rem;
   color: #FFFFFF;
 }
 
 .badge-header-logo {
-  max-height: 48px;
+  max-height: 46px;
   width: auto;
   margin: 0 auto 0.4rem auto;
   display: block;
@@ -3636,8 +3639,38 @@ input:checked + .slider::before {
   width: 100%;
 }
 
+.badge-digital-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #EAFBF0;
+  color: #0F5938;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  margin-top: 0.85rem;
+  border: 1px solid #86EFAC;
+}
+
+.status-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #16A34A;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.25);
+  display: inline-block;
+  animation: pulseLiveDot 1.8s infinite;
+}
+
+@keyframes pulseLiveDot {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+}
+
 .badge-event-details {
-  padding: 0.85rem 1rem 0.6rem 1rem;
+  padding: 0.75rem 1rem 0.6rem 1rem;
   border-bottom: 1px dashed #E2E8F0;
 }
 
@@ -3676,7 +3709,7 @@ input:checked + .slider::before {
 }
 
 .badge-attendee-body {
-  padding: 1rem 1rem 0.5rem 1rem;
+  padding: 0.85rem 1rem 0.4rem 1rem;
 }
 
 .badge-role-pill {
@@ -3691,7 +3724,7 @@ input:checked + .slider::before {
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.45rem;
 }
 
 .badge-role-pill.badge-role-ponente {
@@ -3722,9 +3755,10 @@ input:checked + .slider::before {
   gap: 0.35rem;
   background: #F1F5F9;
   color: #334155;
-  font-size: 0.82rem;
-  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.65rem;
   border-radius: 6px;
+  margin-bottom: 0.25rem;
   border: 1px solid #CBD5E1;
 }
 
@@ -3742,7 +3776,7 @@ input:checked + .slider::before {
 }
 
 .badge-qr-section {
-  padding: 0.75rem 1rem 0.5rem 1rem;
+  padding: 0.6rem 1rem 0.5rem 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3751,7 +3785,7 @@ input:checked + .slider::before {
 .badge-qr-container {
   background: #FFFFFF;
   padding: 0.6rem;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid #CBD5E1;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   display: inline-flex;
@@ -3771,8 +3805,8 @@ input:checked + .slider::before {
   margin: 0.5rem 1rem 0.75rem 1rem;
   background: #EAFBF0;
   border: 1px solid #86EFAC;
-  border-radius: 8px;
-  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -3799,58 +3833,69 @@ input:checked + .slider::before {
 
 .badge-footer-band {
   background: #0F5938;
-  padding: 0.6rem;
+  padding: 0.75rem 1rem;
   color: #FFFFFF;
-  font-size: 0.72rem;
+  border-radius: 0 0 22px 22px;
 }
 
-.badge-footer-band p {
+.badge-footer-inst {
   margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .badge-legal-mini {
-  font-size: 0.62rem;
+  font-size: 0.64rem;
   color: #C59B27;
-  margin-top: 0.15rem !important;
+  margin: 0.2rem 0 0 0 !important;
 }
 
-.badge-actions-bar {
+/* Barra de Acciones siempre visible en el pie del Modal */
+.badge-modal-footer-actions {
+  flex-shrink: 0;
+  background: #FFFFFF;
+  border-top: 1px solid #E2E8F0;
+  padding: 0.75rem 1rem;
   display: flex;
-  gap: 0.6rem;
-  width: 100%;
-  max-width: 380px;
+  gap: 0.5rem;
   justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.04);
+  z-index: 10;
 }
 
-.btn-badge-download {
-  flex: 1;
+.btn-action-pdf-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
   background: #0F5938;
   color: #FFFFFF;
-  border: none;
-  padding: 0.65rem 0.9rem;
+  border: 1.5px solid #C59B27;
+  padding: 0.65rem 1rem;
   border-radius: 8px;
   font-weight: 700;
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(15, 89, 56, 0.3);
 }
 
-.btn-badge-download:hover {
+.btn-action-pdf-primary:hover:not(:disabled) {
   background: #0B432A;
   transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 89, 56, 0.4);
 }
 
-.btn-badge-print {
+.btn-action-png-secondary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   background: #FFFFFF;
   color: #0F5938;
-  border: 1px solid #0F5938;
+  border: 1.5px solid #0F5938;
   padding: 0.65rem 0.85rem;
   border-radius: 8px;
   font-weight: 700;
@@ -3859,13 +3904,36 @@ input:checked + .slider::before {
   transition: all 0.2s ease;
 }
 
-.btn-badge-print:hover {
+.btn-action-png-secondary:hover:not(:disabled) {
   background: #EAFBF0;
+  transform: translateY(-1px);
 }
 
-.btn-badge-verify-link {
+.btn-action-print-ghost {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: #F8FAFC;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-action-print-ghost:hover {
+  background: #E2E8F0;
+  color: #1E293B;
+}
+
+.btn-action-verify-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   background: #F1F5F9;
   color: #334155;
@@ -3876,10 +3944,6 @@ input:checked + .slider::before {
   font-size: 0.82rem;
   text-decoration: none;
   cursor: pointer;
-}
-
-.badge-cta-container {
-  margin: 1rem 0;
   text-align: center;
 }
 
