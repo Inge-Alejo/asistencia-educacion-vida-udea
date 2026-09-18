@@ -165,27 +165,76 @@ export default function AttendeeView({
     ) || null;
   }, [asistencias, currentEventId, normalizedCurrentDoc]);
 
-  // Estados para Desafío de Seguridad de Correo al autocompletar en nuevo dispositivo
+  // Asistencia específica para la fecha o sesión de hoy
+  const hoyStr = officialTime.fechaStr || getColombiaLocalDateStr();
+  const asistenciaHoy = useMemo(() => {
+    if (misAsistenciasEvento.length === 0) return null;
+    return misAsistenciasEvento.find(a =>
+      a.fechaDia === hoyStr ||
+      (dayStatus.diaNumero && a.diaNumero === dayStatus.diaNumero)
+    ) || null;
+  }, [misAsistenciasEvento, hoyStr, dayStatus.diaNumero]);
+
+  const yaRegistroHoy = Boolean(asistenciaHoy);
+
+  // Detección en tiempo real de registro existente (en multidía, verifica si ya llenó el día de hoy)
+  const registroExistente = useMemo(() => {
+    if (!normalizedCurrentDoc || !currentEventId) return null;
+    if (evento?.esMultidia) {
+      return yaRegistroHoy ? asistenciaHoy : null;
+    }
+    return (asistencias || []).find(a => a.eventoId === currentEventId && normalizeDocumentId(a.documento) === normalizedCurrentDoc);
+  }, [normalizedCurrentDoc, currentEventId, evento, yaRegistroHoy, asistenciaHoy, asistencias]);
+
+  const [asistenciaRegistrada, setAsistenciaRegistrada] = useState(() => {
+    if (!sessionInfo) return false;
+    // Si el evento es multidía, validar si la sesión guardada corresponde al día de hoy
+    if (evento?.esMultidia) {
+      return sessionInfo.fechaDia === getColombiaLocalDateStr();
+    }
+    return Boolean(sessionInfo.registrado);
+  });
+
+  // Estado consolidado de si este participante ya completó el registro de asistencia oficial en este dispositivo
+  const isRegisteredForEvent = useMemo(() => {
+    if (asistenciaRegistrada) return true;
+    if (sessionInfo?.registrado) {
+      if (evento?.esMultidia) {
+        return sessionInfo.fechaDia === hoyStr;
+      }
+      return true;
+    }
+    return false;
+  }, [asistenciaRegistrada, sessionInfo, evento, hoyStr]);
+
+  const [codigoComprobante, setCodigoComprobante] = useState(() => sessionInfo?.comprobanteId || '');
+  const [errorAsistencia, setErrorAsistencia] = useState('');
+  const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
+
+  // Estados para Desafío de Seguridad de Correo al autocompletar o acceder a registro existente en nuevo dispositivo
   const [challengeEmail, setChallengeEmail] = useState('');
   const [challengeError, setChallengeError] = useState('');
   const [verifiedDoc, setVerifiedDoc] = useState(() => (sessionInfo?.documento ? String(sessionInfo.documento).trim() : null));
 
   // Determinar si el documento ingresado actualmente está debidamente validado y vinculado
   const isCurrentDocVerified = useMemo(() => {
-    if (!normalizedCurrentDoc || !registroPrevioEvento) return false;
+    if (!normalizedCurrentDoc) return false;
+    const targetRecord = registroExistente || registroPrevioEvento;
+    if (!targetRecord) return false;
     const isDocMatch = normalizeDocumentId(verifiedDoc) === normalizedCurrentDoc || 
       (sessionInfo && normalizeDocumentId(sessionInfo.documento) === normalizedCurrentDoc);
-    const isNameMatch = Boolean(formData.nombreCompleto && areNamesMatching(formData.nombreCompleto, registroPrevioEvento.nombreCompleto));
+    const isNameMatch = Boolean(formData.nombreCompleto && areNamesMatching(formData.nombreCompleto, targetRecord.nombreCompleto));
     return Boolean(isDocMatch && isNameMatch);
-  }, [normalizedCurrentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroPrevioEvento]);
+  }, [normalizedCurrentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroExistente, registroPrevioEvento]);
 
-  // Función para validar el correo y autocompletar en nuevo dispositivo
+  // Función para validar el correo y autocompletar o autenticar en nuevo dispositivo
   const handleVerifyChallengeEmail = (e) => {
     e?.preventDefault();
-    if (!registroPrevioEvento) return;
+    const targetRecord = registroExistente || registroPrevioEvento;
+    if (!targetRecord) return;
 
     const inputEmail = challengeEmail.trim().toLowerCase();
-    const targetEmail = (registroPrevioEvento.correo || '').trim().toLowerCase();
+    const targetEmail = (targetRecord.correo || '').trim().toLowerCase();
 
     if (!inputEmail) {
       setChallengeError('Por favor ingrese su correo registrado para validar su identidad.');
@@ -195,31 +244,48 @@ export default function AttendeeView({
     if (inputEmail === targetEmail) {
       setFormData(prev => ({
         ...prev,
-        tipoDocumento: registroPrevioEvento.tipoDocumento || prev.tipoDocumento,
-        nombreCompleto: registroPrevioEvento.nombreCompleto || prev.nombreCompleto,
-        correo: registroPrevioEvento.correo || prev.correo,
-        telefono: registroPrevioEvento.telefono || prev.telefono,
-        vinculacion: registroPrevioEvento.vinculacion || prev.vinculacion,
-        placaVehiculo: registroPrevioEvento.placaVehiculo || prev.placaVehiculo,
+        tipoDocumento: targetRecord.tipoDocumento || prev.tipoDocumento,
+        nombreCompleto: targetRecord.nombreCompleto || prev.nombreCompleto,
+        correo: targetRecord.correo || prev.correo,
+        telefono: targetRecord.telefono || prev.telefono,
+        vinculacion: targetRecord.vinculacion || prev.vinculacion,
+        placaVehiculo: targetRecord.placaVehiculo || prev.placaVehiculo,
         habeasDataAceptado: true
       }));
       setVerifiedDoc(currentDoc);
       setChallengeError('');
 
+      // Si ya tiene registro hoy, restauramos comprobante y sesión para permitir acceso completo
+      if (registroExistente) {
+        setCodigoComprobante(registroExistente.id);
+        setAsistenciaRegistrada(true);
+        setMaxUnlockedStep(5);
+        setErrorAsistencia('');
+      }
+
       try {
         localStorage.setItem(`udea_session_attendee_${evento?.id}`, JSON.stringify({
-          tipoDocumento: registroPrevioEvento.tipoDocumento,
-          documento: registroPrevioEvento.documento,
-          nombreCompleto: registroPrevioEvento.nombreCompleto,
-          correo: registroPrevioEvento.correo,
-          telefono: registroPrevioEvento.telefono,
-          vinculacion: registroPrevioEvento.vinculacion,
-          placaVehiculo: registroPrevioEvento.placaVehiculo,
-          registrado: true
+          tipoDocumento: targetRecord.tipoDocumento,
+          documento: targetRecord.documento,
+          nombreCompleto: targetRecord.nombreCompleto,
+          correo: targetRecord.correo,
+          telefono: targetRecord.telefono,
+          vinculacion: targetRecord.vinculacion,
+          placaVehiculo: targetRecord.placaVehiculo,
+          comprobanteId: registroExistente ? registroExistente.id : undefined,
+          registrado: Boolean(registroExistente)
         }));
       } catch {}
+
+      if (registroExistente) {
+        setActiveStep(3);
+      }
     } else {
-      setChallengeError('El correo ingresado no coincide con el registrado en jornadas anteriores para este documento.');
+      setChallengeError(
+        registroExistente
+          ? 'El correo ingresado no coincide con el registrado en la asistencia de hoy para este documento.'
+          : 'El correo ingresado no coincide con el registrado en jornadas anteriores para este documento.'
+      );
     }
   };
 
@@ -273,43 +339,6 @@ export default function AttendeeView({
     setActiveStep(1);
   };
 
-  // Asistencia específica para la fecha o sesión de hoy
-  const hoyStr = officialTime.fechaStr || getColombiaLocalDateStr();
-  const asistenciaHoy = useMemo(() => {
-    if (misAsistenciasEvento.length === 0) return null;
-    return misAsistenciasEvento.find(a =>
-      a.fechaDia === hoyStr ||
-      (dayStatus.diaNumero && a.diaNumero === dayStatus.diaNumero)
-    ) || null;
-  }, [misAsistenciasEvento, hoyStr, dayStatus.diaNumero]);
-
-  const yaRegistroHoy = Boolean(asistenciaHoy);
-
-  const [asistenciaRegistrada, setAsistenciaRegistrada] = useState(() => {
-    if (!sessionInfo) return false;
-    // Si el evento es multidía, validar si la sesión guardada corresponde al día de hoy
-    if (evento?.esMultidia) {
-      return sessionInfo.fechaDia === getColombiaLocalDateStr();
-    }
-    return Boolean(sessionInfo.registrado);
-  });
-
-  // Estado consolidado de si este participante ya completó el registro de asistencia oficial en este dispositivo
-  const isRegisteredForEvent = useMemo(() => {
-    if (asistenciaRegistrada) return true;
-    if (sessionInfo?.registrado) {
-      if (evento?.esMultidia) {
-        return sessionInfo.fechaDia === hoyStr;
-      }
-      return true;
-    }
-    return false;
-  }, [asistenciaRegistrada, sessionInfo, evento, hoyStr]);
-
-  const [codigoComprobante, setCodigoComprobante] = useState(() => sessionInfo?.comprobanteId || '');
-  const [errorAsistencia, setErrorAsistencia] = useState('');
-  const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
-
   // Registro del participante activo para la Escarapela Digital (prioriza la sesión actual)
   const activeAttendeeRecord = useMemo(() => {
     if (asistenciaHoy) return asistenciaHoy;
@@ -348,15 +377,6 @@ export default function AttendeeView({
       ''
     );
   }, [formData.nombreCompleto, activeAttendeeRecord, sessionInfo]);
-
-  // Detección en tiempo real de registro existente (en multidía, verifica si ya llenó el día de hoy)
-  const registroExistente = useMemo(() => {
-    if (!normalizedCurrentDoc || !currentEventId) return null;
-    if (evento?.esMultidia) {
-      return yaRegistroHoy ? asistenciaHoy : null;
-    }
-    return (asistencias || []).find(a => a.eventoId === currentEventId && normalizeDocumentId(a.documento) === normalizedCurrentDoc);
-  }, [normalizedCurrentDoc, currentEventId, evento, yaRegistroHoy, asistenciaHoy, asistencias]);
 
   // Estado de Preguntas a Ponentes
   const defaultPonenteId = evento?.ponentes?.[0]?.id || '';
@@ -1176,47 +1196,106 @@ export default function AttendeeView({
 
                   {/* Alerta inmediata si el documento ya se encuentra registrado */}
                   {registroExistente ? (
-                    <div className="doc-duplicate-alert animated-step">
-                      <div className="doc-duplicate-header">
-                        <AlertTriangle size={15} className="warn-icon" />
-                        <span>Este documento ya registró asistencia en la jornada de hoy:</span>
+                    isCurrentDocVerified ? (
+                      <div className="doc-duplicate-alert animated-step">
+                        <div className="doc-duplicate-header">
+                          <AlertTriangle size={15} className="warn-icon" />
+                          <span>Este documento ya registró asistencia en la jornada de hoy:</span>
+                        </div>
+                        <div className="doc-duplicate-details">
+                          <strong>{maskFullName(registroExistente.nombreCompleto)}</strong> (Comprobante: <code>{registroExistente.id}</code>)
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="btn-recover-attendance"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                nombreCompleto: registroExistente.nombreCompleto || prev.nombreCompleto,
+                                correo: registroExistente.correo || prev.correo,
+                                telefono: registroExistente.telefono || prev.telefono,
+                                vinculacion: registroExistente.vinculacion || prev.vinculacion,
+                                placaVehiculo: registroExistente.placaVehiculo || prev.placaVehiculo
+                              }));
+                              setCodigoComprobante(registroExistente.id);
+                              setAsistenciaRegistrada(true);
+                              setMaxUnlockedStep(5);
+                              setErrorAsistencia('');
+                              try {
+                                localStorage.setItem(`udea_session_attendee_${evento.id}`, JSON.stringify({
+                                  ...formData,
+                                  nombreCompleto: registroExistente.nombreCompleto,
+                                  documento: registroExistente.documento,
+                                  comprobanteId: registroExistente.id,
+                                  registrado: true
+                                }));
+                              } catch {}
+                              setActiveStep(3);
+                            }}
+                          >
+                            <CheckCircle2 size={15} />
+                            <span>Ver mi comprobante e ir a Preguntas en Vivo</span>
+                            <ChevronRight size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-change-participant-mini"
+                            onClick={handleResetParticipant}
+                            title="Limpiar campos para ingresar con otro documento"
+                            style={{ alignSelf: 'center' }}
+                          >
+                            Cambiar documento
+                          </button>
+                        </div>
                       </div>
-                      <div className="doc-duplicate-details">
-                        <strong>{maskFullName(registroExistente.nombreCompleto)}</strong> (Comprobante: <code>{registroExistente.id}</code>)
+                    ) : (
+                      <div className="security-challenge-card animated-step">
+                        <div className="security-challenge-header">
+                          <ShieldCheck size={16} color="#006633" />
+                          <span>Registro de hoy detectado: <strong>{maskFullName(registroExistente.nombreCompleto)}</strong> ({maskEmail(registroExistente.correo)})</span>
+                        </div>
+                        <p className="security-challenge-desc">
+                          Por seguridad y protección de datos personales (Ley 1581), para acceder a tu comprobante y preguntas en vivo en este dispositivo, confirma tu correo electrónico registrado:
+                        </p>
+                        <div className="security-challenge-form-row">
+                          <input
+                            type="email"
+                            className="form-input challenge-input"
+                            placeholder="Confirma tu correo registrado..."
+                            value={challengeEmail}
+                            onChange={(e) => {
+                              setChallengeEmail(e.target.value);
+                              setChallengeError('');
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleVerifyChallengeEmail(e);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn-challenge-action"
+                            onClick={handleVerifyChallengeEmail}
+                          >
+                            <KeyRound size={14} />
+                            <span>Validar y Acceder</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-change-participant-mini"
+                            onClick={handleResetParticipant}
+                            title="Limpiar campos para ingresar con otro documento"
+                            style={{ alignSelf: 'center' }}
+                          >
+                            Ingresar con otro documento
+                          </button>
+                        </div>
+                        {challengeError && <p className="challenge-err-text">{challengeError}</p>}
                       </div>
-                      <button
-                        type="button"
-                        className="btn-recover-attendance"
-                        onClick={() => {
-                          setFormData(prev => ({
-                            ...prev,
-                            nombreCompleto: registroExistente.nombreCompleto || prev.nombreCompleto,
-                            correo: registroExistente.correo || prev.correo,
-                            telefono: registroExistente.telefono || prev.telefono,
-                            vinculacion: registroExistente.vinculacion || prev.vinculacion,
-                            placaVehiculo: registroExistente.placaVehiculo || prev.placaVehiculo
-                          }));
-                          setCodigoComprobante(registroExistente.id);
-                          setAsistenciaRegistrada(true);
-                          setMaxUnlockedStep(5);
-                          setErrorAsistencia('');
-                          try {
-                            localStorage.setItem(`udea_session_attendee_${evento.id}`, JSON.stringify({
-                              ...formData,
-                              nombreCompleto: registroExistente.nombreCompleto,
-                              documento: registroExistente.documento,
-                              comprobanteId: registroExistente.id,
-                              registrado: true
-                            }));
-                          } catch {}
-                          setActiveStep(3);
-                        }}
-                      >
-                        <CheckCircle2 size={15} />
-                        <span>Ver mi comprobante e ir a Preguntas en Vivo</span>
-                        <ChevronRight size={14} />
-                      </button>
-                    </div>
+                    )
                   ) : registroPrevioEvento ? (
                     isCurrentDocVerified ? (
                       <div className="doc-autofilled-hint animated-step">
@@ -1250,6 +1329,12 @@ export default function AttendeeView({
                               setChallengeEmail(e.target.value);
                               setChallengeError('');
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleVerifyChallengeEmail(e);
+                              }
+                            }}
                           />
                           <button
                             type="button"
@@ -1258,6 +1343,15 @@ export default function AttendeeView({
                           >
                             <KeyRound size={14} />
                             <span>Validar y Autocompletar</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-change-participant-mini"
+                            onClick={handleResetParticipant}
+                            title="Limpiar campos para ingresar con otro documento"
+                            style={{ alignSelf: 'center' }}
+                          >
+                            Ingresar con otro documento
                           </button>
                         </div>
                         {challengeError && <p className="challenge-err-text">{challengeError}</p>}
