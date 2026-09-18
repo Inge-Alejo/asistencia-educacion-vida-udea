@@ -3,7 +3,8 @@ import {
   Users, HelpCircle, Star, ThumbsUp, Download, QrCode, Plus, Search,
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
   ExternalLink, Trash2, Shield, KeyRound, LogOut, Upload, X, Award,
-  Database, HardDrive, Server, Activity, Wifi, Camera, Edit3
+  Database, HardDrive, Server, Activity, Wifi, Camera, Edit3,
+  CheckCircle2, Globe, Phone
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import QRScannerModal from './QRScannerModal';
@@ -24,6 +25,34 @@ import {
   saveEvent
 } from '../services/storage';
 import { changeAdminPassword } from '../services/auth';
+
+function formatRegistrationDate(fechaRegistro, horaRegistro) {
+  if (!fechaRegistro) return { date: '—', time: '' };
+  const str = String(fechaRegistro).trim();
+
+  // Si contiene coma (ej: '17/9/2026, 7:34:35 p. m.')
+  if (str.includes(',')) {
+    const parts = str.split(',');
+    return {
+      date: parts[0].trim(),
+      time: (horaRegistro || parts[1] || '').trim()
+    };
+  }
+
+  // Si tiene espacio entre fecha y hora (ej: '2026-09-17 17:49:05')
+  if (str.includes(' ')) {
+    const parts = str.split(' ');
+    return {
+      date: parts[0].trim(),
+      time: (horaRegistro || parts.slice(1).join(' ')).trim()
+    };
+  }
+
+  return {
+    date: str,
+    time: horaRegistro || ''
+  };
+}
 
 export default function AdminPanel({
   evento = {},
@@ -510,142 +539,140 @@ export default function AdminPanel({
            </div>
 
            <div className="table-responsive-container">
-             <table className="admin-table">
-               <thead>
-                 <tr>
-                   <th>N°</th>
-                   <th>Documento</th>
-                   <th>Nombre del Asistente</th>
-                   <th>Correo y Teléfono</th>
-                   <th>Vinculación / Rol</th>
-                   <th>Placa Vehicular</th>
-                   <th>Geolocalización GPS</th>
-                   <th>Hora Registro</th>
-                   <th>Acción</th>
-                 </tr>
-               </thead>
-               <tbody>
-                 {asistenciasFiltradas.length === 0 ? (
-                   <tr>
-                     <td colSpan="9" className="empty-table-row">
-                       No se encontraron registros de asistencia que coincidan con la búsqueda.
-                     </td>
-                   </tr>
-                 ) : (
-                   asistenciasFiltradas.map((a, idx) => (
-                     <tr key={a.id || idx}>
-                       <td>{idx + 1}</td>
-                       <td>
-                         <strong>{a.documento}</strong>
-                         <span className="doc-type-badge">{a.tipoDocumento || 'CC'}</span>
-                       </td>
-                       <td className="attendee-name-cell">
-                         <strong>{a.nombreCompleto}</strong>
-                       </td>
-                       <td>
-                         <div className="contact-cell">
-                           <span>{a.correo}</span>
-                           {a.telefono && <small>{a.telefono}</small>}
-                         </div>
-                       </td>
-                       <td>
-                         <span className={`role-chip ${a.vinculacion?.includes('Ponente') ? 'role-chip-ponente' : ''}`}>
-                           {a.vinculacion}
-                         </span>
-                       </td>
-                       <td>
-                         {a.placaVehiculo ? (
-                           <span className="plate-badge">{a.placaVehiculo}</span>
-                         ) : (
-                           <span className="text-muted">
-                             {evento.habilitarPlacaVehiculo ? 'No registrada' : 'No requería'}
-                           </span>
-                         )}
-                       </td>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-start' }}>
-                          {a.geolocalizacion?.esPresencial ? (
-                            <span className="geo-badge-success" title={`A ${a.geolocalizacion.distanciaSedeMetros}m de la sede`}>
-                              <CheckCircle size={13} /> En Sede ({a.geolocalizacion.distanciaSedeMetros}m)
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '45px', textAlign: 'center' }}>N°</th>
+                  <th style={{ width: '135px' }}>Documento</th>
+                  <th style={{ minWidth: '180px' }}>Asistente</th>
+                  <th style={{ minWidth: '210px' }}>Contacto</th>
+                  <th style={{ minWidth: '160px' }}>Vinculación</th>
+                  <th style={{ width: '90px', textAlign: 'center' }}>Placa</th>
+                  <th style={{ minWidth: '150px' }}>Ubicación GPS</th>
+                  <th style={{ width: '140px' }}>Registro</th>
+                  <th style={{ width: '85px', textAlign: 'center' }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {asistenciasFiltradas.length === 0 ? (
+                  <tr>
+                    <td colSpan="9" className="empty-table-row">
+                      No se encontraron registros de asistencia que coincidan con la búsqueda.
+                    </td>
+                  </tr>
+                ) : (
+                  asistenciasFiltradas.map((a, idx) => {
+                    const dateInfo = formatRegistrationDate(a.fechaRegistro, a.horaRegistro);
+                    const isPonente = a.vinculacion?.includes('Ponente');
+                    const isEspecialista = a.vinculacion?.includes('Especialista') || a.vinculacion?.includes('Docente');
+                    const isEgresado = a.vinculacion?.includes('Egresado');
+                    const roleClass = isPonente ? 'role-chip-ponente' : isEspecialista ? 'role-chip-docente' : isEgresado ? 'role-chip-egresado' : 'role-chip-estudiante';
+
+                    return (
+                      <tr key={a.id || idx} className="admin-table-row">
+                        <td className="row-index-cell">{idx + 1}</td>
+                        <td>
+                          <div className="doc-cluster">
+                            <span className="doc-val">{a.documento}</span>
+                            <span className="doc-pill">{a.tipoDocumento || 'CC'}</span>
+                          </div>
+                        </td>
+                        <td className="attendee-name-cell">
+                          <span className="attendee-name-text">{a.nombreCompleto}</span>
+                        </td>
+                        <td>
+                          <div className="contact-cluster">
+                            <span className="contact-email-text" title={a.correo}>{a.correo}</span>
+                            {a.telefono && (
+                              <span className="contact-phone-text">
+                                <Phone size={11} className="contact-sub-icon" />
+                                <span>{a.telefono}</span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`role-chip ${roleClass}`}>
+                            {a.vinculacion || 'Asistente'}
+                          </span>
+                        </td>
+                        <td className="plate-cell text-center">
+                          {a.placaVehiculo ? (
+                            <span className="plate-badge" title={`Vehículo: ${a.placaVehiculo}`}>
+                              🚗 {a.placaVehiculo}
                             </span>
                           ) : (
-                            <span className="geo-badge-warning" title={a.geolocalizacion?.distanciaSedeMetros ? `A ${a.geolocalizacion.distanciaSedeMetros}m` : 'Remoto'}>
-                              <AlertCircle size={13} /> {a.geolocalizacion?.distanciaSedeMetros ? `${a.geolocalizacion.distanciaSedeMetros}m (Remoto)` : 'Remoto'}
-                            </span>
+                            <span className="no-plate-dash" title="Sin vehículo registrado">—</span>
                           )}
+                        </td>
+                        <td>
+                          <div className="geo-cluster">
+                            {a.geolocalizacion?.esPresencial ? (
+                              <span className="geo-pill in-situ" title={`Confirmado en sede (a ${a.geolocalizacion.distanciaSedeMetros}m)`}>
+                                <CheckCircle2 size={12} />
+                                <span>En Sede ({a.geolocalizacion.distanciaSedeMetros}m)</span>
+                              </span>
+                            ) : (
+                              <span className="geo-pill remote" title={a.geolocalizacion?.distanciaSedeMetros ? `A ${a.geolocalizacion.distanciaSedeMetros}m de la sede` : 'Asistencia remota'}>
+                                <Globe size={12} />
+                                <span>Remoto {a.geolocalizacion?.distanciaSedeMetros ? `(${a.geolocalizacion.distanciaSedeMetros}m)` : ''}</span>
+                              </span>
+                            )}
 
-                          {a.geolocalizacion?.latitud && a.geolocalizacion?.longitud && (
+                            {a.geolocalizacion?.latitud && a.geolocalizacion?.longitud && (
+                              <button
+                                type="button"
+                                className="btn-geo-map-pill"
+                                onClick={() => setSelectedGeoRecord(a)}
+                                title="Ver ubicación en mapa satelital interactivo"
+                              >
+                                <MapPin size={11} />
+                                <span>Mapa</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="timestamp-cluster">
+                            <span className="time-date-text">{dateInfo.date}</span>
+                            <div className="time-sub-line">
+                              {dateInfo.time && <span className="time-clock-text">{dateInfo.time}</span>}
+                              {(evento.esMultidia || a.diaNumero) && (
+                                <span className="day-badge-clean">
+                                  Día {a.diaNumero || 1}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="actions-cell text-center">
+                          <div className="table-actions-cluster">
                             <button
                               type="button"
-                              onClick={() => setSelectedGeoRecord(a)}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.3rem',
-                                fontSize: '0.74rem',
-                                background: '#eefbf4',
-                                border: '1px solid #86efac',
-                                color: '#166534',
-                                padding: '0.2rem 0.5rem',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontWeight: '600'
-                              }}
-                              title="Ver ubicación exacta en mapa y satélite"
+                              className="btn-table-action-badge"
+                              title={`Ver pase digital oficial de ${a.nombreCompleto}`}
+                              onClick={() => setSelectedBadgeAttendee(a)}
                             >
-                              <MapPin size={11} />
-                              <span>Ver Mapa Exacto</span>
+                              <Award size={15} />
                             </button>
-                          )}
-                        </div>
+                            <button
+                              type="button"
+                              className="btn-table-action-delete"
+                              title={`Eliminar asistencia de ${a.nombreCompleto}`}
+                              onClick={async () => {
+                                if (window.confirm(`¿Eliminar el registro de asistencia de "${a.nombreCompleto}" (Doc: ${a.documento})?`)) {
+                                  await deleteAttendance(a.id);
+                                  if (onDataUpdated) onDataUpdated();
+                                }
+                              }}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                       </td>
-                      <td className="time-cell">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                          <span>{a.fechaRegistro}</span>
-                          {(evento.esMultidia || a.diaNumero) && (
-                            <span className="day-badge-tag" style={{ alignSelf: 'flex-start' }}>
-                              Día {a.diaNumero || 1} {a.fechaDia ? `(${a.fechaDia})` : ''}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="table-actions-cluster" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                          <button
-                            type="button"
-                            className="btn-table-badge"
-                            title={`Ver pase digital oficial de ${a.nombreCompleto}`}
-                            onClick={() => setSelectedBadgeAttendee(a)}
-                            style={{
-                              background: '#eefbf4',
-                              border: '1px solid #86efac',
-                              color: '#0F5938',
-                              padding: '0.35rem',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                          >
-                            <Award size={15} />
-                          </button>
-                          <button
-                            className="btn-table-delete"
-                            title={`Eliminar asistencia de ${a.nombreCompleto}`}
-                            onClick={async () => {
-                              if (window.confirm(`¿Eliminar el registro de asistencia de "${a.nombreCompleto}" (Doc: ${a.documento})?`)) {
-                                await deleteAttendance(a.id);
-                                if (onDataUpdated) onDataUpdated();
-                              }
-                            }}
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
