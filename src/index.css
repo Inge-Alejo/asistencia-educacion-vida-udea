@@ -7652,10 +7652,14 @@ input:checked + .slider::before {
   background: #FFFFFF !important;
   border-radius: 16px !important;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 102, 51, 0.12) !important;
-  overflow: hidden !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
   display: flex !important;
   flex-direction: column !important;
-  max-height: 94vh !important;
+  max-height: 92dvh !important;
+  max-height: 92vh !important;
   animation: modalEnter 0.22s ease-out !important;
 }
 
@@ -8156,4 +8160,235 @@ input:checked + .slider::before {
   font-size: 0.72rem !important;
   color: #475569 !important;
   line-height: 1.35 !important;
+}
+
+/* ==========================================================================
+   ADAPTACIÓN RESPONSIVE MOBILE - CONTROL DE ALIMENTACIÓN
+   ========================================================================== */
+@media (max-width: 640px) {
+  .meal-scanner-overlay {
+    padding: 0.4rem 0.3rem !important;
+    align-items: center !important;
+  }
+
+  .meal-scanner-container {
+    max-height: 96dvh !important;
+    max-height: 96vh !important;
+    border-radius: 14px !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35) !important;
+    width: 100% !important;
+  }
+
+  .meal-scanner-header {
+    padding: 0.75rem 0.85rem !important;
+  }
+
+  .meal-badge-title {
+    font-size: 0.7rem !important;
+  }
+
+  .meal-event-title {
+    font-size: 1rem !important;
+    max-width: 230px !important;
+  }
+
+  .meal-selector-bar {
+    padding: 0.55rem 0.75rem !important;
+  }
+
+  .meal-selector-label {
+    font-size: 0.7rem !important;
+    margin-bottom: 0.35rem !important;
+  }
+
+  .meal-chips-list {
+    gap: 0.4rem !important;
+    padding-bottom: 0.2rem !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .meal-chips-list::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .meal-chip-btn {
+    min-width: 112px !important;
+    padding: 0.45rem 0.65rem !important;
+    flex-shrink: 0 !important;
+  }
+
+  .meal-chip-name {
+    font-size: 0.8rem !important;
+  }
+
+  .meal-chip-time {
+    font-size: 0.68rem !important;
+  }
+
+  .meal-chip-badge {
+    font-size: 0.65rem !important;
+  }
+
+  .meal-kpi-strip {
+    padding: 0.45rem 0.75rem !important;
+    gap: 0.3rem !important;
+  }
+
+  .meal-kpi-sub {
+    font-size: 0.62rem !important;
+    letter-spacing: 0.2px !important;
+  }
+
+  .meal-kpi-val {
+    font-size: 0.85rem !important;
+  }
+
+  .meal-viewport-section {
+    min-height: 200px !important;
+  }
+
+  .scanner-video-wrapper {
+    max-height: 260px !important;
+  }
+
+  .scanner-video-feed {
+    max-height: 260px !important;
+  }
+
+  .scanner-crosshair-overlay {
+    width: 170px !important;
+    height: 170px !important;
+  }
+
+  .scanner-bracket {
+    width: 22px !important;
+    height: 22px !important;
+    border-width: 3px !important;
+  }
+
+  .scanner-guide-text {
+    font-size: 0.68rem !important;
+    padding: 2px 8px !important;
+    bottom: -24px !important;
+  }
+
+  /* Controles en cuadrícula 2x2 para que NUNCA se desborden horizontalmente */
+  .meal-scanner-controls-row {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.45rem !important;
+    padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px)) !important;
+    overflow-x: visible !important;
+  }
+
+  .btn-scanner-tool {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.5rem 0.35rem !important;
+    font-size: 0.74rem !important;
+    gap: 0.3rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .btn-scanner-tool span {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* Formulario manual adaptado a pantallas táctiles */
+  .manual-doc-deliver-form {
+    padding: 0.65rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .manual-input-wrap {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.45rem !important;
+  }
+
+  .manual-doc-input {
+    width: 100% !important;
+    padding: 0.55rem 0.75rem 0.55rem 2.2rem !important;
+    font-size: 0.85rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .btn-manual-submit {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.6rem 1rem !important;
+    font-size: 0.82rem !important;
+  }
+
+  /* Tarjeta de resultado flotante responsive */
+  .meal-scan-result-card {
+    top: 6px !important;
+    bottom: 6px !important;
+    left: 6px !important;
+    right: 6px !important;
+    padding: 0.75rem !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .result-content-wrap {
+    gap: 0.65rem !important;
+  }
+
+  .result-icon-circle {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .result-icon-circle svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  .result-status-title {
+    font-size: 0.72rem !important;
+    margin-bottom: 0.15rem !important;
+  }
+
+  .result-attendee-name {
+    font-size: 1rem !important;
+    margin-bottom: 0.35rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .result-duplicate-warning {
+    font-size: 0.76rem !important;
+    margin: 0.25rem 0 0.45rem !important;
+  }
+
+  .result-error-msg {
+    font-size: 0.76rem !important;
+  }
+
+  .result-pill {
+    font-size: 0.7rem !important;
+    padding: 2px 6px !important;
+  }
+
+  .result-resume-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.45rem !important;
+    padding-top: 0.45rem !important;
+    margin-top: 0.45rem !important;
+  }
+
+  .auto-resume-text {
+    font-size: 0.72rem !important;
+    text-align: center !important;
+  }
+
+  .btn-next-scan {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.55rem 0.85rem !important;
+    margin-left: 0 !important;
+  }
 }

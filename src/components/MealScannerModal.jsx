@@ -612,19 +612,19 @@ export default function MealScannerModal({
         {/* Resumen KPI de la comida activa */}
         <div className="meal-kpi-strip">
           <div className="meal-kpi-item">
-            <span className="meal-kpi-sub">Comida en Curso:</span>
+            <span className="meal-kpi-sub">Comida Activa</span>
             <strong className="meal-kpi-val" style={{ color: '#006633' }}>{selectedMeal?.nombre}</strong>
           </div>
           <div className="meal-kpi-item">
             <span className="meal-kpi-sub">
-              {selectedMeal?.cantidadTotal ? 'Raciones Contratadas:' : 'Asistentes del Evento:'}
+              {selectedMeal?.cantidadTotal ? 'Contratadas' : 'Asistentes'}
             </span>
             <strong className="meal-kpi-val">
               {conteoComidaActual.entregadas} / {conteoComidaActual.totalProgramado}
             </strong>
           </div>
           <div className="meal-kpi-item">
-            <span className="meal-kpi-sub">Raciones Restantes:</span>
+            <span className="meal-kpi-sub">Restantes</span>
             <strong className="meal-kpi-val" style={{ color: conteoComidaActual.pendientes === 0 ? '#DC2626' : '#D97706' }}>
               {conteoComidaActual.pendientes}
             </strong>
