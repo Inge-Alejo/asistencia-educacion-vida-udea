@@ -25,3 +25,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Presentaciones y scripts internos
+*.pptx
+scripts/
+
