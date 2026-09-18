@@ -50,18 +50,23 @@ export default function Header({
               </select>
             </div>
           ) : (
-            <div className="header-event-locked-badge" title="Evento asignado según código QR escaneado">
-              <span className="locked-pill-tag">
-                <Lock size={11} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
-                Evento Oficial
-              </span>
+            <div className="header-event-locked-badge" title={`Evento oficial: ${currentEvent?.titulo || 'Evento Académico UdeA'}`}>
+              <div className="locked-badge-header">
+                <span className="locked-pill-tag">
+                  <Lock size={11} />
+                  <span>Evento Oficial</span>
+                </span>
+                {currentEvent?.fecha && (
+                  <span className="locked-date">
+                    <Calendar size={11} />
+                    <span>{currentEvent.fecha}</span>
+                  </span>
+                )}
+              </div>
               <div className="locked-text-wrap">
                 <strong className="locked-title">
-                  {currentEvent?.titulo
-                    ? (currentEvent.titulo.length > 38 ? currentEvent.titulo.substring(0, 38) + '...' : currentEvent.titulo)
-                    : 'Evento Académico UdeA'}
+                  {currentEvent?.titulo || 'Evento Académico UdeA'}
                 </strong>
-                <span className="locked-date">{currentEvent?.fecha || ''}</span>
               </div>
             </div>
           )}

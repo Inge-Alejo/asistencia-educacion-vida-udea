@@ -201,6 +201,109 @@ body {
   color: #FFFFFF;
 }
 
+/* Badge de Evento Asignado en Header (Asistentes) */
+.header-event-locked-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(197, 155, 39, 0.45);
+  border-radius: 10px;
+  padding: 0.4rem 0.85rem;
+  max-width: 360px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  transition: all 0.25s ease;
+}
+
+.header-event-locked-badge:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(197, 155, 39, 0.75);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.locked-badge-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.locked-pill-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(10, 61, 38, 0.95);
+  color: #86EFAC;
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+
+.locked-pill-tag svg {
+  color: #86EFAC;
+}
+
+.locked-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #FDE68A;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.locked-date svg {
+  color: #FBBF24;
+}
+
+.locked-text-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.locked-title {
+  color: #FFFFFF !important;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+  .header-event-locked-badge {
+    align-items: flex-start;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 0.35rem;
+  }
+  .locked-badge-header {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .locked-text-wrap {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .locked-title {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
 /* Barra de Navegación */
 .header-nav-bar {
   background-color: #0E4E32;
