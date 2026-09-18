@@ -19,7 +19,7 @@ import {
 } from '../services/storage';
 import { maskFullName, maskEmail, areNamesMatching, sanitizeText } from '../services/sanitizer';
 import { getOfficialColombiaTime, getEventDaysList, checkEventDayStatus } from '../services/networkTime';
-import { isDocumentEnrolled } from '../services/enrollmentService';
+import { isDocumentEnrolled, normalizeDocumentId } from '../services/enrollmentService';
 
 function getSavedAttendeeSession(eventId) {
   if (typeof window === 'undefined' || !eventId) return null;
@@ -133,30 +133,31 @@ export default function AttendeeView({
   }));
 
   const currentDoc = (formData?.documento || '').trim();
+  const normalizedCurrentDoc = normalizeDocumentId(currentDoc);
 
   // Verificación de si el documento actual figura en la lista de inscritos oficiales del evento
   const enrollmentStatus = useMemo(() => {
-    if (!currentDoc || currentDoc.length < 4) {
+    if (!normalizedCurrentDoc || normalizedCurrentDoc.length < 4) {
       return { isEnrolled: true, hasWhitelist: Boolean(inscritosList && inscritosList.length > 0) };
     }
-    return isDocumentEnrolled(inscritosList, currentDoc);
-  }, [inscritosList, currentDoc]);
+    return isDocumentEnrolled(inscritosList, normalizedCurrentDoc);
+  }, [inscritosList, normalizedCurrentDoc]);
 
   // Historial de asistencias registradas por este participante en este evento (todas las sesiones)
   const misAsistenciasEvento = useMemo(() => {
-    if (!currentDoc || !currentEventId) return [];
+    if (!normalizedCurrentDoc || !currentEventId) return [];
     return (asistencias || []).filter(a =>
-      a.eventoId === currentEventId && String(a.documento).trim() === currentDoc
+      a.eventoId === currentEventId && normalizeDocumentId(a.documento) === normalizedCurrentDoc
     );
-  }, [asistencias, currentEventId, currentDoc]);
+  }, [asistencias, currentEventId, normalizedCurrentDoc]);
 
   // Registro previo baseline de este documento en el evento (para autocompletado seguro y validación de coherencia)
   const registroPrevioEvento = useMemo(() => {
-    if (!currentDoc || !currentEventId) return null;
+    if (!normalizedCurrentDoc || !currentEventId) return null;
     return (asistencias || []).find(a =>
-      a.eventoId === currentEventId && String(a.documento).trim() === currentDoc
+      a.eventoId === currentEventId && normalizeDocumentId(a.documento) === normalizedCurrentDoc
     ) || null;
-  }, [asistencias, currentEventId, currentDoc]);
+  }, [asistencias, currentEventId, normalizedCurrentDoc]);
 
   // Estados para Desafío de Seguridad de Correo al autocompletar en nuevo dispositivo
   const [challengeEmail, setChallengeEmail] = useState('');
@@ -165,11 +166,12 @@ export default function AttendeeView({
 
   // Determinar si el documento ingresado actualmente está debidamente validado y vinculado
   const isCurrentDocVerified = useMemo(() => {
-    if (!currentDoc || !registroPrevioEvento) return false;
-    const isDocMatch = verifiedDoc === currentDoc || (sessionInfo && String(sessionInfo.documento).trim() === currentDoc);
+    if (!normalizedCurrentDoc || !registroPrevioEvento) return false;
+    const isDocMatch = normalizeDocumentId(verifiedDoc) === normalizedCurrentDoc || 
+      (sessionInfo && normalizeDocumentId(sessionInfo.documento) === normalizedCurrentDoc);
     const isNameMatch = Boolean(formData.nombreCompleto && areNamesMatching(formData.nombreCompleto, registroPrevioEvento.nombreCompleto));
     return Boolean(isDocMatch && isNameMatch);
-  }, [currentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroPrevioEvento]);
+  }, [normalizedCurrentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroPrevioEvento]);
 
   // Función para validar el correo y autocompletar en nuevo dispositivo
   const handleVerifyChallengeEmail = (e) => {
@@ -264,10 +266,10 @@ export default function AttendeeView({
     if (asistenciaHoy) return asistenciaHoy;
     if (misAsistenciasEvento.length > 0) return misAsistenciasEvento[0];
 
-    if (!codigoComprobante && !currentDoc) return null;
+    if (!codigoComprobante && !normalizedCurrentDoc) return null;
     const found = (asistencias || []).find(a =>
       (codigoComprobante && a.id === codigoComprobante) ||
-      (a.eventoId === currentEventId && String(a.documento).trim() === currentDoc)
+      (a.eventoId === currentEventId && normalizeDocumentId(a.documento) === normalizedCurrentDoc)
     );
     if (found) return found;
 
@@ -286,16 +288,16 @@ export default function AttendeeView({
       };
     }
     return null;
-  }, [asistenciaHoy, misAsistenciasEvento, asistencias, codigoComprobante, formData, currentEventId, currentDoc, asistenciaRegistrada, yaRegistroHoy, dayStatus.diaNumero, officialTime.fechaStr]);
+  }, [asistenciaHoy, misAsistenciasEvento, asistencias, codigoComprobante, formData, currentEventId, normalizedCurrentDoc, asistenciaRegistrada, yaRegistroHoy, dayStatus.diaNumero, officialTime.fechaStr]);
 
   // Detección en tiempo real de registro existente (en multidía, verifica si ya llenó el día de hoy)
   const registroExistente = useMemo(() => {
-    if (!currentDoc || !currentEventId) return null;
+    if (!normalizedCurrentDoc || !currentEventId) return null;
     if (evento?.esMultidia) {
       return yaRegistroHoy ? asistenciaHoy : null;
     }
-    return (asistencias || []).find(a => a.eventoId === currentEventId && String(a.documento).trim() === currentDoc);
-  }, [currentDoc, currentEventId, evento, yaRegistroHoy, asistenciaHoy, asistencias]);
+    return (asistencias || []).find(a => a.eventoId === currentEventId && normalizeDocumentId(a.documento) === normalizedCurrentDoc);
+  }, [normalizedCurrentDoc, currentEventId, evento, yaRegistroHoy, asistenciaHoy, asistencias]);
 
   // Estado de Preguntas a Ponentes
   const defaultPonenteId = evento?.ponentes?.[0]?.id || '';
@@ -437,19 +439,20 @@ export default function AttendeeView({
     setErrorAsistencia('');
 
     const doc = formData.documento.trim();
-    if (!doc) {
+    const cleanDoc = normalizeDocumentId(doc);
+    if (!cleanDoc) {
       setErrorAsistencia('Por favor ingrese su número de documento de identidad.');
       return;
     }
-    if (formData.tipoDocumento !== 'PASAPORTE' && !/^\d{5,12}$/.test(doc)) {
-      setErrorAsistencia('El número de documento debe contener entre 5 y 12 dígitos numéricos.');
+    if (cleanDoc.length < 4 || cleanDoc.length > 20 || !/^[A-Z0-9]+$/.test(cleanDoc)) {
+      setErrorAsistencia('El número de documento debe contener entre 4 y 20 caracteres válidos (números o letras).');
       return;
     }
 
     // Validación estricta de admisión: debe figurar en la lista de inscritos si el evento tiene lista cargada
     if (enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled) {
       setErrorAsistencia(
-        `El documento ${doc} no se encuentra en el registro oficial de personas inscritas a este evento. Por favor acércate al punto de información del evento o comunícate con la coordinación académica.`
+        `El documento ${cleanDoc} no se encuentra en el registro oficial de personas inscritas a este evento. Por favor acércate al punto de información del evento o comunícate con la coordinación académica.`
       );
       return;
     }
@@ -503,7 +506,7 @@ export default function AttendeeView({
       fechaVerificadaInternet: officialTime.esVerificadaInternet,
       fuenteTiempo: officialTime.fuente,
       tipoDocumento: formData.tipoDocumento,
-      documento: sanitizeText(doc, 20),
+      documento: sanitizeText(cleanDoc, 20),
       nombreCompleto: sanitizeText(nombre, 100),
       correo: sanitizeText(email, 100),
       telefono: sanitizeText(telClean, 25),
@@ -1076,7 +1079,8 @@ export default function AttendeeView({
                     <option value="CC">Cédula de Ciudadanía (CC)</option>
                     <option value="TI">Tarjeta de Identidad (TI)</option>
                     <option value="CE">Cédula de Extranjería (CE)</option>
-                    <option value="PASAPORTE">Pasaporte</option>
+                    <option value="DE">Documento Extranjero (DE)</option>
+                    <option value="PASAPORTE">Pasaporte (PA)</option>
                     <option value="OTRO">Otro Documento</option>
                   </select>
                 </div>
@@ -1183,7 +1187,7 @@ export default function AttendeeView({
                         {challengeError && <p className="challenge-err-text">{challengeError}</p>}
                       </div>
                     )
-                  ) : (enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled && currentDoc.length >= 4) ? (
+                  ) : (enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled && normalizedCurrentDoc.length >= 4) ? (
                     <div className="doc-not-enrolled-alert animated-step">
                       <div className="doc-not-enrolled-header">
                         <AlertTriangle size={16} className="warn-icon" />
@@ -1194,7 +1198,7 @@ export default function AttendeeView({
                       </p>
                     </div>
                   ) : (
-                    formData.documento.trim().length >= 4 && (
+                    normalizedCurrentDoc.length >= 4 && (
                       <div className="doc-available-hint">
                         <Check size={13} />
                         <span>

@@ -5,9 +5,9 @@ import * as XLSX from 'xlsx';
 /**
  * Normaliza un número de documento para comparación infalible:
  * - Elimina puntos, comas, guiones, espacios en blanco, barras y caracteres especiales.
- * - Convierte a mayúsculas para tolerar pasaportes o identificaciones extranjeras (ej: A77610967).
- * - Elimina espacios internos y externos.
- * Ejemplo: " 1.053.873.161 " -> "1053873161"
+ * - Tolera documentos alfanuméricos con letras y números (ej: A77610967, pasaportes o identificaciones extranjeras).
+ * - Convierte a mayúsculas para unificar comparaciones.
+ * - Limpia espacios iniciales/finales (ej: " 1017255152 " -> "1017255152").
  */
 export function normalizeDocumentId(rawDoc) {
   if (rawDoc === null || rawDoc === undefined) return '';
@@ -18,25 +18,7 @@ export function normalizeDocumentId(rawDoc) {
 }
 
 /**
- * Patrones de nombres de columna para identificar la columna del documento de identidad
- */
-const DOCUMENT_HEADER_PATTERNS = [
-  'numero de documento',
-  'número de documento',
-  'no. documento',
-  'no.documento',
-  'no documento',
-  'num documento',
-  'documento',
-  'nro documento',
-  'cédula',
-  'cedula',
-  'identificación',
-  'identificacion'
-];
-
-/**
- * Limpia un texto de cabecera para búsqueda flexible
+ * Limpia un texto de celda para comparación flexible
  */
 function cleanHeaderCell(cellValue) {
   if (!cellValue) return '';
@@ -49,6 +31,107 @@ function cleanHeaderCell(cellValue) {
 }
 
 /**
+ * Determina con precisión si una columna corresponde al NÚMERO de documento y no al TIPO de documento.
+ * Evita falsos positivos como "Tipo de documento" o "Tipo Documento".
+ */
+function isDocumentNumberHeader(headerText) {
+  const clean = cleanHeaderCell(headerText);
+  if (!clean) return false;
+
+  // EXCLUIR explícitamente columnas que son sólo el tipo de documento o estado
+  if (
+    clean === 'tipo de documento' ||
+    clean === 'tipo documento' ||
+    clean === 'tipo doc' ||
+    clean.startsWith('tipo de doc') ||
+    clean.startsWith('tipo doc') ||
+    clean.includes('tipo de identificacion') ||
+    clean.includes('tipo identificacion') ||
+    clean.includes('estado')
+  ) {
+    return false;
+  }
+
+  // Patrones específicos de NÚMERO de documento
+  const specificNumberPatterns = [
+    'numero de documento',
+    'no. documento',
+    'no.documento',
+    'no documento',
+    'num documento',
+    'num. documento',
+    'nro documento',
+    'nro. documento',
+    'numero documento',
+    'doc. numero',
+    'cedula de ciudadania',
+    'cedula ciudadania',
+    'cedula',
+    'identificacion'
+  ];
+
+  for (const pat of specificNumberPatterns) {
+    if (clean === pat || clean.includes(pat)) {
+      return true;
+    }
+  }
+
+  // Coincidencia exacta con "documento" o "document"
+  if (clean === 'documento' || clean === 'document') {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Parser robusto de texto CSV que tolera delimitadores (; , \t),
+ * campos entre comillas con saltos de línea y caracteres especiales.
+ */
+function parseCSVMatrix(text) {
+  const sample = text.slice(0, 3000);
+  const semiCount = (sample.match(/;/g) || []).length;
+  const commaCount = (sample.match(/,/g) || []).length;
+  const tabCount = (sample.match(/\t/g) || []).length;
+  let delimiter = ';';
+  if (tabCount > semiCount && tabCount > commaCount) delimiter = '\t';
+  else if (commaCount > semiCount) delimiter = ',';
+
+  const rows = [];
+  let row = [''];
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        row[row.length - 1] += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      row.push('');
+    } else if (char === '\r') {
+      // Ignorar retornos de carro
+    } else if (char === '\n' && !inQuotes) {
+      rows.push(row);
+      row = [''];
+    } else {
+      row[row.length - 1] += char;
+    }
+  }
+
+  if (row.length > 1 || (row.length === 1 && row[0].trim() !== '')) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+/**
  * Analiza un archivo de Excel (.xlsx, .xls) o CSV (.csv) y extrae los números de documento normalizados.
  * Detecta dinámicamente en qué fila se encuentran los encabezados sin importar metadatos previos.
  * @param {File | ArrayBuffer | string} fileData
@@ -57,31 +140,43 @@ function cleanHeaderCell(cellValue) {
  */
 export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx') {
   try {
-    let workbook;
+    let rows = [];
+    const isCSV = fileName.toLowerCase().endsWith('.csv') || typeof fileData === 'string';
 
-    if (typeof fileData === 'string') {
-      // Texto plano (por ejemplo CSV separado por ; o ,)
-      workbook = XLSX.read(fileData, { type: 'string' });
-    } else if (fileData instanceof ArrayBuffer) {
-      workbook = XLSX.read(fileData, { type: 'array' });
-    } else if (fileData instanceof File || fileData instanceof Blob) {
-      const buffer = await fileData.arrayBuffer();
-      workbook = XLSX.read(buffer, { type: 'array' });
+    if (isCSV) {
+      // Decodificación de texto para archivos CSV con soporte UTF-8 / Latin1
+      let text = '';
+      if (typeof fileData === 'string') {
+        text = fileData;
+      } else if (fileData instanceof File || fileData instanceof Blob) {
+        text = await fileData.text();
+      } else if (fileData instanceof ArrayBuffer) {
+        text = new TextDecoder('utf-8').decode(fileData);
+      }
+      rows = parseCSVMatrix(text);
     } else {
-      throw new Error('Formato de archivo no soportado para lectura.');
-    }
+      // Lectura binaria para hojas de cálculo Excel (.xlsx, .xls)
+      let buffer;
+      if (fileData instanceof ArrayBuffer) {
+        buffer = fileData;
+      } else if (fileData instanceof File || fileData instanceof Blob) {
+        buffer = await fileData.arrayBuffer();
+      } else {
+        throw new Error('Formato de archivo binario no soportado.');
+      }
 
-    const firstSheetName = workbook.SheetNames[0];
-    if (!firstSheetName) {
-      throw new Error('El archivo no contiene hojas de cálculo válidas.');
-    }
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        throw new Error('El archivo no contiene hojas de cálculo válidas.');
+      }
 
-    const sheet = workbook.Sheets[firstSheetName];
-    // Convertir a matriz bidimensional de celdas
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      const sheet = workbook.Sheets[firstSheetName];
+      rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    }
 
     if (!rows || rows.length === 0) {
-      throw new Error('La hoja de cálculo está vacía.');
+      throw new Error('El archivo cargado está vacío o no contiene datos legibles.');
     }
 
     // 1. Buscar la fila donde se encuentran los encabezados y la columna del documento
@@ -89,23 +184,16 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
     let docColIndex = -1;
     let detectedColumnName = '';
 
-    for (let r = 0; r < Math.min(rows.length, 15); r++) {
+    for (let r = 0; r < Math.min(rows.length, 20); r++) {
       const row = rows[r];
       if (!Array.isArray(row)) continue;
 
       for (let c = 0; c < row.length; c++) {
-        const cellText = cleanHeaderCell(row[c]);
-        if (!cellText) continue;
-
-        const isMatch = DOCUMENT_HEADER_PATTERNS.some(pattern => {
-          const cleanPat = cleanHeaderCell(pattern);
-          return cellText === cleanPat || cellText.includes(cleanPat);
-        });
-
-        if (isMatch) {
+        const cellValue = row[c];
+        if (isDocumentNumberHeader(cellValue)) {
           headerRowIndex = r;
           docColIndex = c;
-          detectedColumnName = String(row[c]).trim();
+          detectedColumnName = String(cellValue).trim();
           break;
         }
       }
@@ -114,11 +202,11 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
 
     if (docColIndex === -1) {
       throw new Error(
-        'No se encontró la columna de documento de identidad. Asegúrese de que el archivo contenga una columna llamada "Número de documento", "No. Documento" o "Documento".'
+        'No se encontró la columna de documento de identidad. Verifique que el archivo contenga una columna titulada "Número de documento", "No. Documento" o "Documento".'
       );
     }
 
-    // 2. Extraer todos los documentos de las filas siguientes
+    // 2. Extraer todos los documentos de las filas siguientes (alfanuméricos con letras y números)
     const documentsSet = new Set();
     const originalSample = [];
 
@@ -129,7 +217,7 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
       const rawValue = row[docColIndex];
       const normalizedDoc = normalizeDocumentId(rawValue);
 
-      // Descartar celdas vacías, encabezados repetidos o cadenas de menos de 4 caracteres
+      // Descartar celdas vacías o cadenas de menos de 4 caracteres
       if (normalizedDoc && normalizedDoc.length >= 4) {
         if (!documentsSet.has(normalizedDoc)) {
           documentsSet.add(normalizedDoc);
@@ -188,3 +276,4 @@ export function isDocumentEnrolled(inscritosList, inputDoc) {
   const found = inscritosList.includes(normalizedInput);
   return { isEnrolled: found, hasWhitelist: true };
 }
+
