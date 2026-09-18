@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  Camera,
   X,
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
-  User,
   CreditCard,
   Volume2,
   VolumeX,
   RefreshCw,
-  Award,
   Loader2,
   UtensilsCrossed,
   Coffee,
@@ -126,7 +123,6 @@ export default function MealScannerModal({
 
   // Estados de la cámara y escaneo
   const [isLoadingCamera, setIsLoadingCamera] = useState(true);
-  const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [cameraError, setCameraError] = useState('');
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' | 'user'
   const [isScanning, setIsScanning] = useState(true);
@@ -402,7 +398,6 @@ export default function MealScannerModal({
         await videoRef.current.play();
 
         setIsLoadingCamera(false);
-        setHasCameraPermission(true);
         setIsScanning(true);
         startScanLoop();
       }
@@ -417,13 +412,11 @@ export default function MealScannerModal({
           await videoRef.current.play();
 
           setIsLoadingCamera(false);
-          setHasCameraPermission(true);
           setIsScanning(true);
           startScanLoop();
         }
       } catch (finalErr) {
         setIsLoadingCamera(false);
-        setHasCameraPermission(false);
         if (finalErr.name === 'NotAllowedError' || finalErr.name === 'PermissionDeniedError') {
           setCameraError('Permiso denegado. Habilita el acceso a la cámara en los permisos de tu navegador o celular.');
         } else if (finalErr.name === 'NotFoundError' || finalErr.name === 'DevicesNotFoundError') {

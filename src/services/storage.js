@@ -16,8 +16,9 @@ import {
   deleteDoc
 } from './firebase.js';
 import { normalizeDocumentId } from './enrollmentService.js';
+import { getColombiaLocalDateStr } from './networkTime.js';
 
-export { isFirebaseConfigured, normalizeDocumentId };
+export { isFirebaseConfigured, normalizeDocumentId, getColombiaLocalDateStr };
 
 const STORAGE_KEY_EVENTS = 'udea_med_events_v1';
 const STORAGE_KEY_ATTENDANCE = 'udea_med_attendance_v1';
