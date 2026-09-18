@@ -3,9 +3,9 @@ import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, La
 import { getEventDaysList } from '../services/networkTime';
 
 const DEFAULT_MEALS = [
-  { id: 'comida-1', nombre: 'Refrigerio Mañana', horario: '09:30 - 10:30' },
-  { id: 'comida-2', nombre: 'Almuerzo Institucional', horario: '12:30 - 14:00' },
-  { id: 'comida-3', nombre: 'Refrigerio Tarde', horario: '16:00 - 17:00' }
+  { id: 'comida-1', nombre: 'Refrigerio Mañana', horario: '09:30 - 10:30', cantidadTotal: 100 },
+  { id: 'comida-2', nombre: 'Almuerzo Institucional', horario: '12:30 - 14:00', cantidadTotal: 100 },
+  { id: 'comida-3', nombre: 'Refrigerio Tarde', horario: '16:00 - 17:00', cantidadTotal: 100 }
 ];
 
 export default function EventModal({ isOpen, onClose, onSave, initialEvent = null }) {
@@ -148,7 +148,10 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
         ? comidasConfig.filter(c => c.nombre && c.nombre.trim()).map(c => ({
             id: c.id || `comida-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             nombre: c.nombre.trim(),
-            horario: (c.horario || '').trim()
+            horario: (c.horario || '').trim(),
+            cantidadTotal: c.cantidadTotal !== undefined && c.cantidadTotal !== '' && !isNaN(Number(c.cantidadTotal))
+              ? Number(c.cantidadTotal)
+              : null
           }))
         : [],
       microsoftFormsUrl: microsoftFormsUrl.trim(),
@@ -512,7 +515,8 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                       {
                         id: `comida-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
                         nombre: `Refrigerio ${nextNum}`,
-                        horario: '10:00 - 11:00'
+                        horario: '10:00 - 11:00',
+                        cantidadTotal: 100
                       }
                     ]);
                   }}
@@ -522,7 +526,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                 </button>
               </div>
               <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '0 0 0.85rem', lineHeight: 1.35 }}>
-                Define las comidas o refrigerios disponibles. En el escáner administrativo podrás seleccionar cuál comida estás entregando en cada momento.
+                Define las comidas disponibles y la cantidad de raciones contratadas/programadas para llevar control de stock en tiempo real.
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
@@ -537,13 +541,14 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                       border: '1px solid #E2E8F0',
                       borderRadius: '6px',
                       padding: '0.5rem 0.75rem',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                      flexWrap: 'wrap'
                     }}
                   >
                     <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F5938', background: '#E8F5E9', width: '22px', height: '22px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       {idx + 1}
                     </span>
-                    <div style={{ flex: 2 }}>
+                    <div style={{ flex: '2 1 180px' }}>
                       <label style={{ fontSize: '0.72rem', color: '#475569', display: 'block', marginBottom: '2px', fontWeight: 500 }}>
                         Nombre de la Comida / Refrigerio <span style={{ color: '#DC2626' }}>*</span>
                       </label>
@@ -561,7 +566,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                         required
                       />
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: '1.2 1 120px' }}>
                       <label style={{ fontSize: '0.72rem', color: '#475569', display: 'block', marginBottom: '2px', fontWeight: 500 }}>
                         Horario (Opcional)
                       </label>
@@ -576,6 +581,26 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                           updated[idx] = { ...updated[idx], horario: e.target.value };
                           setComidasConfig(updated);
                         }}
+                      />
+                    </div>
+                    <div style={{ flex: '0.9 1 95px' }}>
+                      <label style={{ fontSize: '0.72rem', color: '#0F5938', display: 'block', marginBottom: '2px', fontWeight: 600 }}>
+                        Raciones / Cant. <span style={{ color: '#DC2626' }}>*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="form-input"
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.83rem', fontWeight: 600, color: '#0F5938' }}
+                        placeholder="Ej: 100"
+                        value={comida.cantidadTotal ?? ''}
+                        onChange={(e) => {
+                          const updated = [...comidasConfig];
+                          const val = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+                          updated[idx] = { ...updated[idx], cantidadTotal: isNaN(val) ? '' : val };
+                          setComidasConfig(updated);
+                        }}
+                        required
                       />
                     </div>
                     {comidasConfig.length > 1 && (

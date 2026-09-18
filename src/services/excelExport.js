@@ -137,7 +137,7 @@ export function exportEventDataToExcel({
     { 'Parámetro': 'Fecha del Evento', 'Detalle': `${safeEvento.fecha || 'N/A'} (${safeEvento.horaInicio || 'N/A'} - ${safeEvento.horaFin || 'N/A'})` },
     { 'Parámetro': 'Lugar / Auditorio', 'Detalle': sanitizeExcelFormula(safeEvento.lugar || 'Facultad de Medicina') },
     { 'Parámetro': 'Registro Vehicular Habilitado', 'Detalle': safeEvento.habilitarPlacaVehiculo ? 'SÍ (Parqueadero Activo)' : 'NO' },
-    { 'Parámetro': 'Control de Alimentación / Refrigerios', 'Detalle': safeEvento.habilitarAlimentacion ? `SÍ (${(safeEvento.comidasConfig || []).map(c => c.nombre).join(', ') || 'Activo'})` : 'NO' },
+    { 'Parámetro': 'Control de Alimentación / Refrigerios', 'Detalle': safeEvento.habilitarAlimentacion ? `SÍ (${(safeEvento.comidasConfig || []).map(c => `${c.nombre}${c.cantidadTotal ? ` [${c.cantidadTotal} raciones]` : ''}`).join(', ') || 'Activo'})` : 'NO' },
     { 'Parámetro': 'Total Asistentes Registrados', 'Detalle': safeAsistencias.length },
     { 'Parámetro': 'Asistencias Validadas Presenciales GPS', 'Detalle': safeAsistencias.filter(a => a.geolocalizacion?.esPresencial).length },
     { 'Parámetro': 'Total Entregas de Alimentación', 'Detalle': safeEntregas.length },

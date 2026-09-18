@@ -1222,7 +1222,9 @@ export default function AdminPanel({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
             {(evento.comidasConfig || []).map((comida) => {
               const entregadas = (entregasComidas || []).filter(e => e.eventoId === evento.id && e.comidaId === comida.id).length;
-              const porcentaje = totalAsistentes > 0 ? Math.round((entregadas / totalAsistentes) * 100) : 0;
+              const totalObjetivo = comida.cantidadTotal ? Number(comida.cantidadTotal) : totalAsistentes;
+              const porcentaje = totalObjetivo > 0 ? Math.round((entregadas / totalObjetivo) * 100) : 0;
+              const restantes = Math.max(0, totalObjetivo - entregadas);
               const isSelected = mealFilterId === comida.id;
               return (
                 <div
@@ -1242,17 +1244,26 @@ export default function AdminPanel({
                     <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1E293B' }}>{comida.nombre}</span>
                     <UtensilsCrossed size={15} color={isSelected ? '#006633' : '#94A3B8'} />
                   </div>
-                  {comida.horario && (
-                    <span style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '0.5rem' }}>
-                      <Clock size={11} /> {comida.horario}
-                    </span>
-                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '4px' }}>
+                    {comida.horario && (
+                      <span style={{ fontSize: '0.73rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        <Clock size={11} /> {comida.horario}
+                      </span>
+                    )}
+                    {comida.cantidadTotal ? (
+                      <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0F5938', background: '#E8F5E9', padding: '1px 6px', borderRadius: '4px' }}>
+                        {comida.cantidadTotal} raciones
+                      </span>
+                    ) : null}
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '0.4rem' }}>
                     <strong style={{ fontSize: '1.2rem', color: '#0F5938' }}>{entregadas}</strong>
-                    <span style={{ fontSize: '0.75rem', color: '#64748B' }}>de {totalAsistentes} ({porcentaje}%)</span>
+                    <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                      de {totalObjetivo} ({porcentaje}%) • {restantes} rest.
+                    </span>
                   </div>
                   <div style={{ background: '#E2E8F0', height: '5px', borderRadius: '3px', marginTop: '0.4rem', overflow: 'hidden' }}>
-                    <div style={{ background: '#006633', height: '100%', width: `${Math.min(100, porcentaje)}%`, transition: 'width 0.3s' }}></div>
+                    <div style={{ background: porcentaje >= 100 ? '#DC2626' : '#006633', height: '100%', width: `${Math.min(100, porcentaje)}%`, transition: 'width 0.3s' }}></div>
                   </div>
                 </div>
               );

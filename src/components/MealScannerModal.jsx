@@ -118,8 +118,10 @@ export default function MealScannerModal({
       e => e.eventoId === eventoActual?.id && e.comidaId === selectedMeal?.id
     ).length;
     const totalAsistentes = asistencias.filter(a => a.eventoId === eventoActual?.id).length;
-    return { entregadas, totalAsistentes };
-  }, [entregasComidas, eventoActual?.id, selectedMeal?.id, asistencias]);
+    const totalProgramado = selectedMeal?.cantidadTotal ? Number(selectedMeal.cantidadTotal) : totalAsistentes;
+    const pendientes = Math.max(0, totalProgramado - entregadas);
+    return { entregadas, totalAsistentes, totalProgramado, pendientes };
+  }, [entregasComidas, eventoActual?.id, selectedMeal, asistencias]);
 
   // Estados de la cámara y escaneo
   const [isLoadingCamera, setIsLoadingCamera] = useState(true);
@@ -197,7 +199,7 @@ export default function MealScannerModal({
       });
 
       if (autoResume) {
-        setAutoResumeCountdown(4);
+        setAutoResumeCountdown(7);
       }
       return;
     }
@@ -234,7 +236,7 @@ export default function MealScannerModal({
       if (onDataUpdated) onDataUpdated();
 
       if (autoResume) {
-        setAutoResumeCountdown(3);
+        setAutoResumeCountdown(7);
       }
     } else {
       if (soundEnabled) playPopSound(false);
@@ -248,7 +250,7 @@ export default function MealScannerModal({
       });
 
       if (autoResume) {
-        setAutoResumeCountdown(4);
+        setAutoResumeCountdown(7);
       }
     }
   }, [eventoActual?.id, selectedMeal, soundEnabled, autoResume, onDataUpdated]);
@@ -315,7 +317,7 @@ export default function MealScannerModal({
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
       if (autoResume) {
-        setAutoResumeCountdown(4);
+        setAutoResumeCountdown(7);
       }
     }
   }, [asistencias, eventoActual?.id, processMealDelivery, soundEnabled, autoResume]);
@@ -495,7 +497,7 @@ export default function MealScannerModal({
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
       if (autoResume) {
-        setAutoResumeCountdown(4);
+        setAutoResumeCountdown(7);
       }
     }
 
@@ -550,7 +552,9 @@ export default function MealScannerModal({
                 >
                   <span className="meal-chip-name">{comida.nombre}</span>
                   {comida.horario && <span className="meal-chip-time">{comida.horario}</span>}
-                  <span className="meal-chip-badge">{deliveredCount} entregados</span>
+                  <span className="meal-chip-badge">
+                    {deliveredCount}{comida.cantidadTotal ? ` / ${comida.cantidadTotal}` : ''} entregados
+                  </span>
                 </button>
               );
             })}
@@ -564,15 +568,17 @@ export default function MealScannerModal({
             <strong className="meal-kpi-val" style={{ color: '#006633' }}>{selectedMeal?.nombre}</strong>
           </div>
           <div className="meal-kpi-item">
-            <span className="meal-kpi-sub">Raciones Entregadas:</span>
+            <span className="meal-kpi-sub">
+              {selectedMeal?.cantidadTotal ? 'Raciones Contratadas:' : 'Asistentes del Evento:'}
+            </span>
             <strong className="meal-kpi-val">
-              {conteoComidaActual.entregadas} / {conteoComidaActual.totalAsistentes}
+              {conteoComidaActual.entregadas} / {conteoComidaActual.totalProgramado}
             </strong>
           </div>
           <div className="meal-kpi-item">
-            <span className="meal-kpi-sub">Pendientes:</span>
-            <strong className="meal-kpi-val" style={{ color: '#D97706' }}>
-              {Math.max(0, conteoComidaActual.totalAsistentes - conteoComidaActual.entregadas)}
+            <span className="meal-kpi-sub">Raciones Restantes:</span>
+            <strong className="meal-kpi-val" style={{ color: conteoComidaActual.pendientes === 0 ? '#DC2626' : '#D97706' }}>
+              {conteoComidaActual.pendientes}
             </strong>
           </div>
         </div>
