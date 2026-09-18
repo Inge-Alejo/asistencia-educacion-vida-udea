@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Trash2, Search, FileText } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Trash2, Search, FileText, UserPlus, PlusCircle } from 'lucide-react';
 import { parseEnrollmentFile, normalizeDocumentId } from '../services/enrollmentService';
 import { saveEventInscritos, getEventInscritosData, deleteEventInscritos } from '../services/storage';
 
@@ -13,6 +13,8 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
   const [errorMessage, setErrorMessage] = useState('');
   const [searchDocTest, setSearchDocTest] = useState('');
   const [testResult, setTestResult] = useState(null);
+  const [manualDocInput, setManualDocInput] = useState('');
+  const [manualSuccessMsg, setManualSuccessMsg] = useState('');
 
   if (evento?.id !== prevEventId) {
     setPrevEventId(evento?.id);
@@ -21,6 +23,8 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
     setErrorMessage('');
     setSearchDocTest('');
     setTestResult(null);
+    setManualDocInput('');
+    setManualSuccessMsg('');
   }
 
   if (!isOpen) return null;
@@ -87,8 +91,79 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
     const exists = docs.includes(cleanTest);
     setTestResult({
       doc: cleanTest,
-      found: exists
+      found: exists,
+      justAdded: false
     });
+  };
+
+  const handleAddManualDoc = async (rawInput) => {
+    const textToProcess = typeof rawInput === 'string' ? rawInput : manualDocInput;
+    if (!textToProcess || !textToProcess.trim() || !evento?.id) return;
+
+    // Extraer y normalizar documentos separados por comas, espacios, punto y coma o saltos de línea
+    const tokens = textToProcess.split(/[\s,;]+/);
+    const validTokens = [];
+    for (const t of tokens) {
+      const norm = normalizeDocumentId(t);
+      if (norm && norm.length >= 4 && norm.length <= 20) {
+        validTokens.push(norm);
+      }
+    }
+
+    if (validTokens.length === 0) {
+      setErrorMessage('Por favor ingrese al menos un número de documento válido (4 a 20 caracteres alfanuméricos).');
+      return;
+    }
+
+    setIsProcessing(true);
+    setErrorMessage('');
+    setManualSuccessMsg('');
+
+    const existingDocs = currentInscritosData?.documents || [];
+    const docsSet = new Set(existingDocs);
+    let addedCount = 0;
+
+    for (const doc of validTokens) {
+      if (!docsSet.has(doc)) {
+        docsSet.add(doc);
+        addedCount++;
+      }
+    }
+
+    const updatedDocsList = Array.from(docsSet);
+
+    const payload = {
+      eventoId: evento.id,
+      documents: updatedDocsList,
+      count: updatedDocsList.length,
+      fileName: currentInscritosData?.fileName || 'Registro Manual Administrativo',
+      detectedColumn: currentInscritosData?.detectedColumn || 'Ingreso Manual',
+      sample: updatedDocsList.slice(0, 10),
+      actualizadoEn: new Date().toISOString()
+    };
+
+    const saveRes = await saveEventInscritos(evento.id, payload);
+    setIsProcessing(false);
+
+    if (saveRes.success) {
+      setCurrentInscritosData(saveRes.payload);
+      setManualDocInput('');
+      setManualSuccessMsg(
+        addedCount > 0
+          ? `✓ Se ${addedCount === 1 ? 'agregó 1 documento' : `agregaron ${addedCount} documentos`} exitosamente a la lista oficial.`
+          : `El documento ya se encontraba previamente en la lista oficial.`
+      );
+      if (typeof rawInput === 'string') {
+        setTestResult({
+          doc: validTokens[0],
+          found: true,
+          justAdded: true
+        });
+      }
+      if (onInscritosUpdated) onInscritosUpdated();
+    } else {
+      setErrorMessage('Error al guardar el documento en la base de datos.');
+    }
   };
 
   return (
@@ -175,20 +250,79 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
               {testResult && (
                 <div className={`test-result-badge ${testResult.found ? 'success' : 'not-found'}`}>
                   {testResult.found ? (
-                    <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                       <CheckCircle2 size={16} />
-                      <span>✓ El documento <strong>{testResult.doc}</strong> SÍ figura como inscrito oficial.</span>
-                    </>
+                      <span>
+                        {testResult.justAdded
+                          ? <>✓ Documento <strong>{testResult.doc}</strong> habilitado e inscrito exitosamente.</>
+                          : <>✓ El documento <strong>{testResult.doc}</strong> SÍ figura como inscrito oficial.</>}
+                      </span>
+                    </div>
                   ) : (
-                    <>
-                      <AlertTriangle size={16} />
-                      <span>✗ El documento <strong>{testResult.doc}</strong> NO se encuentra en la lista de este evento.</span>
-                    </>
+                    <div className="test-not-found-row">
+                      <div className="test-not-found-text">
+                        <AlertTriangle size={16} />
+                        <span>✗ El documento <strong>{testResult.doc}</strong> NO se encuentra en la lista de este evento.</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-add-quick-doc"
+                        onClick={() => handleAddManualDoc(testResult.doc)}
+                        disabled={isProcessing}
+                        title="Habilitar este documento de inmediato para que la persona pueda registrarse"
+                      >
+                        <UserPlus size={14} />
+                        <span>Habilitar e Inscribir Manualmente</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
             </div>
           )}
+
+          {/* Sección para Agregar Documento Manual a la Lista Oficial */}
+          <div className="manual-add-section">
+            <label className="manual-add-title">
+              <UserPlus size={15} color="#0F5938" />
+              <span>Inscripción Manual de Asistentes</span>
+            </label>
+            <p className="manual-add-desc">
+              Si una persona no figura en el archivo suministrado o se inscribió a última hora, ingresa su documento aquí para habilitarlo en la lista oficial de este evento:
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAddManualDoc();
+              }}
+              className="manual-add-row"
+            >
+              <input
+                type="text"
+                className="form-input manual-add-input"
+                placeholder="Ej: 1037654321, A77610967 (puedes ingresar varios separados por coma)..."
+                value={manualDocInput}
+                onChange={(e) => {
+                  setManualDocInput(e.target.value);
+                  setManualSuccessMsg('');
+                }}
+              />
+              <button
+                type="submit"
+                className="btn-add-manual-submit"
+                disabled={isProcessing || !manualDocInput.trim()}
+              >
+                <PlusCircle size={15} />
+                <span>Agregar a la Lista</span>
+              </button>
+            </form>
+            {manualSuccessMsg && (
+              <div className="manual-success-badge animated-step">
+                <CheckCircle2 size={15} color="#15803D" />
+                <span>{manualSuccessMsg}</span>
+              </div>
+            )}
+          </div>
 
           {/* Zona de Subida de Archivo (Drag & Drop) */}
           <div

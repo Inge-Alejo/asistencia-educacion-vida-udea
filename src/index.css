@@ -7013,6 +7013,133 @@ input:checked + .slider::before {
   border: 1px solid #FCA5A5;
 }
 
+.test-not-found-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.test-not-found-text {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1;
+}
+
+.btn-add-quick-doc {
+  background: #0F5938;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.35rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-add-quick-doc:hover {
+  background: #0A3D26;
+  transform: translateY(-1px);
+}
+
+/* Sección de Inscripción Manual */
+.manual-add-section {
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.manual-add-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0F5938;
+  margin: 0;
+}
+
+.manual-add-desc {
+  font-size: 0.8rem;
+  color: #475569;
+  margin: 0 0 0.4rem;
+  line-height: 1.4;
+}
+
+.manual-add-row {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.manual-add-input {
+  flex: 1;
+  min-width: 240px;
+  padding: 0.55rem 0.85rem;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.manual-add-input:focus {
+  border-color: #0F5938;
+  box-shadow: 0 0 0 3px rgba(15, 89, 56, 0.12);
+}
+
+.btn-add-manual-submit {
+  background: #0F5938;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 1.15rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-add-manual-submit:hover:not(:disabled) {
+  background: #0A3D26;
+  transform: translateY(-1px);
+}
+
+.btn-add-manual-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.manual-success-badge {
+  background: #DCFCE7;
+  border: 1px solid #86EFAC;
+  color: #15803D;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.5rem 0.85rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.4rem;
+}
+
 /* Pie de modal */
 .modal-footer {
   display: flex !important;
