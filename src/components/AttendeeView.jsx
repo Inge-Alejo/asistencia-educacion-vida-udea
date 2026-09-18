@@ -411,11 +411,17 @@ export default function AttendeeView({
   // Función de captura de Geolocalización GPS precisa
   const handleObtenerUbicacion = () => {
     if (!navigator.geolocation) {
-      setGeoState(prev => ({
-        ...prev,
-        error: 'Su navegador no soporta geolocalización GPS.',
-        cargando: false
-      }));
+      setGeoState({
+        cargando: false,
+        obtenida: false,
+        error: 'Su navegador o dispositivo no soporta geolocalización GPS.',
+        latitud: null,
+        longitud: null,
+        precision: null,
+        distancia: null,
+        esPresencial: false,
+        origenSenal: null
+      });
       setMaxUnlockedStep(prev => Math.max(prev, 2));
       return;
     }
@@ -455,23 +461,30 @@ export default function AttendeeView({
         setActiveStep(2);
       },
       (err) => {
-        let msg = 'No se pudo obtener la ubicación. Verifique los permisos en su celular.';
-        if (err.code === 1) msg = 'Permiso de ubicación denegado en su navegador.';
-        if (err.code === 2) msg = 'Señal GPS no disponible.';
-        if (err.code === 3) msg = 'Tiempo de espera de GPS agotado.';
+        let msg = 'No se pudo obtener la ubicación satelital. Verifique los permisos en su celular.';
+        if (err.code === 1) {
+          msg = 'Permiso de ubicación denegado en su navegador. Si desea certificar asistencia presencial, active el permiso en el icono de candado 🔒 de la barra de direcciones y pulse "Reintentar", o continúe hacia el formulario como Asistencia Remota.';
+        } else if (err.code === 2) {
+          msg = 'Señal GPS no disponible en este momento. Puede reintentar o continuar.';
+        } else if (err.code === 3) {
+          msg = 'Tiempo de espera de GPS agotado. Puede reintentar la captura.';
+        }
 
-        setGeoState(prev => ({
-          ...prev,
+        setGeoState({
           cargando: false,
           error: msg,
-          obtenida: true,
+          obtenida: false, // Asegurar que NO se marque como obtenida si falló
+          latitud: null,
+          longitud: null,
+          precision: null,
+          distancia: null,
           esPresencial: false,
-          distancia: null
-        }));
+          origenSenal: null
+        });
 
         setMaxUnlockedStep(prev => Math.max(prev, 2));
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
   };
 
@@ -833,11 +846,13 @@ export default function AttendeeView({
                   {geoState.obtenida
                     ? (geoState.esPresencial
                         ? `Ubicación satelital confirmada: Estás a ${geoState.distancia} metros del Auditorio de la Facultad de Medicina.`
-                        : `Coordenadas registradas: Estás a ${geoState.distancia ? `${geoState.distancia} metros` : 'distancia'} de la Facultad de Medicina.`)
+                        : `Coordenadas registradas: Estás a ${geoState.distancia != null ? `${geoState.distancia} metros` : 'distancia no calculada'} de la Facultad de Medicina.`)
+                    : geoState.error
+                    ? 'Ocurrió un inconveniente con el permiso o la señal GPS. Puedes pulsar "Reintentar", usar el Modo Demostración o continuar al registro como Asistencia Remota.'
                     : 'Presione el botón para obtener la ubicación satelital precisa de su dispositivo.'}
                 </p>
 
-                {geoState.obtenida && (
+                {geoState.obtenida && geoState.distancia != null && (
                   <div className="geo-tech-specs">
                     <span><strong>Fuente de señal:</strong> {geoState.origenSenal || 'Sensor GPS'}</span>
                     <span><strong>Margen de precisión:</strong> ±{geoState.precision || 15} metros</span>
@@ -856,8 +871,8 @@ export default function AttendeeView({
                     onClick={handleObtenerUbicacion}
                     disabled={geoState.cargando}
                   >
-                    <Radio size={16} />
-                    <span>{geoState.cargando ? 'Conectando con Satélites GPS...' : 'Obtener Ubicación Satelital Precisa'}</span>
+                    {geoState.error ? <RotateCcw size={16} /> : <Radio size={16} />}
+                    <span>{geoState.cargando ? 'Conectando con Satélites GPS...' : geoState.error ? 'Reintentar Obtener Ubicación GPS' : 'Obtener Ubicación Satelital Precisa'}</span>
                   </button>
                   <button
                     type="button"
@@ -877,9 +892,20 @@ export default function AttendeeView({
                     type="button"
                     className="btn-re-scan"
                     onClick={handleObtenerUbicacion}
+                    disabled={geoState.cargando}
+                    title="Volver a escanear señal GPS"
                   >
                     <RotateCcw size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                    <span>Re-escanear GPS</span>
+                    <span>{geoState.cargando ? 'Escaneando...' : 'Re-escanear GPS'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-change-participant-mini"
+                    style={{ marginTop: '0.35rem' }}
+                    onClick={handleSimularEnSede}
+                    title="Cambiar a En Sede para pruebas"
+                  >
+                    Probar en Sede
                   </button>
                 </div>
               )}
@@ -902,25 +928,27 @@ export default function AttendeeView({
 
             <div className="geo-radar-divider">
               <div className="radar-distance-pill">
-                {geoState.obtenida ? `${geoState.distancia} m` : '---'}
+                {geoState.obtenida && geoState.distancia != null ? `${geoState.distancia} m` : '---'}
               </div>
             </div>
 
             <div className="geo-radar-col">
               <div className="radar-col-header">
                 <span className={`radar-badge ${geoState.obtenida ? (geoState.esPresencial ? 'presencial' : 'remoto') : 'neutral'}`}>
-                  {geoState.obtenida ? (geoState.esPresencial ? 'En Auditorio' : 'Remoto') : 'Por Escanear'}
+                  {geoState.obtenida ? (geoState.esPresencial ? 'En Auditorio' : 'Remoto') : (geoState.error ? 'No Obtenida' : 'Por Escanear')}
                 </span>
                 <strong>Tu Dispositivo</strong>
               </div>
               <p className="radar-col-sub">
                 {geoState.obtenida
                   ? (geoState.origenSenal || 'Sensor GPS Móvil')
+                  : geoState.error
+                  ? 'Captura no realizada o permiso denegado'
                   : 'Presione "Obtener Ubicación Satelital"'}
               </p>
               <div className="radar-specs-list">
-                <span><strong>Margen:</strong> {geoState.precision ? `±${geoState.precision} m` : 'No capturado'}</span>
-                <span><strong>Estado:</strong> {geoState.obtenida ? (geoState.esPresencial ? 'Validado en Sede' : 'Registrado como Remoto') : 'Pendiente'}</span>
+                <span><strong>Margen:</strong> {geoState.obtenida && geoState.precision ? `±${geoState.precision} m` : 'No capturado'}</span>
+                <span><strong>Estado:</strong> {geoState.obtenida ? (geoState.esPresencial ? 'Validado en Sede' : 'Registrado como Remoto') : (geoState.error ? 'Sin permiso / señal' : 'Pendiente')}</span>
               </div>
             </div>
           </div>
