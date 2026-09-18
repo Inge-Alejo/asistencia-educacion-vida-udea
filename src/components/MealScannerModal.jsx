@@ -142,6 +142,25 @@ export default function MealScannerModal({
   const [showManualInput, setShowManualInput] = useState(false);
 
   // Detener cámara
+  // Sincronizar referencias actualizadas para callbacks estables sin recreaciones
+  const asistenciasRef = useRef(asistencias);
+  const eventoActualRef = useRef(eventoActual);
+  const selectedMealRef = useRef(selectedMeal);
+  const autoResumeRef = useRef(autoResume);
+  const soundEnabledRef = useRef(soundEnabled);
+  const onDataUpdatedRef = useRef(onDataUpdated);
+  const wasOpenRef = useRef(false);
+
+  useEffect(() => {
+    asistenciasRef.current = asistencias;
+    eventoActualRef.current = eventoActual;
+    selectedMealRef.current = selectedMeal;
+    autoResumeRef.current = autoResume;
+    soundEnabledRef.current = soundEnabled;
+    onDataUpdatedRef.current = onDataUpdated;
+  }, [asistencias, eventoActual, selectedMeal, autoResume, soundEnabled, onDataUpdated]);
+
+  // Detener cámara
   const stopCamera = useCallback(() => {
     if (animFrameIdRef.current) {
       cancelAnimationFrame(animFrameIdRef.current);
@@ -160,31 +179,38 @@ export default function MealScannerModal({
 
   // Procesar entrega de comida para un participante
   const processMealDelivery = useCallback(async (attendee, compId = null, method = 'QR_CAMERA') => {
+    const currentEvent = eventoActualRef.current;
+    const currentMeal = selectedMealRef.current;
+    const currentSound = soundEnabledRef.current;
+    const currentAutoResume = autoResumeRef.current;
+
     if (!attendee || !attendee.documento) {
       setScanResult({
         status: 'NOT_FOUND',
         message: 'No se encontraron datos válidos del participante.',
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
-      if (soundEnabled) playPopSound(false);
+      if (currentSound) playPopSound(false);
+      if (currentAutoResume) setAutoResumeCountdown(7);
       return;
     }
 
-    if (!selectedMeal) {
+    if (!currentMeal) {
       setScanResult({
         status: 'ERROR',
         message: 'No hay ninguna comida seleccionada para entregar.',
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
-      if (soundEnabled) playPopSound(false);
+      if (currentSound) playPopSound(false);
+      if (currentAutoResume) setAutoResumeCountdown(7);
       return;
     }
 
     // 1. Verificación directa contra Cloud Firestore y caché local para detectar si YA fue reclamado
-    const check = await checkMealAlreadyClaimed(eventoActual.id, selectedMeal.id, attendee.documento);
+    const check = await checkMealAlreadyClaimed(currentEvent?.id, currentMeal.id, attendee.documento);
 
     if (check.claimed) {
-      if (soundEnabled) playPopSound(false);
+      if (currentSound) playPopSound(false);
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         try { navigator.vibrate([180, 80, 180]); } catch {}
       }
@@ -192,13 +218,13 @@ export default function MealScannerModal({
       setScanResult({
         status: 'ALREADY_CLAIMED',
         attendee,
-        meal: selectedMeal,
+        meal: currentMeal,
         previousClaim: check.record,
         message: `Este beneficio ya fue entregado a este participante.`,
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
 
-      if (autoResume) {
+      if (currentAutoResume) {
         setAutoResumeCountdown(7);
       }
       return;
@@ -206,9 +232,9 @@ export default function MealScannerModal({
 
     // 2. Si no ha sido reclamado, registrar en Cloud Firestore y caché local
     const saveRes = await recordMealDelivery({
-      eventoId: eventoActual.id,
-      comidaId: selectedMeal.id,
-      comidaNombre: selectedMeal.nombre,
+      eventoId: currentEvent?.id,
+      comidaId: currentMeal.id,
+      comidaNombre: currentMeal.nombre,
       documento: attendee.documento,
       nombreCompleto: attendee.nombreCompleto || 'Participante Acreditado',
       tipoDocumento: attendee.tipoDocumento || 'CC',
@@ -219,7 +245,7 @@ export default function MealScannerModal({
     });
 
     if (saveRes.success) {
-      if (soundEnabled) playPopSound(true);
+      if (currentSound) playPopSound(true);
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         try { navigator.vibrate([60, 40, 60]); } catch {}
       }
@@ -227,33 +253,40 @@ export default function MealScannerModal({
       setScanResult({
         status: 'SUCCESS',
         attendee,
-        meal: selectedMeal,
+        meal: currentMeal,
         delivery: saveRes.record,
-        message: `¡${selectedMeal.nombre} entregado exitosamente!`,
+        message: `¡${currentMeal.nombre} entregado exitosamente!`,
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
 
-      if (onDataUpdated) onDataUpdated();
-
-      if (autoResume) {
+      if (currentAutoResume) {
         setAutoResumeCountdown(7);
       }
+
+      // Notificar al componente padre de forma asíncrona para que actualice métricas
+      if (onDataUpdatedRef.current) {
+        try {
+          onDataUpdatedRef.current();
+        } catch (e) {
+          console.warn('Error notificando onDataUpdated:', e);
+        }
+      }
     } else {
-      if (soundEnabled) playPopSound(false);
+      if (currentSound) playPopSound(false);
       setScanResult({
         status: saveRes.alreadyClaimed ? 'ALREADY_CLAIMED' : 'ERROR',
         attendee,
-        meal: selectedMeal,
+        meal: currentMeal,
         previousClaim: saveRes.record,
         message: saveRes.message || 'Error al registrar la entrega de la comida.',
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
 
-      if (autoResume) {
+      if (currentAutoResume) {
         setAutoResumeCountdown(7);
       }
     }
-  }, [eventoActual?.id, selectedMeal, soundEnabled, autoResume, onDataUpdated]);
+  }, []);
 
   // Manejar decodificación del código QR
   const handleDecodedQR = useCallback(async (rawText) => {
@@ -287,8 +320,11 @@ export default function MealScannerModal({
 
       // 1. Buscar primero en la lista de asistencias del evento en memoria
       const cleanCompId = compId.trim();
-      let foundAttendee = asistencias.find(
-        a => a.eventoId === eventoActual?.id && (
+      const currentList = asistenciasRef.current || [];
+      const currentEvId = eventoActualRef.current?.id;
+
+      let foundAttendee = currentList.find(
+        a => a.eventoId === currentEvId && (
           a.id === cleanCompId ||
           normalizeDocumentId(a.documento) === normalizeDocumentId(cleanCompId)
         )
@@ -310,17 +346,17 @@ export default function MealScannerModal({
       await processMealDelivery(foundAttendee, cleanCompId, 'QR_CAMERA');
 
     } catch (err) {
-      if (soundEnabled) playPopSound(false);
+      if (soundEnabledRef.current) playPopSound(false);
       setScanResult({
         status: 'NOT_FOUND',
         message: err.message || 'Error al validar el código QR escaneado.',
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
-      if (autoResume) {
+      if (autoResumeRef.current) {
         setAutoResumeCountdown(7);
       }
     }
-  }, [asistencias, eventoActual?.id, processMealDelivery, soundEnabled, autoResume]);
+  }, [processMealDelivery]);
 
   // Bucle de lectura de fotogramas del canvas
   const startScanLoop = useCallback(() => {
@@ -435,10 +471,14 @@ export default function MealScannerModal({
     setAutoResumeCountdown(null);
     setScanResult(null);
     setIsScanning(true);
-    startScanLoop();
-  }, [startScanLoop]);
+    if (streamRef.current && videoRef.current) {
+      startScanLoop();
+    } else {
+      startCamera();
+    }
+  }, [startCamera, startScanLoop]);
 
-  // Manejar cuenta regresiva de auto-resume
+  // Manejar cuenta regresiva de auto-resume (7 segundos)
   useEffect(() => {
     if (autoResumeCountdown === null) return;
     if (autoResumeCountdown <= 0) {
@@ -456,17 +496,23 @@ export default function MealScannerModal({
   // Control del ciclo de vida de la cámara al abrir o cerrar el modal
   useEffect(() => {
     if (isOpen) {
-      setScanResult(null);
-      setAutoResumeCountdown(null);
+      // Solo resetear scanResult y countdown si el modal pasa de cerrado a abierto
+      if (!wasOpenRef.current) {
+        setScanResult(null);
+        setAutoResumeCountdown(null);
+      }
       startCamera();
     } else {
       stopCamera();
+      setScanResult(null);
+      setAutoResumeCountdown(null);
     }
+    wasOpenRef.current = isOpen;
 
     return () => {
       stopCamera();
     };
-  }, [isOpen, startCamera, stopCamera]);
+  }, [isOpen, facingMode, startCamera, stopCamera]);
 
   // Cambiar cámara frontal / trasera
   const handleToggleFacingMode = () => {
@@ -481,22 +527,24 @@ export default function MealScannerModal({
 
     setManualProcessing(true);
 
-    // Buscar en asistencias del evento
-    const attendee = asistencias.find(
-      a => a.eventoId === eventoActual?.id && normalizeDocumentId(a.documento) === cleanDoc
+    // Buscar en asistencias del evento usando referencia fresca
+    const currentList = asistenciasRef.current || [];
+    const currentEvId = eventoActualRef.current?.id;
+    const attendee = currentList.find(
+      a => a.eventoId === currentEvId && normalizeDocumentId(a.documento) === cleanDoc
     );
 
     if (attendee) {
       await processMealDelivery(attendee, null, 'MANUAL');
       setManualDocInput('');
     } else {
-      if (soundEnabled) playPopSound(false);
+      if (soundEnabledRef.current) playPopSound(false);
       setScanResult({
         status: 'NOT_FOUND',
         message: `El documento ${cleanDoc} no figura como asistente registrado en este evento.`,
         scannedAt: new Date().toLocaleTimeString('es-CO')
       });
-      if (autoResume) {
+      if (autoResumeRef.current) {
         setAutoResumeCountdown(7);
       }
     }
