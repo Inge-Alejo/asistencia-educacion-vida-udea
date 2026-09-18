@@ -1421,7 +1421,32 @@ export default function AttendeeView({
           PASO 3: PREGUNTAS A PONENTES EN VIVO (LIVE Q&A)
           ========================================================================= */}
       {activeStep === 3 && (
-        <section className="attendee-card-module animated-step">
+        <>
+          {/* ACCESO DESTACADO A LA ESCARAPELA DIGITAL (Debajo de las 5 etapas y arriba de las preguntas) */}
+          <div className="step-badge-banner-cta animated-step">
+            <div className="step-badge-banner-content">
+              <div className="step-badge-icon-wrap">
+                <Award size={26} />
+              </div>
+              <div className="step-badge-text-wrap">
+                <h3 className="step-badge-title">Mi Escarapela Digital Oficial UdeA</h3>
+                <p className="step-badge-sub">
+                  Presenta tu código QR institucional y comprobante de asistencia confirmada en cualquier momento.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-open-badge-glow pulse"
+              onClick={() => setIsBadgeModalOpen(true)}
+              title="Ver mi escarapela digital oficial con código QR"
+            >
+              <Award size={18} />
+              <span>Ver Mi Escarapela Digital</span>
+            </button>
+          </div>
+
+          <section className="attendee-card-module animated-step">
           <div className="module-header">
             <div className="module-icon-wrap questions-icon">
               <HelpCircle size={22} />
@@ -1540,7 +1565,8 @@ export default function AttendeeView({
             </button>
           </div>
         </section>
-      )}
+      </>
+    )}
 
       {/* =========================================================================
           PASO 4: CALIFICACIÓN DINÁMICA DE PONENTES

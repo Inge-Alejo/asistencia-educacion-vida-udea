@@ -7439,4 +7439,76 @@ input:checked + .slider::before {
   pointer-events: none;
 }
 
+/* =========================================================================
+   BANNER DESTACADO DE ESCARAPELA DIGITAL EN PASO 3
+   ========================================================================= */
+.step-badge-banner-cta {
+  background: linear-gradient(135deg, #0F5938 0%, #083D24 100%);
+  border: 2px solid #C59B27;
+  border-radius: 14px;
+  padding: 1.15rem 1.4rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  box-shadow: 0 8px 24px rgba(15, 89, 56, 0.22);
+  color: #FFFFFF;
+}
+
+.step-badge-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.step-badge-icon-wrap {
+  width: 48px;
+  height: 48px;
+  background: rgba(197, 155, 39, 0.2);
+  border: 1.5px solid #C59B27;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FBBF24;
+  flex-shrink: 0;
+}
+
+.step-badge-title {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.01em;
+}
+
+.step-badge-sub {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #D1FAE5;
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .step-badge-banner-cta {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    gap: 1rem;
+    padding: 1.1rem 1rem;
+  }
+
+  .step-badge-banner-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.6rem;
+  }
+
+  .step-badge-banner-cta .btn-open-badge-glow {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
 
