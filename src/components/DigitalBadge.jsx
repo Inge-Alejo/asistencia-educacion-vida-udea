@@ -378,7 +378,7 @@ export default function DigitalBadge({
           <div className="badge-modal-header no-print">
             <div className="badge-modal-title">
               <ShieldCheck size={20} className="shield-green" />
-              <span>Pase Digital Oficial UdeA</span>
+              <span>Escarapela Digital</span>
             </div>
             <button className="btn-close-modal" onClick={onClose} aria-label="Cerrar credencial">
               <X size={20} />

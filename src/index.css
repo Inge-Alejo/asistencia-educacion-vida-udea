@@ -7490,6 +7490,52 @@ input:checked + .slider::before {
   line-height: 1.4;
 }
 
+.step-badge-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.btn-nuevo-registro-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  padding: 0.65rem 1rem;
+  border-radius: 9px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-nuevo-registro-banner:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: #FFFFFF;
+  transform: translateY(-1px);
+}
+
+.stepper-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.btn-nuevo-registro-footer {
+  color: #0F5938 !important;
+  border-color: #A7F3D0 !important;
+  background: #F0FDF4 !important;
+}
+
+.btn-nuevo-registro-footer:hover {
+  background: #DCFCE7 !important;
+  border-color: #0F5938 !important;
+}
+
 @media (max-width: 768px) {
   .step-badge-banner-cta {
     flex-direction: column;
@@ -7505,10 +7551,29 @@ input:checked + .slider::before {
     gap: 0.6rem;
   }
 
-  .step-badge-banner-cta .btn-open-badge-glow {
+  .step-badge-banner-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.6rem;
+  }
+
+  .step-badge-banner-cta .btn-open-badge-glow,
+  .btn-nuevo-registro-banner {
     justify-content: center;
     width: 100%;
   }
+
+  .stepper-left-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .stepper-left-actions button {
+    width: 100%;
+    justify-content: center;
+  }
 }
+
 
 

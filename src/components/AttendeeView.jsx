@@ -4,7 +4,7 @@ import {
   MapPin, CheckCircle2, AlertTriangle, Send, Star, Car, User, Mail,
   Phone, CreditCard, MessageSquare, ThumbsUp, HelpCircle,
   Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check,
-  Navigation, Radio, Award, Calendar, KeyRound, RotateCcw
+  Navigation, Radio, Award, Calendar, KeyRound, RotateCcw, UserPlus
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import {
@@ -243,6 +243,36 @@ export default function AttendeeView({
     } catch {}
   };
 
+  // Función para realizar un nuevo registro desde el paso 3 o cabecera
+  const handleNuevoRegistro = () => {
+    const confirm = window.confirm(
+      '¿Deseas realizar un nuevo registro de asistencia? Se cerrará la sesión actual en este dispositivo para permitir el registro de otro participante o documento.'
+    );
+    if (!confirm) return;
+
+    setVerifiedDoc(null);
+    setChallengeEmail('');
+    setChallengeError('');
+    setFormData({
+      tipoDocumento: 'CC',
+      documento: '',
+      nombreCompleto: '',
+      correo: '',
+      telefono: '',
+      vinculacion: 'Estudiante Pregrado Medicina UdeA',
+      placaVehiculo: '',
+      habeasDataAceptado: false
+    });
+    setAsistenciaRegistrada(false);
+    setCodigoComprobante('');
+    setErrorAsistencia('');
+    try {
+      localStorage.removeItem(`udea_session_attendee_${evento?.id}`);
+    } catch {}
+    setMaxUnlockedStep(1);
+    setActiveStep(1);
+  };
+
   // Asistencia específica para la fecha o sesión de hoy
   const hoyStr = officialTime.fechaStr || getColombiaLocalDateStr();
   const asistenciaHoy = useMemo(() => {
@@ -264,29 +294,17 @@ export default function AttendeeView({
     return Boolean(sessionInfo.registrado);
   });
 
-  // Estado consolidado de si este participante ya completó el registro de asistencia oficial
+  // Estado consolidado de si este participante ya completó el registro de asistencia oficial en este dispositivo
   const isRegisteredForEvent = useMemo(() => {
     if (asistenciaRegistrada) return true;
     if (sessionInfo?.registrado) {
       if (evento?.esMultidia) {
-        return sessionInfo.fechaDia === hoyStr || yaRegistroHoy;
+        return sessionInfo.fechaDia === hoyStr;
       }
       return true;
     }
-    if (yaRegistroHoy) return true;
-    if (misAsistenciasEvento.length > 0 && !evento?.esMultidia) return true;
     return false;
-  }, [asistenciaRegistrada, sessionInfo, evento, hoyStr, yaRegistroHoy, misAsistenciasEvento]);
-
-  // Garantizar que si ya está registrado o avanzó a los pasos posteriores, se posicione directamente en el Paso 3
-  const [prevIsRegistered, setPrevIsRegistered] = useState(isRegisteredForEvent);
-  if (isRegisteredForEvent !== prevIsRegistered) {
-    setPrevIsRegistered(isRegisteredForEvent);
-    if (isRegisteredForEvent && activeStep < 3) {
-      setActiveStep(3);
-      setMaxUnlockedStep(5);
-    }
-  }
+  }, [asistenciaRegistrada, sessionInfo, evento, hoyStr]);
 
   const [codigoComprobante, setCodigoComprobante] = useState(() => sessionInfo?.comprobanteId || '');
   const [errorAsistencia, setErrorAsistencia] = useState('');
@@ -320,6 +338,16 @@ export default function AttendeeView({
     }
     return null;
   }, [asistenciaHoy, misAsistenciasEvento, asistencias, codigoComprobante, formData, currentEventId, normalizedCurrentDoc, isRegisteredForEvent, yaRegistroHoy, dayStatus.diaNumero, hoyStr]);
+
+  // Nombre consolidado del participante para mostrar en la escarapela y textos
+  const attendeeDisplayName = useMemo(() => {
+    return (
+      formData.nombreCompleto?.trim() ||
+      activeAttendeeRecord?.nombreCompleto?.trim() ||
+      sessionInfo?.nombreCompleto?.trim() ||
+      ''
+    );
+  }, [formData.nombreCompleto, activeAttendeeRecord, sessionInfo]);
 
   // Detección en tiempo real de registro existente (en multidía, verifica si ya llenó el día de hoy)
   const registroExistente = useMemo(() => {
@@ -719,37 +747,19 @@ export default function AttendeeView({
               type="button"
               className="btn-session-nav badge-btn-pill"
               onClick={() => setIsBadgeModalOpen(true)}
-              title="Ver mi Escarapela Digital oficial para ingreso"
+              title="Ver Escarapela Digital para ingreso"
             >
               <Award size={15} />
-              <span>Mi Escarapela Digital</span>
+              <span>Escarapela Digital</span>
             </button>
             <button
               type="button"
               className="btn-change-attendee"
-              onClick={() => {
-                if (window.confirm('¿Deseas registrar a otra persona o realizar un nuevo registro para probar la ubicación GPS?')) {
-                  localStorage.removeItem(`udea_session_attendee_${evento.id}`);
-                  setAsistenciaRegistrada(false);
-                  setCodigoComprobante('');
-                  setFormData({
-                    tipoDocumento: 'CC',
-                    documento: '',
-                    nombreCompleto: '',
-                    correo: '',
-                    telefono: '',
-                    vinculacion: 'Estudiante Pregrado Medicina UdeA',
-                    placaVehiculo: '',
-                    habeasDataAceptado: false
-                  });
-                  setActiveStep(1);
-                  setMaxUnlockedStep(1);
-                }
-              }}
-              title="Registrar a otro participante o probar de nuevo"
+              onClick={handleNuevoRegistro}
+              title="Realizar un nuevo registro de asistencia"
             >
               <RotateCcw size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
-              <span>Nuevo Registro / Probar GPS</span>
+              <span>Realizar nuevo registro</span>
             </button>
           </div>
         </div>
@@ -1429,21 +1439,38 @@ export default function AttendeeView({
                 <Award size={26} />
               </div>
               <div className="step-badge-text-wrap">
-                <h3 className="step-badge-title">Mi Escarapela Digital Oficial UdeA</h3>
+                <h3 className="step-badge-title">Escarapela Digital</h3>
                 <p className="step-badge-sub">
-                  Presenta tu código QR institucional y comprobante de asistencia confirmada en cualquier momento.
+                  {attendeeDisplayName ? (
+                    <>
+                      Hola, <strong>{attendeeDisplayName}</strong>. Presenta tu código QR institucional y comprobante de asistencia confirmada en cualquier momento.
+                    </>
+                  ) : (
+                    'Presenta tu código QR institucional y comprobante de asistencia confirmada en cualquier momento.'
+                  )}
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              className="btn-open-badge-glow pulse"
-              onClick={() => setIsBadgeModalOpen(true)}
-              title="Ver mi escarapela digital oficial con código QR"
-            >
-              <Award size={18} />
-              <span>Ver Mi Escarapela Digital</span>
-            </button>
+            <div className="step-badge-banner-actions">
+              <button
+                type="button"
+                className="btn-open-badge-glow pulse"
+                onClick={() => setIsBadgeModalOpen(true)}
+                title="Ver escarapela digital con código QR"
+              >
+                <Award size={18} />
+                <span>Ver Escarapela Digital</span>
+              </button>
+              <button
+                type="button"
+                className="btn-nuevo-registro-banner"
+                onClick={handleNuevoRegistro}
+                title="Realizar un nuevo registro de asistencia"
+              >
+                <UserPlus size={16} />
+                <span>Realizar nuevo registro</span>
+              </button>
+            </div>
           </div>
 
           <section className="attendee-card-module animated-step">
@@ -1542,15 +1569,26 @@ export default function AttendeeView({
           </div>
 
           <div className="stepper-footer-actions">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setIsBadgeModalOpen(true)}
-              title="Ver mi credencial y comprobante oficial de ingreso con código QR"
-            >
-              <Award size={16} />
-              <span>Mi Escarapela Digital</span>
-            </button>
+            <div className="stepper-left-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setIsBadgeModalOpen(true)}
+                title="Ver credencial y comprobante oficial con código QR"
+              >
+                <Award size={16} />
+                <span>Escarapela Digital</span>
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-nuevo-registro-footer"
+                onClick={handleNuevoRegistro}
+                title="Realizar un nuevo registro de asistencia"
+              >
+                <UserPlus size={16} />
+                <span>Realizar nuevo registro</span>
+              </button>
+            </div>
 
             <button
               type="button"
