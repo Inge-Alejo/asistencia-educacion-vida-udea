@@ -6,7 +6,7 @@ import { saveEventInscritos, getEventInscritosData, fetchEventInscritosData, sub
 export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpdated }) {
   const [prevEventId, setPrevEventId] = useState(evento?.id);
   const [currentInscritosData, setCurrentInscritosData] = useState(() => {
-    return evento?.id ? getEventInscritosData(evento.id) : null;
+    return evento?.inscritosData || (evento?.id ? getEventInscritosData(evento.id) : null);
   });
   const [parsedData, setParsedData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -39,7 +39,7 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
 
   if (evento?.id !== prevEventId) {
     setPrevEventId(evento?.id);
-    setCurrentInscritosData(evento?.id ? getEventInscritosData(evento.id) : null);
+    setCurrentInscritosData(evento?.inscritosData || (evento?.id ? getEventInscritosData(evento.id) : null));
     setParsedData(null);
     setErrorMessage('');
     setSearchDocTest('');

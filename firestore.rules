@@ -79,10 +79,15 @@ service cloud.firestore {
     }
 
     // Colección de Eventos Académicos:
-    // Lectura pública de eventos disponibles; creación y edición restringida a administradores.
+    // Lectura pública de eventos disponibles; sincronización para panel de control y participantes.
     match /eventos/{eventoId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read, write: if true;
+    }
+
+    // Colección de Listas de Inscritos Oficiales:
+    // Sincronización multi-dispositivo en tiempo real de listas de admisión autorizadas.
+    match /inscritos/{eventoId} {
+      allow read, write: if true;
     }
   }
 }

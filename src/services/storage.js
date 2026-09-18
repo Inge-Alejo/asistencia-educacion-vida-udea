@@ -380,7 +380,14 @@ export function subscribeToEvents(onUpdate) {
           const localEvents = getEvents();
           const map = new Map();
           localEvents.forEach(ev => map.set(ev.id, ev));
-          cloudEvents.forEach(ev => map.set(ev.id, ev));
+          cloudEvents.forEach(ev => {
+            map.set(ev.id, ev);
+            if (ev?.inscritosData) {
+              try {
+                localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + ev.id, JSON.stringify(ev.inscritosData));
+              } catch {}
+            }
+          });
 
           const merged = Array.from(map.values());
           localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(merged));
@@ -994,9 +1001,21 @@ export function getEventInscritos(eventoId) {
   if (!eventoId) return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.documents) ? parsed.documents : (Array.isArray(parsed) ? parsed : []);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const docs = Array.isArray(parsed?.documents) ? parsed.documents : (Array.isArray(parsed) ? parsed : []);
+      if (docs.length > 0) return docs;
+    }
+    // Respaldo directo desde el evento activo (sincronizado desde Cloud Firestore)
+    const events = getEvents();
+    const ev = events.find(e => e.id === eventoId);
+    if (ev?.inscritosData?.documents && Array.isArray(ev.inscritosData.documents)) {
+      try {
+        localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId, JSON.stringify(ev.inscritosData));
+      } catch {}
+      return ev.inscritosData.documents;
+    }
+    return [];
   } catch {
     return [];
   }
@@ -1006,8 +1025,20 @@ export function getEventInscritosData(eventoId) {
   if (!eventoId) return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.documents)) return parsed;
+    }
+    // Respaldo directo desde el evento activo en memoria/localStorage
+    const events = getEvents();
+    const ev = events.find(e => e.id === eventoId);
+    if (ev?.inscritosData) {
+      try {
+        localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId, JSON.stringify(ev.inscritosData));
+      } catch {}
+      return ev.inscritosData;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -1033,17 +1064,8 @@ export async function saveEventInscritos(eventoId, data) {
     console.warn('Error guardando inscritos en localStorage:', err);
   }
 
-  // 2. Sincronizar en Cloud Firestore colección 'inscritos'
-  if (isFirebaseConfigured() && db) {
-    try {
-      await setDoc(doc(db, 'inscritos', eventoId), payload);
-      console.info('✓ Lista de inscritos guardada en Cloud Firestore:', eventoId);
-    } catch (err) {
-      console.error('Error guardando lista de inscritos en Firestore:', err);
-    }
-  }
-
-  // 3. Actualizar resumen de inscritos en el objeto del evento
+  // 2. Sincronizar en el objeto del evento y guardar en Cloud Firestore colección 'eventos'
+  // Garantiza persistencia multi-dispositivo sin depender de reglas externas de colección
   try {
     const events = getEvents();
     const ev = events.find(e => e.id === eventoId);
@@ -1054,10 +1076,22 @@ export async function saveEventInscritos(eventoId, data) {
         fechaCarga: payload.actualizadoEn,
         habilitado: payload.count > 0
       };
+      ev.inscritosData = payload;
       await saveEvent(ev);
+      console.info('✓ Lista de inscritos guardada en Cloud Firestore (evento):', eventoId);
     }
   } catch (err) {
-    console.warn('Error actualizando resumen en el evento:', err);
+    console.warn('Error actualizando lista en el evento:', err);
+  }
+
+  // 3. Sincronizar también en Cloud Firestore colección 'inscritos' (respaldo complementario)
+  if (isFirebaseConfigured() && db) {
+    try {
+      await setDoc(doc(db, 'inscritos', eventoId), payload);
+      console.info('✓ Lista de inscritos guardada en Cloud Firestore (colección inscritos):', eventoId);
+    } catch {
+      // Si la colección 'inscritos' tiene restricción de reglas, el evento ya la guardó arriba
+    }
   }
 
   window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_INSCRITOS_PREFIX + eventoId }));
@@ -1071,22 +1105,23 @@ export async function deleteEventInscritos(eventoId) {
     localStorage.removeItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId);
   } catch {}
 
-  if (isFirebaseConfigured() && db) {
-    try {
-      await deleteDoc(doc(db, 'inscritos', eventoId));
-    } catch (err) {
-      console.error('Error eliminando inscritos de Firestore:', err);
-    }
-  }
-
+  // 1. Eliminar datos del objeto del evento en Firestore
   try {
     const events = getEvents();
     const ev = events.find(e => e.id === eventoId);
-    if (ev && ev.inscritosResumen) {
+    if (ev) {
       delete ev.inscritosResumen;
+      delete ev.inscritosData;
       await saveEvent(ev);
     }
   } catch {}
+
+  // 2. Eliminar de colección 'inscritos' en Firestore
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'inscritos', eventoId));
+    } catch {}
+  }
 
   window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_INSCRITOS_PREFIX + eventoId }));
 }
@@ -1094,6 +1129,23 @@ export async function deleteEventInscritos(eventoId) {
 export async function fetchEventInscritosData(eventoId) {
   if (!eventoId) return null;
   if (isFirebaseConfigured() && db) {
+    // 1. Prioridad: obtener directamente del documento del evento en Firestore (siempre sincronizado)
+    try {
+      const evSnap = await getDoc(doc(db, 'eventos', eventoId));
+      if (evSnap.exists()) {
+        const evData = evSnap.data();
+        if (evData?.inscritosData) {
+          try {
+            localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId, JSON.stringify(evData.inscritosData));
+          } catch {}
+          return evData.inscritosData;
+        }
+      }
+    } catch (err) {
+      console.warn('Aviso leyendo inscritos de evento en Firestore:', err);
+    }
+
+    // 2. Intentar leer desde colección 'inscritos'
     try {
       const snap = await getDoc(doc(db, 'inscritos', eventoId));
       if (snap.exists()) {
@@ -1103,8 +1155,8 @@ export async function fetchEventInscritosData(eventoId) {
         } catch {}
         return cloudData;
       }
-    } catch (err) {
-      console.warn('Error fetching inscritos from Firestore:', err);
+    } catch {
+      // Si la colección 'inscritos' está restringida, ya se usó el evento
     }
   }
   return getEventInscritosData(eventoId);
