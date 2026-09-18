@@ -8,6 +8,7 @@ import {
 import DigitalBadge from './DigitalBadge';
 import QRScannerModal from './QRScannerModal';
 import EventSelectorModal from './EventSelectorModal';
+import InscritosModal from './InscritosModal';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
 import {
   toggleQuestionAnswered,
@@ -46,6 +47,7 @@ export default function AdminPanel({
   const [selectedBadgeAttendee, setSelectedBadgeAttendee] = useState(null);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const [isEditSelectorOpen, setIsEditSelectorOpen] = useState(false);
+  const [isInscritosModalOpen, setIsInscritosModalOpen] = useState(false);
 
   // Estados para filtros de Preguntas en Vivo (corrige error de carga)
   const [searchTermQuestions, setSearchTermQuestions] = useState('');
@@ -274,6 +276,15 @@ export default function AdminPanel({
           >
             <Edit3 size={16} />
             <span>Editar Evento Existente</span>
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setIsInscritosModalOpen(true)}
+            title="Cargar o gestionar lista oficial de personas inscritas (Excel / CSV) para este evento"
+          >
+            <FileSpreadsheet size={16} />
+            <span>Lista de Inscritos {evento?.inscritosResumen?.total ? `(${evento.inscritosResumen.total})` : ''}</span>
           </button>
           <button className="btn-secondary" onClick={onOpenQRModal}>
             <QrCode size={16} />
@@ -1522,6 +1533,16 @@ export default function AdminPanel({
             if (onSelectEvent) onSelectEvent(ev);
           }}
           onOpenNewEvent={onOpenNewEventModal}
+        />
+      )}
+
+      {/* Modal para Carga y Verificación de Lista de Inscritos (Excel / CSV) */}
+      {isInscritosModalOpen && (
+        <InscritosModal
+          isOpen={isInscritosModalOpen}
+          onClose={() => setIsInscritosModalOpen(false)}
+          evento={evento}
+          onInscritosUpdated={onDataUpdated}
         />
       )}
     </div>

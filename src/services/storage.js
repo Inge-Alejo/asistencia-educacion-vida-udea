@@ -965,3 +965,144 @@ export function importDatabaseBackupJSON(jsonString) {
   }
 }
 
+// =========================================================================
+// GESTIÓN DE LISTAS DE INSCRITOS POR EVENTO (EXCEL / CSV)
+// =========================================================================
+const STORAGE_KEY_INSCRITOS_PREFIX = 'udea_med_inscritos_';
+
+export function getEventInscritos(eventoId) {
+  if (!eventoId) return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.documents) ? parsed.documents : (Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return [];
+  }
+}
+
+export function getEventInscritosData(eventoId) {
+  if (!eventoId) return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export async function saveEventInscritos(eventoId, data) {
+  if (!eventoId || !data) return { success: false, message: 'Faltan parámetros obligatorios.' };
+
+  const payload = {
+    eventoId,
+    documents: data.documents || [],
+    count: (data.documents || []).length,
+    fileName: data.fileName || 'Inscritos.xlsx',
+    detectedColumn: data.detectedColumn || '',
+    sample: (data.documents || []).slice(0, 10),
+    actualizadoEn: new Date().toISOString()
+  };
+
+  // 1. Guardar localmente
+  try {
+    localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId, JSON.stringify(payload));
+  } catch (err) {
+    console.warn('Error guardando inscritos en localStorage:', err);
+  }
+
+  // 2. Sincronizar en Cloud Firestore colección 'inscritos'
+  if (isFirebaseConfigured() && db) {
+    try {
+      await setDoc(doc(db, 'inscritos', eventoId), payload);
+      console.info('✓ Lista de inscritos guardada en Cloud Firestore:', eventoId);
+    } catch (err) {
+      console.error('Error guardando lista de inscritos en Firestore:', err);
+    }
+  }
+
+  // 3. Actualizar resumen de inscritos en el objeto del evento
+  try {
+    const events = getEvents();
+    const ev = events.find(e => e.id === eventoId);
+    if (ev) {
+      ev.inscritosResumen = {
+        total: payload.count,
+        fileName: payload.fileName,
+        fechaCarga: payload.actualizadoEn,
+        habilitado: payload.count > 0
+      };
+      await saveEvent(ev);
+    }
+  } catch (err) {
+    console.warn('Error actualizando resumen en el evento:', err);
+  }
+
+  window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_INSCRITOS_PREFIX + eventoId }));
+  return { success: true, payload };
+}
+
+export async function deleteEventInscritos(eventoId) {
+  if (!eventoId) return;
+
+  try {
+    localStorage.removeItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId);
+  } catch {}
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'inscritos', eventoId));
+    } catch (err) {
+      console.error('Error eliminando inscritos de Firestore:', err);
+    }
+  }
+
+  try {
+    const events = getEvents();
+    const ev = events.find(e => e.id === eventoId);
+    if (ev && ev.inscritosResumen) {
+      delete ev.inscritosResumen;
+      await saveEvent(ev);
+    }
+  } catch {}
+
+  window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_INSCRITOS_PREFIX + eventoId }));
+}
+
+export function subscribeToEventInscritos(eventoId, onUpdate) {
+  if (!eventoId) return () => {};
+
+  const handleLocal = (e) => {
+    if (!e || e.key === STORAGE_KEY_INSCRITOS_PREFIX + eventoId) {
+      onUpdate(getEventInscritos(eventoId));
+    }
+  };
+  window.addEventListener('storage', handleLocal);
+
+  let unsubscribeFirestore = () => {};
+  if (isFirebaseConfigured() && db) {
+    try {
+      unsubscribeFirestore = onSnapshot(doc(db, 'inscritos', eventoId), (snapshot) => {
+        if (snapshot.exists()) {
+          const cloudData = snapshot.data();
+          try {
+            localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId, JSON.stringify(cloudData));
+          } catch {}
+          onUpdate(cloudData?.documents || []);
+        } else {
+          onUpdate(getEventInscritos(eventoId));
+        }
+      });
+    } catch (err) {
+      console.warn('Error en listener de Firestore inscritos:', err);
+    }
+  }
+
+  return () => {
+    window.removeEventListener('storage', handleLocal);
+    unsubscribeFirestore();
+  };
+}
+

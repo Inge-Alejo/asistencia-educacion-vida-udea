@@ -13,10 +13,13 @@ import {
   recordAttendance,
   addQuestion,
   recordEvaluation,
-  recordSatisfaction
+  recordSatisfaction,
+  getEventInscritos,
+  subscribeToEventInscritos
 } from '../services/storage';
 import { maskFullName, maskEmail, areNamesMatching, sanitizeText } from '../services/sanitizer';
 import { getOfficialColombiaTime, getEventDaysList, checkEventDayStatus } from '../services/networkTime';
+import { isDocumentEnrolled } from '../services/enrollmentService';
 
 function getSavedAttendeeSession(eventId) {
   if (typeof window === 'undefined' || !eventId) return null;
@@ -100,6 +103,23 @@ export default function AttendeeView({
   const eventDays = useMemo(() => getEventDaysList(evento), [evento]);
   const dayStatus = useMemo(() => checkEventDayStatus(evento, officialTime.fechaStr), [evento, officialTime.fechaStr]);
 
+  // Lista de personas inscritas oficialmente a este evento (cargada por Excel/CSV en Admin)
+  const [prevInscritosEventId, setPrevInscritosEventId] = useState(evento?.id);
+  const [inscritosList, setInscritosList] = useState(() => getEventInscritos(evento?.id));
+
+  if (evento?.id !== prevInscritosEventId) {
+    setPrevInscritosEventId(evento?.id);
+    setInscritosList(getEventInscritos(evento?.id));
+  }
+
+  useEffect(() => {
+    if (!evento?.id) return;
+    const unsubscribe = subscribeToEventInscritos(evento.id, (docs) => {
+      setInscritosList(docs);
+    });
+    return () => unsubscribe();
+  }, [evento?.id]);
+
   // Estado del Formulario de Asistencia
   const [formData, setFormData] = useState(() => ({
     tipoDocumento: sessionInfo?.tipoDocumento || 'CC',
@@ -113,6 +133,14 @@ export default function AttendeeView({
   }));
 
   const currentDoc = (formData?.documento || '').trim();
+
+  // Verificación de si el documento actual figura en la lista de inscritos oficiales del evento
+  const enrollmentStatus = useMemo(() => {
+    if (!currentDoc || currentDoc.length < 4) {
+      return { isEnrolled: true, hasWhitelist: Boolean(inscritosList && inscritosList.length > 0) };
+    }
+    return isDocumentEnrolled(inscritosList, currentDoc);
+  }, [inscritosList, currentDoc]);
 
   // Historial de asistencias registradas por este participante en este evento (todas las sesiones)
   const misAsistenciasEvento = useMemo(() => {
@@ -415,6 +443,14 @@ export default function AttendeeView({
     }
     if (formData.tipoDocumento !== 'PASAPORTE' && !/^\d{5,12}$/.test(doc)) {
       setErrorAsistencia('El número de documento debe contener entre 5 y 12 dígitos numéricos.');
+      return;
+    }
+
+    // Validación estricta de admisión: debe figurar en la lista de inscritos si el evento tiene lista cargada
+    if (enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled) {
+      setErrorAsistencia(
+        `El documento ${doc} no se encuentra en el registro oficial de personas inscritas a este evento. Por favor acércate al punto de información del evento o comunícate con la coordinación académica.`
+      );
       return;
     }
 
@@ -1147,11 +1183,25 @@ export default function AttendeeView({
                         {challengeError && <p className="challenge-err-text">{challengeError}</p>}
                       </div>
                     )
+                  ) : (enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled && currentDoc.length >= 4) ? (
+                    <div className="doc-not-enrolled-alert animated-step">
+                      <div className="doc-not-enrolled-header">
+                        <AlertTriangle size={16} className="warn-icon" />
+                        <span>No figura en la lista oficial de inscritos</span>
+                      </div>
+                      <p className="doc-not-enrolled-desc">
+                        El documento <strong>{currentDoc}</strong> no se encuentra en el registro oficial de personas inscritas a este evento. Por favor acércate al punto de información del evento o comunícate con la coordinación académica.
+                      </p>
+                    </div>
                   ) : (
                     formData.documento.trim().length >= 4 && (
                       <div className="doc-available-hint">
                         <Check size={13} />
-                        <span>Documento disponible para nuevo registro</span>
+                        <span>
+                          {enrollmentStatus.hasWhitelist
+                            ? '✓ Documento verificado en la lista oficial de inscritos'
+                            : 'Documento disponible para registro de asistencia'}
+                        </span>
                       </div>
                     )
                   )}
@@ -1304,9 +1354,16 @@ export default function AttendeeView({
                   <span>Volver a Ubicación</span>
                 </button>
 
-                <button type="submit" className="btn-primary-action">
+                <button
+                  type="submit"
+                  className={`btn-primary-action ${enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled ? 'btn-disabled' : ''}`}
+                  disabled={enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled}
+                  title={enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled ? 'No figura en la lista oficial de inscritos' : ''}
+                >
                   <span>
-                    {evento?.esMultidia
+                    {enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled
+                      ? 'No Figura en Lista de Inscritos'
+                      : evento?.esMultidia
                       ? `Confirmar Asistencia Día ${dayStatus.diaNumero || 1} (${officialTime.fechaStr})`
                       : 'Confirmar Asistencia al Evento'}
                   </span>

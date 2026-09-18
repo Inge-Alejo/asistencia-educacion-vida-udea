@@ -6607,3 +6607,452 @@ input:checked + .slider::before {
   color: #047857;
 }
 
+/* ==========================================================================
+   MODAL DE GESTIÓN DE INSCRITOS (EXCEL / CSV) & ALERTAS DE INSCRIPCIÓN
+   ========================================================================== */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(10, 30, 20, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  animation: fadeInModal 0.2s ease-out;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.inscritos-modal-card {
+  background: #FFFFFF;
+  border-radius: 14px;
+  box-shadow: 0 20px 40px -10px rgba(10, 45, 25, 0.3), 0 0 0 1px rgba(15, 89, 56, 0.12);
+  width: 100%;
+  max-width: 620px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUpModal 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpModal {
+  from { transform: translateY(20px) scale(0.97); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.25rem 1.5rem;
+  background: #F8FAF9;
+  border-bottom: 1px solid #E2ECE6;
+}
+
+.modal-title-group h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0A3D26;
+}
+
+.modal-title-group p {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: #496355;
+}
+
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: #748A7E;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-close-modal:hover {
+  color: #0A3D26;
+  background: #EBF4EF;
+}
+
+.inscritos-modal-body {
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+/* Banner de estado actual */
+.inscritos-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  background: #F4F8F5;
+  border: 1px solid #D1E5DA;
+  border-radius: 10px;
+}
+
+.inscritos-banner-icon {
+  font-size: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inscritos-banner-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.inscritos-banner-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.inscritos-count-strong {
+  font-size: 0.95rem;
+  color: #0F5938;
+}
+
+.inscritos-meta {
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.inscritos-meta-tag {
+  font-size: 0.75rem;
+  color: #557262;
+  background: #E8EFEA;
+  padding: 1px 7px;
+  border-radius: 4px;
+}
+
+.inscritos-status-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.inscritos-status-badge.active {
+  background: #DCFCE7;
+  color: #166534;
+  border: 1px solid #BBF7D0;
+}
+
+.inscritos-status-badge.empty {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FDE68A;
+}
+
+.inscritos-actions-row {
+  margin-left: auto;
+}
+
+.btn-text-danger {
+  background: transparent;
+  border: 1px solid #FCA5A5;
+  color: #DC2626;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-text-danger:hover {
+  background: #FEE2E2;
+  border-color: #EF4444;
+}
+
+/* Zona de Carga Excel/CSV */
+.excel-dropzone {
+  border: 2px dashed #A7CBB7;
+  border-radius: 12px;
+  background: #FAFDFB;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.excel-dropzone:hover,
+.excel-dropzone.dragging {
+  border-color: #0F5938;
+  background: #EEF7F1;
+}
+
+.dropzone-icon {
+  font-size: 2.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.dropzone-text-primary {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #13241B;
+  margin-bottom: 0.35rem;
+}
+
+.file-picker-label {
+  display: inline-block;
+  background: #0F5938;
+  color: #FFFFFF;
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 0.45rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin: 0.35rem 0 0.5rem;
+  box-shadow: 0 2px 4px rgba(15, 89, 56, 0.2);
+  transition: background 0.15s ease;
+}
+
+.file-picker-label:hover {
+  background: #0A3D26;
+}
+
+.file-specs-hint {
+  font-size: 0.76rem;
+  color: #748A7E;
+  margin: 0;
+  max-width: 420px;
+}
+
+/* Vista previa de archivo parseado */
+.parsed-preview-card {
+  background: #F0FDF4;
+  border: 1px solid #86EFAC;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.parsed-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.parsed-count-badge {
+  background: #15803D;
+  color: #FFFFFF;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.parsed-sample-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.sample-doc-chip {
+  background: #FFFFFF;
+  border: 1px solid #BBF7D0;
+  color: #166534;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+/* Buscador de prueba rápida */
+.test-search-box {
+  background: #F8FAF9;
+  border: 1px solid #E2ECE6;
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+}
+
+.test-search-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+
+.test-search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.test-search-input:focus {
+  border-color: #0F5938;
+  box-shadow: 0 0 0 2px rgba(15, 89, 56, 0.15);
+}
+
+.test-result-badge {
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.test-result-badge.in {
+  background: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #86EFAC;
+}
+
+.test-result-badge.not-in {
+  background: #FEE2E2;
+  color: #B91C1C;
+  border: 1px solid #FCA5A5;
+}
+
+/* Guía de formato */
+.format-guide-accordion {
+  background: #F8FAF9;
+  border: 1px solid #E2ECE6;
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.8rem;
+}
+
+.format-guide-accordion summary {
+  font-weight: 600;
+  color: #496355;
+  cursor: pointer;
+  user-select: none;
+}
+
+.format-guide-content {
+  margin-top: 0.6rem;
+  color: #557262;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.guide-pill {
+  display: inline-block;
+  background: #E8EFEA;
+  color: #0A3D26;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin: 2px 2px 2px 0;
+}
+
+/* Pie de modal */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  background: #F8FAF9;
+  border-top: 1px solid #E2ECE6;
+}
+
+/* Alert en AttendeeView para documentos no inscritos */
+.doc-not-enrolled-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: #FEF2F2;
+  border: 1px solid #F87171;
+  border-left: 4px solid #DC2626;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin: 0.65rem 0 0.85rem;
+  color: #7F1D1D;
+  animation: shakeAlert 0.3s ease-in-out;
+}
+
+@keyframes shakeAlert {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.doc-not-enrolled-alert .alert-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.doc-not-enrolled-alert .alert-content strong {
+  display: block;
+  font-size: 0.88rem;
+  color: #991B1B;
+  margin-bottom: 0.2rem;
+}
+
+.doc-not-enrolled-alert .alert-content p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #7F1D1D;
+}
+
+.doc-not-enrolled-alert .alert-content code {
+  background: #FEE2E2;
+  border: 1px solid #FCA5A5;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #991B1B;
+}
+
+.doc-enrolled-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  color: #065F46;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  margin: 0.45rem 0 0.65rem;
+}
+
+.btn-disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.5);
+  pointer-events: none;
+}
+
+
