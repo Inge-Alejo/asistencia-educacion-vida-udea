@@ -887,6 +887,26 @@ export function subscribeToEventData(eventId, onUpdate) {
         (err) => console.warn('Firestore satisfaccion snapshot:', err)
       );
       unsubs.push(unsubSat);
+
+      // Sincronización en vivo de Lista Oficial de Inscritos (Excel / CSV)
+      const unsubInscritos = onSnapshot(
+        doc(db, 'inscritos', eventId),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const cloudData = snapshot.data();
+            try {
+              localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + eventId, JSON.stringify(cloudData));
+            } catch {}
+          } else {
+            try {
+              localStorage.removeItem(STORAGE_KEY_INSCRITOS_PREFIX + eventId);
+            } catch {}
+          }
+          if (onUpdate) onUpdate();
+        },
+        (err) => console.warn('Firestore inscritos snapshot en subscribeToEventData:', err)
+      );
+      unsubs.push(unsubInscritos);
     } catch (err) {
       console.error('Error al configurar los listeners en vivo de Firestore:', err);
     }
@@ -1071,12 +1091,33 @@ export async function deleteEventInscritos(eventoId) {
   window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_INSCRITOS_PREFIX + eventoId }));
 }
 
+export async function fetchEventInscritosData(eventoId) {
+  if (!eventoId) return null;
+  if (isFirebaseConfigured() && db) {
+    try {
+      const snap = await getDoc(doc(db, 'inscritos', eventoId));
+      if (snap.exists()) {
+        const cloudData = snap.data();
+        try {
+          localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId, JSON.stringify(cloudData));
+        } catch {}
+        return cloudData;
+      }
+    } catch (err) {
+      console.warn('Error fetching inscritos from Firestore:', err);
+    }
+  }
+  return getEventInscritosData(eventoId);
+}
+
 export function subscribeToEventInscritos(eventoId, onUpdate) {
   if (!eventoId) return () => {};
 
   const handleLocal = (e) => {
     if (!e || e.key === STORAGE_KEY_INSCRITOS_PREFIX + eventoId) {
-      onUpdate(getEventInscritos(eventoId));
+      const docs = getEventInscritos(eventoId);
+      const fullData = getEventInscritosData(eventoId);
+      onUpdate(docs, fullData);
     }
   };
   window.addEventListener('storage', handleLocal);
@@ -1090,12 +1131,12 @@ export function subscribeToEventInscritos(eventoId, onUpdate) {
           try {
             localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId, JSON.stringify(cloudData));
           } catch {}
-          onUpdate(cloudData?.documents || []);
+          onUpdate(cloudData?.documents || [], cloudData);
         } else {
           try {
             localStorage.removeItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId);
           } catch {}
-          onUpdate([]);
+          onUpdate([], null);
         }
       });
     } catch (err) {

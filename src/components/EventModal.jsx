@@ -354,7 +354,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                   })}
                 </div>
                 <p className="days-preview-note" style={{ marginTop: '0.6rem' }}>
-                  El sistema validará la asistencia de cada día según su horario de finalización programado y la hora legal de Colombia.
+                  El sistema validará la asistencia de cada día según su horario de finalización programado y la hora oficial de Colombia.
                 </p>
               </div>
             </div>

@@ -358,12 +358,6 @@ export default function DigitalBadge({
               Registrado: {asistente.fechaRegistro}
               {asistente.diaNumero ? ` (Día ${asistente.diaNumero})` : ''}
             </span>
-            {asistente.fechaVerificadaInternet && (
-              <span style={{ color: '#006633', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                <CheckCircle2 size={13} />
-                <span>Hora Legal de Colombia Verificada</span>
-              </span>
-            )}
           </div>
         </div>
 

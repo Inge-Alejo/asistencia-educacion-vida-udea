@@ -18,7 +18,7 @@ import {
   subscribeToEventInscritos
 } from '../services/storage';
 import { maskFullName, maskEmail, areNamesMatching, sanitizeText } from '../services/sanitizer';
-import { getOfficialColombiaTime, getEventDaysList, checkEventDayStatus } from '../services/networkTime';
+import { getOfficialColombiaTime, getEventDaysList, checkEventDayStatus, getColombiaLocalDateStr } from '../services/networkTime';
 import { isDocumentEnrolled, normalizeDocumentId } from '../services/enrollmentService';
 
 function getSavedAttendeeSession(eventId) {
@@ -67,8 +67,8 @@ export default function AttendeeView({
 
   // Control del Flujo Secuencial (Pasos 1 a 5)
   // 1: Ubicación GPS, 2: Datos de Asistencia, 3: Preguntas en Vivo, 4: Calificación Ponentes, 5: Microsoft Forms / Satisfacción
-  const [activeStep, setActiveStep] = useState(() => (sessionInfo ? 3 : 1));
-  const [maxUnlockedStep, setMaxUnlockedStep] = useState(() => (sessionInfo ? 5 : 1));
+  const [activeStep, setActiveStep] = useState(() => (sessionInfo?.registrado ? 3 : 1));
+  const [maxUnlockedStep, setMaxUnlockedStep] = useState(() => (sessionInfo?.registrado ? 5 : 1));
 
   // Estado de Geolocalización
   const [geoState, setGeoState] = useState({
@@ -84,7 +84,7 @@ export default function AttendeeView({
 
   // Estado de Fecha y Hora Oficial de Colombia vía Internet
   const [officialTime, setOfficialTime] = useState({
-    fechaStr: new Date().toISOString().slice(0, 10),
+    fechaStr: getColombiaLocalDateStr(),
     horaStr: '08:00',
     esVerificadaInternet: false,
     fuente: 'Reloj Local'
@@ -244,13 +244,14 @@ export default function AttendeeView({
   };
 
   // Asistencia específica para la fecha o sesión de hoy
+  const hoyStr = officialTime.fechaStr || getColombiaLocalDateStr();
   const asistenciaHoy = useMemo(() => {
     if (misAsistenciasEvento.length === 0) return null;
     return misAsistenciasEvento.find(a =>
-      a.fechaDia === officialTime.fechaStr ||
+      a.fechaDia === hoyStr ||
       (dayStatus.diaNumero && a.diaNumero === dayStatus.diaNumero)
     ) || null;
-  }, [misAsistenciasEvento, officialTime.fechaStr, dayStatus.diaNumero]);
+  }, [misAsistenciasEvento, hoyStr, dayStatus.diaNumero]);
 
   const yaRegistroHoy = Boolean(asistenciaHoy);
 
@@ -258,10 +259,34 @@ export default function AttendeeView({
     if (!sessionInfo) return false;
     // Si el evento es multidía, validar si la sesión guardada corresponde al día de hoy
     if (evento?.esMultidia) {
-      return sessionInfo.fechaDia === new Date().toISOString().slice(0, 10);
+      return sessionInfo.fechaDia === getColombiaLocalDateStr();
     }
     return Boolean(sessionInfo.registrado);
   });
+
+  // Estado consolidado de si este participante ya completó el registro de asistencia oficial
+  const isRegisteredForEvent = useMemo(() => {
+    if (asistenciaRegistrada) return true;
+    if (sessionInfo?.registrado) {
+      if (evento?.esMultidia) {
+        return sessionInfo.fechaDia === hoyStr || yaRegistroHoy;
+      }
+      return true;
+    }
+    if (yaRegistroHoy) return true;
+    if (misAsistenciasEvento.length > 0 && !evento?.esMultidia) return true;
+    return false;
+  }, [asistenciaRegistrada, sessionInfo, evento, hoyStr, yaRegistroHoy, misAsistenciasEvento]);
+
+  // Garantizar que si ya está registrado o avanzó a los pasos posteriores, se posicione directamente en el Paso 3
+  const [prevIsRegistered, setPrevIsRegistered] = useState(isRegisteredForEvent);
+  if (isRegisteredForEvent !== prevIsRegistered) {
+    setPrevIsRegistered(isRegisteredForEvent);
+    if (isRegisteredForEvent && activeStep < 3) {
+      setActiveStep(3);
+      setMaxUnlockedStep(5);
+    }
+  }
 
   const [codigoComprobante, setCodigoComprobante] = useState(() => sessionInfo?.comprobanteId || '');
   const [errorAsistencia, setErrorAsistencia] = useState('');
@@ -279,7 +304,7 @@ export default function AttendeeView({
     );
     if (found) return found;
 
-    if (asistenciaRegistrada || yaRegistroHoy) {
+    if (isRegisteredForEvent || yaRegistroHoy) {
       return {
         id: codigoComprobante || 'ATT-MED-01',
         eventoId: currentEventId,
@@ -289,12 +314,12 @@ export default function AttendeeView({
         vinculacion: formData.vinculacion || 'Asistente',
         placaVehiculo: formData.placaVehiculo || '',
         diaNumero: dayStatus.diaNumero || 1,
-        fechaDia: officialTime.fechaStr,
+        fechaDia: hoyStr,
         fechaRegistro: new Date().toLocaleString('es-CO')
       };
     }
     return null;
-  }, [asistenciaHoy, misAsistenciasEvento, asistencias, codigoComprobante, formData, currentEventId, normalizedCurrentDoc, asistenciaRegistrada, yaRegistroHoy, dayStatus.diaNumero, officialTime.fechaStr]);
+  }, [asistenciaHoy, misAsistenciasEvento, asistencias, codigoComprobante, formData, currentEventId, normalizedCurrentDoc, isRegisteredForEvent, yaRegistroHoy, dayStatus.diaNumero, hoyStr]);
 
   // Detección en tiempo real de registro existente (en multidía, verifica si ya llenó el día de hoy)
   const registroExistente = useMemo(() => {
@@ -538,7 +563,7 @@ export default function AttendeeView({
       try {
         localStorage.setItem(`udea_session_attendee_${evento.id}`, JSON.stringify({
           ...payload,
-          fechaDia: officialTime.fechaStr,
+          fechaDia: hoyStr,
           diaNumero: dayStatus.diaNumero || 1,
           comprobanteId: res.record.id,
           registrado: true,
@@ -548,8 +573,9 @@ export default function AttendeeView({
         console.warn('Error al guardar sesión del asistente:', err);
       }
 
-      // Desbloquear todos los pasos siguientes (Preguntas, Evaluaciones, Forms)
+      // Desbloquear todos los pasos siguientes y avanzar de inmediato a Preguntas en Vivo (Paso 3)
       setMaxUnlockedStep(5);
+      setActiveStep(3);
 
       confetti({
         particleCount: 90,
@@ -667,15 +693,6 @@ export default function AttendeeView({
           <div className="session-banner-actions">
             <button
               type="button"
-              className={`btn-session-nav ${activeStep === 1 ? 'active' : ''}`}
-              onClick={() => setActiveStep(1)}
-              title="Ver el radar y las coordenadas GPS detectadas"
-            >
-              <MapPin size={15} />
-              <span>Ver Ubicación GPS</span>
-            </button>
-            <button
-              type="button"
               className={`btn-session-nav ${activeStep === 3 ? 'active' : ''}`}
               onClick={() => setActiveStep(3)}
             >
@@ -684,11 +701,19 @@ export default function AttendeeView({
             </button>
             <button
               type="button"
-              className={`btn-session-nav ${activeStep === 2 ? 'active' : ''}`}
-              onClick={() => setActiveStep(2)}
+              className={`btn-session-nav ${activeStep === 4 ? 'active' : ''}`}
+              onClick={() => setActiveStep(4)}
+            >
+              <Star size={15} />
+              <span>Calificar Ponentes</span>
+            </button>
+            <button
+              type="button"
+              className={`btn-session-nav ${activeStep === 5 ? 'active' : ''}`}
+              onClick={() => setActiveStep(5)}
             >
               <FileText size={15} />
-              <span>Ver Comprobante</span>
+              <span>{evento.microsoftFormsUrl ? 'Microsoft Forms' : 'Satisfacción'}</span>
             </button>
             <button
               type="button"
@@ -740,19 +765,24 @@ export default function AttendeeView({
             { step: 4, label: 'Calificar Ponentes', icon: Star },
             { step: 5, label: evento.microsoftFormsUrl ? 'Microsoft Forms' : 'Satisfacción', icon: FileText }
           ].map((item) => {
-            const isCompleted = item.step < activeStep || (item.step === 2 && asistenciaRegistrada);
+            const isCompleted = item.step < activeStep || (item.step === 2 && isRegisteredForEvent);
             const isCurrent = item.step === activeStep;
-            const isUnlocked = item.step <= maxUnlockedStep;
+            // Restricción solicitada:
+            // Una vez que el usuario ya está registrado o en etapas 3+, no se puede devolver a 1 ni 2.
+            // Pero sí puede navegar entre los pasos 3, 4 y 5 hacia adelante y atrás.
+            const isAccessible = (isRegisteredForEvent || activeStep >= 3)
+              ? (item.step >= 3 && item.step <= maxUnlockedStep)
+              : (item.step <= maxUnlockedStep);
 
             return (
               <button
                 key={item.step}
                 type="button"
-                className={`stepper-step-btn ${isCurrent ? 'current' : ''} ${isCompleted ? 'completed' : ''} ${!isUnlocked ? 'locked' : ''}`}
+                className={`stepper-step-btn ${isCurrent ? 'current' : ''} ${isCompleted ? 'completed' : ''} ${!isAccessible ? 'locked' : ''}`}
                 onClick={() => {
-                  if (isUnlocked) setActiveStep(item.step);
+                  if (isAccessible) setActiveStep(item.step);
                 }}
-                disabled={!isUnlocked}
+                disabled={!isAccessible}
               >
                 <div className="step-circle">
                   {isCompleted ? <Check size={14} /> : <span>{item.step}</span>}
@@ -1016,7 +1046,7 @@ export default function AttendeeView({
             </div>
           )}
 
-          {(asistenciaRegistrada && (!evento?.esMultidia || yaRegistroHoy)) ? (
+          {(isRegisteredForEvent && (!evento?.esMultidia || yaRegistroHoy)) ? (
             <div className="success-attendance-box">
               <div className="success-icon-circle">
                 <CheckCircle2 size={40} className="check-icon" />
@@ -1490,10 +1520,11 @@ export default function AttendeeView({
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => setActiveStep(2)}
+              onClick={() => setIsBadgeModalOpen(true)}
+              title="Ver mi credencial y comprobante oficial de ingreso con código QR"
             >
-              <ChevronLeft size={16} />
-              <span>Ver Asistencia</span>
+              <Award size={16} />
+              <span>Mi Escarapela Digital</span>
             </button>
 
             <button

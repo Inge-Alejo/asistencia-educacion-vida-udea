@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Trash2, Search, FileText, UserPlus, PlusCircle, ShieldCheck } from 'lucide-react';
 import { parseEnrollmentFile, normalizeDocumentId } from '../services/enrollmentService';
-import { saveEventInscritos, getEventInscritosData, deleteEventInscritos } from '../services/storage';
+import { saveEventInscritos, getEventInscritosData, fetchEventInscritosData, subscribeToEventInscritos, deleteEventInscritos } from '../services/storage';
 
 export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpdated }) {
   const [prevEventId, setPrevEventId] = useState(evento?.id);
@@ -15,6 +15,27 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
   const [testResult, setTestResult] = useState(null);
   const [manualDocInput, setManualDocInput] = useState('');
   const [manualSuccessMsg, setManualSuccessMsg] = useState('');
+
+  // Sincronización multi-dispositivo y carga en vivo desde Cloud Firestore
+  useEffect(() => {
+    if (!isOpen || !evento?.id) return;
+
+    fetchEventInscritosData(evento.id).then((cloudData) => {
+      if (cloudData) {
+        setCurrentInscritosData(cloudData);
+      }
+    });
+
+    const unsubscribe = subscribeToEventInscritos(evento.id, (_docs, fullData) => {
+      if (fullData) {
+        setCurrentInscritosData(fullData);
+      } else if (evento?.id) {
+        setCurrentInscritosData(getEventInscritosData(evento.id));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isOpen, evento?.id]);
 
   if (evento?.id !== prevEventId) {
     setPrevEventId(evento?.id);

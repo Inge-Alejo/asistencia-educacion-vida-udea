@@ -43,7 +43,7 @@ export async function getOfficialColombiaTime() {
         cachedOffsetMs = networkDate.getTime() - Date.now();
         lastSyncTimestamp = Date.now();
         isInternetTimeVerified = true;
-        syncSource = 'WorldTimeAPI (Hora Legal de Colombia)';
+        syncSource = 'WorldTimeAPI (Hora Oficial de Colombia)';
         return formatColombiaDateResult(networkDate, true, syncSource);
       }
     }
@@ -141,6 +141,28 @@ function formatColombiaDateResult(dateObj, verified, source) {
     esVerificadaInternet: verified,
     fuente: source
   };
+}
+
+/**
+ * Obtiene la fecha actual en formato ISO YYYY-MM-DD calculada exactamente en la zona horaria de Colombia (America/Bogota).
+ * Evita desajustes con UTC en horas de la noche (después de las 7:00 PM).
+ */
+export function getColombiaLocalDateStr(dateObj = new Date()) {
+  try {
+    const formatter = new Intl.DateTimeFormat('es-CO', {
+      timeZone: COLOMBIA_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = formatter.formatToParts(dateObj);
+    const y = parts.find(p => p.type === 'year')?.value;
+    const m = parts.find(p => p.type === 'month')?.value;
+    const d = parts.find(p => p.type === 'day')?.value;
+    return `${y}-${m}-${d}`;
+  } catch {
+    return dateObj.toISOString().slice(0, 10);
+  }
 }
 
 /**
