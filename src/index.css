@@ -3936,51 +3936,6 @@ input:checked + .slider::before {
   }
 }
 
-/* ==========================================================================
-   CABECERA: BADGE DE EVENTO BLOQUEADO PARA ASISTENTES (QR-LOCKED)
-   ========================================================================== */
-.header-event-locked-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  background: rgba(15, 89, 56, 0.08);
-  border: 1px solid rgba(15, 89, 56, 0.25);
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  max-width: 380px;
-}
-
-.locked-pill-tag {
-  background-color: var(--udea-green-dark, #0F5938);
-  color: #FFFFFF;
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-}
-
-.locked-text-wrap {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.locked-title {
-  font-size: 0.8rem;
-  color: var(--udea-green-dark, #0F5938);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.2;
-}
-
-.locked-date {
-  font-size: 0.7rem;
-  color: var(--text-muted, #4A5568);
-}
 
 /* ==========================================================================
    ESCARAPELA DIGITAL OFICIAL UDEA (CREDENCIAL DE ASISTENTE)
