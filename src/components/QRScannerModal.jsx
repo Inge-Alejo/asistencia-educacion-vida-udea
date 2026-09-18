@@ -546,7 +546,7 @@ export default function QRScannerModal({
                           <CheckCircle2 size={24} />
                         </div>
                         <div>
-                          <span className="status-pill-badge green">✓ Pase Digital Verificado</span>
+                          <span className="status-pill-badge green">Pase Digital Verificado</span>
                           <h4 className="result-attendee-name">{record?.nombreCompleto || 'Participante'}</h4>
                         </div>
                       </>
@@ -556,7 +556,7 @@ export default function QRScannerModal({
                           <AlertTriangle size={24} />
                         </div>
                         <div>
-                          <span className="status-pill-badge amber">⚠️ Registrado en Otro Evento</span>
+                          <span className="status-pill-badge amber">Registrado en Otro Evento</span>
                           <h4 className="result-attendee-name">{record?.nombreCompleto || 'Participante'}</h4>
                         </div>
                       </>
@@ -609,7 +609,7 @@ export default function QRScannerModal({
                     </span>
                     <span className={`detail-value ${record.placaVehiculo && record.placaVehiculo !== 'No registrada' ? 'has-plate' : 'no-plate'}`}>
                       {record.placaVehiculo && record.placaVehiculo !== 'No registrada'
-                        ? `🚗 ${record.placaVehiculo} (Autorizado)`
+                        ? `${record.placaVehiculo} (Autorizado)`
                         : 'Sin vehículo registrado'}
                     </span>
                   </div>
@@ -621,7 +621,7 @@ export default function QRScannerModal({
                     </span>
                     <span className={`detail-value ${record.geolocalizacion?.esPresencial ? 'gps-ok' : 'gps-external'}`}>
                       {record.geolocalizacion?.esPresencial
-                        ? `✓ En Sede (${record.geolocalizacion.distanciaMetros || 0} m)`
+                        ? `En Sede (${record.geolocalizacion.distanciaMetros || 0} m)`
                         : 'Registro remoto / Fuera de sede'}
                     </span>
                   </div>

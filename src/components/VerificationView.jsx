@@ -10,7 +10,9 @@ import {
   CreditCard,
   ArrowLeft,
   Lock,
-  Sparkles
+  Sparkles,
+  Cloud,
+  HardDrive
 } from 'lucide-react';
 import { verifyAttendanceRecord, getEvents } from '../services/storage';
 
@@ -171,7 +173,7 @@ export default function VerificationView({
                     <div>
                       <small>Modalidad</small>
                       <strong className={resultado.record.esPresencial ? 'text-presencial' : ''}>
-                        {resultado.record.esPresencial ? '✓ Presencial en Auditorio' : 'Registro de Asistencia'}
+                        {resultado.record.esPresencial ? 'Presencial en Auditorio' : 'Registro de Asistencia'}
                       </strong>
                     </div>
                   </div>
@@ -191,7 +193,17 @@ export default function VerificationView({
                   </div>
                 )}
                 <div className="security-tag-pill source-tag">
-                  <span>{resultado.fromCloud ? '☁️ Sincronizado en la Nube' : '💾 Validación Local Segura'}</span>
+                  {resultado.fromCloud ? (
+                    <>
+                      <Cloud size={12} style={{ verticalAlign: 'middle', marginRight: '3px' }} />
+                      <span>Sincronizado en la Nube</span>
+                    </>
+                  ) : (
+                    <>
+                      <HardDrive size={12} style={{ verticalAlign: 'middle', marginRight: '3px' }} />
+                      <span>Validación Local Segura</span>
+                    </>
+                  )}
                 </div>
               </div>
 

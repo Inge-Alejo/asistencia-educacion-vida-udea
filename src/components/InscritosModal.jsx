@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Trash2, Search, FileText, UserPlus, PlusCircle } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Trash2, Search, FileText, UserPlus, PlusCircle, ShieldCheck } from 'lucide-react';
 import { parseEnrollmentFile, normalizeDocumentId } from '../services/enrollmentService';
 import { saveEventInscritos, getEventInscritosData, deleteEventInscritos } from '../services/storage';
 
@@ -150,7 +150,7 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
       setManualDocInput('');
       setManualSuccessMsg(
         addedCount > 0
-          ? `✓ Se ${addedCount === 1 ? 'agregó 1 documento' : `agregaron ${addedCount} documentos`} exitosamente a la lista oficial.`
+          ? `Se ${addedCount === 1 ? 'agregó 1 documento' : `agregaron ${addedCount} documentos`} exitosamente a la lista oficial.`
           : `El documento ya se encontraba previamente en la lista oficial.`
       );
       if (typeof rawInput === 'string') {
@@ -254,15 +254,15 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
                       <CheckCircle2 size={16} />
                       <span>
                         {testResult.justAdded
-                          ? <>✓ Documento <strong>{testResult.doc}</strong> habilitado e inscrito exitosamente.</>
-                          : <>✓ El documento <strong>{testResult.doc}</strong> SÍ figura como inscrito oficial.</>}
+                          ? <>Documento <strong>{testResult.doc}</strong> habilitado e inscrito exitosamente.</>
+                          : <>El documento <strong>{testResult.doc}</strong> figura como inscrito oficial.</>}
                       </span>
                     </div>
                   ) : (
                     <div className="test-not-found-row">
                       <div className="test-not-found-text">
                         <AlertTriangle size={16} />
-                        <span>✗ El documento <strong>{testResult.doc}</strong> NO se encuentra en la lista de este evento.</span>
+                        <span>El documento <strong>{testResult.doc}</strong> no se encuentra en la lista de este evento.</span>
                       </div>
                       <button
                         type="button"
@@ -416,7 +416,8 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
         {/* Pie del modal */}
         <div className="modal-footer">
           <div style={{ fontSize: '0.8rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span>🔒 Control de admisión y asistencia institucional</span>
+            <ShieldCheck size={14} />
+            <span>Control de admisión y asistencia institucional</span>
           </div>
           <button type="button" className="btn-secondary" onClick={onClose}>
             <span>Cerrar</span>

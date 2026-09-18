@@ -192,7 +192,7 @@ export default function DigitalBadge({
 
     ctx.fillStyle = '#008744';
     ctx.font = 'bold 15px "Inter", sans-serif';
-    ctx.fillText('✓ ASISTENCIA OFICIAL CONFIRMADA', width / 2, 762);
+    ctx.fillText('ASISTENCIA OFICIAL CONFIRMADA', width / 2, 762);
 
     ctx.fillStyle = '#166534';
     ctx.font = '12px "Inter", sans-serif';
@@ -359,7 +359,10 @@ export default function DigitalBadge({
               {asistente.diaNumero ? ` (Día ${asistente.diaNumero})` : ''}
             </span>
             {asistente.fechaVerificadaInternet && (
-              <span style={{ color: '#006633', fontWeight: 600 }}>🌐 Verificado con Hora Legal de Colombia</span>
+              <span style={{ color: '#006633', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                <CheckCircle2 size={13} />
+                <span>Hora Legal de Colombia Verificada</span>
+              </span>
             )}
           </div>
         </div>

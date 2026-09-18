@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ShieldCheck } from 'lucide-react';
 import Header from './components/Header';
 import AttendeeView from './components/AttendeeView';
 import AdminPanel from './components/AdminPanel';
@@ -308,7 +309,10 @@ export default function App() {
             <p className="footer-addr">Cra. 51D # 62 - 29, Medellín, Colombia (Área de la Salud) • Tel: +57 (604) 219 6000</p>
           </div>
           <div className="footer-meta">
-            <span className="secure-badge">🔒 Acceso Administrativo Protegido</span>
+            <span className="secure-badge">
+              <ShieldCheck size={13} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
+              Acceso Administrativo Protegido
+            </span>
             <span className="version-tag">Versión 2.1 Web Institucional</span>
           </div>
         </div>

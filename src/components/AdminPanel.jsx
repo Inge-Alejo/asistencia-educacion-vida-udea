@@ -4,7 +4,7 @@ import {
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
   ExternalLink, Trash2, Shield, KeyRound, LogOut, Upload, X, Award,
   Database, HardDrive, Server, Activity, Wifi, Camera, Edit3,
-  CheckCircle2, Globe, Phone
+  CheckCircle2, Globe, Phone, Cloud, AlertTriangle
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import QRScannerModal from './QRScannerModal';
@@ -123,7 +123,7 @@ export default function AdminPanel({
       await deleteAllAttendance(evento?.id);
       setShowPurgeModal(false);
       if (onDataUpdated) onDataUpdated();
-      alert(`✓ Se han eliminado exitosamente todos los registros de asistencia del evento "${evento?.titulo || ''}".`);
+      alert(`Se han eliminado exitosamente todos los registros de asistencia del evento "${evento?.titulo || ''}".`);
     } catch (err) {
       console.error('Error al purgar asistencias:', err);
       alert('Hubo un inconveniente al eliminar los registros de asistencia.');
@@ -275,7 +275,17 @@ export default function AdminPanel({
               <span className="live-dot"></span> Sincronizado en Vivo
             </span>
             <span className={`db-status-pill ${isFirebaseConfigured() ? 'cloud' : 'local'}`}>
-              {isFirebaseConfigured() ? '☁️ Cloud Firestore Activo' : '💾 Modo Local de Contingencia'}
+              {isFirebaseConfigured() ? (
+                <>
+                  <Cloud size={13} />
+                  <span>Cloud Firestore Activo</span>
+                </>
+              ) : (
+                <>
+                  <HardDrive size={13} />
+                  <span>Modo Local de Contingencia</span>
+                </>
+              )}
             </span>
           </div>
           <p className="admin-subheading">
@@ -353,7 +363,7 @@ export default function AdminPanel({
                 reader.onload = (event) => {
                   const res = importDatabaseBackupJSON(event.target.result);
                   if (res.success) {
-                    alert(`✓ Respaldo restaurado exitosamente: ${res.countEvents} eventos y ${res.countAttendance} asistencias.`);
+                    alert(`Respaldo restaurado exitosamente: ${res.countEvents} eventos y ${res.countAttendance} asistencias.`);
                     if (onDataUpdated) onDataUpdated();
                   } else {
                     alert('Error al restaurar respaldo: ' + res.message);
@@ -433,7 +443,7 @@ export default function AdminPanel({
               <Star size={18} />
             </div>
           </div>
-          <div className="kpi-value">★ {promedioPonentes}</div>
+          <div className="kpi-value">{promedioPonentes}</div>
           <span className="kpi-meta">Basado en {totalEvals} evaluaciones</span>
         </div>
 
@@ -596,15 +606,16 @@ export default function AdminPanel({
                             {a.vinculacion || 'Asistente'}
                           </span>
                         </td>
-                        <td className="plate-cell text-center">
-                          {a.placaVehiculo ? (
-                            <span className="plate-badge" title={`Vehículo: ${a.placaVehiculo}`}>
-                              🚗 {a.placaVehiculo}
-                            </span>
-                          ) : (
-                            <span className="no-plate-dash" title="Sin vehículo registrado">—</span>
-                          )}
-                        </td>
+                          <td className="plate-cell text-center">
+                            {a.placaVehiculo ? (
+                              <span className="plate-badge" title={`Vehículo: ${a.placaVehiculo}`}>
+                                <Car size={13} />
+                                <span>{a.placaVehiculo}</span>
+                              </span>
+                            ) : (
+                              <span className="no-plate-dash" title="Sin vehículo registrado">—</span>
+                            )}
+                          </td>
                         <td>
                           <div className="geo-cluster">
                             {a.geolocalizacion?.esPresencial ? (
@@ -715,9 +726,9 @@ export default function AdminPanel({
                 onChange={(e) => setFilterEstadoPregunta(e.target.value)}
               >
                 <option value="todas">Todas las preguntas</option>
-                <option value="pendientes">⏳ Solo Pendientes ({preguntas.filter(q => !q.respondida).length})</option>
-                <option value="destacadas">★ Solo Destacadas ({preguntas.filter(q => q.destacada).length})</option>
-                <option value="respondidas">✓ Solo Respondidas ({preguntas.filter(q => q.respondida).length})</option>
+                <option value="pendientes">Solo Pendientes ({preguntas.filter(q => !q.respondida).length})</option>
+                <option value="destacadas">Solo Destacadas ({preguntas.filter(q => q.destacada).length})</option>
+                <option value="respondidas">Solo Respondidas ({preguntas.filter(q => q.respondida).length})</option>
               </select>
             </div>
 
@@ -823,7 +834,9 @@ export default function AdminPanel({
                       <p className="speaker-card-topic">Ponencia: "{ponente.temaPonencia}"</p>
                     </div>
                     <div className="speaker-global-score">
-                      <span className="score-num">★ {avgGeneral}</span>
+                      <span className="score-num" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Star size={15} fill="#D97706" color="#D97706" /> {avgGeneral}
+                      </span>
                       <span className="score-count">{count} evaluaciones</span>
                     </div>
                   </div>
@@ -875,7 +888,7 @@ export default function AdminPanel({
                             <div key={e.id || idx} className="comment-quote-row">
                               <div className="comment-quote">
                                 "{e.comentario}"
-                                <span className="comment-date">— {e.fecha} (Dominio: {e.dominio} ★ | Claridad: {e.claridad} ★ | Aplicabilidad: {e.aplicabilidad} ★)</span>
+                                <span className="comment-date">— {e.fecha} (Dominio: {e.dominio}/5 | Claridad: {e.claridad}/5 | Aplicabilidad: {e.aplicabilidad}/5)</span>
                               </div>
                               <button
                                 className="btn-action-pill delete"
@@ -915,7 +928,7 @@ export default function AdminPanel({
 
             <div className="satisfaction-kpi-card">
               <h3>Cumplimiento de Objetivos</h3>
-              <div className="nps-big-score">★ {promedioExpectativas} <small>/ 5</small></div>
+              <div className="nps-big-score">{promedioExpectativas} <small>/ 5</small></div>
               <p className="nps-desc">
                 Calificación promedio sobre el alcance y pertinencia académica del evento.
               </p>
@@ -1183,7 +1196,7 @@ export default function AdminPanel({
               </div>
 
               <p className="db-metric-footnote">
-                ✓ El evento actual consume una fracción mínima del límite gratuito de 1.024 MB de Firestore Spark.
+                El evento actual consume una fracción mínima del límite gratuito de 1.024 MB de Firestore Spark.
               </p>
             </div>
 
@@ -1489,7 +1502,10 @@ export default function AdminPanel({
             </div>
 
             <div className="purge-modal-warning-box">
-              <p>⚠️ <strong>Atención de Auditoría:</strong> Se purgarán los comprobantes oficiales de ingreso y asistencias tanto de la base de datos local como de la nube institucional.</p>
+              <p>
+                <AlertTriangle size={15} style={{ verticalAlign: 'middle', marginRight: '5px', color: '#DC2626' }} />
+                <strong>Atención de Auditoría:</strong> Se purgarán los comprobantes oficiales de ingreso y asistencias tanto de la base de datos local como de la nube institucional.
+              </p>
             </div>
 
             <div className="purge-countdown-indicator">
@@ -1501,7 +1517,7 @@ export default function AdminPanel({
               ) : (
                 <div className="countdown-pill ready">
                   <CheckCircle size={16} />
-                  <span>✓ Confirmación autorizada. Haga clic en el botón rojo para proceder.</span>
+                  <span>Confirmación autorizada. Haga clic en el botón rojo para proceder.</span>
                 </div>
               )}
             </div>

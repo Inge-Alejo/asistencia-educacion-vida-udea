@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { KeyRound, Eye, EyeOff, ShieldAlert, ArrowLeft, Clock } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, ShieldAlert, ArrowLeft, Clock, ShieldCheck } from 'lucide-react';
 import { authenticateAdmin, getLockoutRemainingSeconds } from '../services/auth';
 
 export default function AdminAuthModal({ isOpen, onClose, onSuccess }) {
@@ -110,7 +110,8 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }) {
 
           <div className="auth-security-notice">
             <p>
-              🔒 <strong>Acceso Institucional Protegido:</strong> Uso exclusivo para el equipo organizador y directivas de la Facultad de Medicina.
+              <ShieldCheck size={14} style={{ verticalAlign: 'middle', marginRight: '5px', color: '#006633' }} />
+              <strong>Acceso Institucional Protegido:</strong> Uso exclusivo para el equipo organizador y directivas de la Facultad de Medicina.
             </p>
           </div>
 

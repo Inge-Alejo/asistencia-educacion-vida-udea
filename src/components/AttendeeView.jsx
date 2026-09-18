@@ -4,7 +4,7 @@ import {
   MapPin, CheckCircle2, AlertTriangle, Send, Star, Car, User, Mail,
   Phone, CreditCard, MessageSquare, ThumbsUp, HelpCircle,
   Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check,
-  Navigation, Radio, Award, Calendar, KeyRound
+  Navigation, Radio, Award, Calendar, KeyRound, RotateCcw
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import {
@@ -654,7 +654,7 @@ export default function AttendeeView({
             </div>
             <div>
               <div className="session-user-row">
-                <span className="session-tag">✓ Asistencia Registrada Oficialmente</span>
+                <span className="session-tag">Asistencia Registrada Oficialmente</span>
                 <span className="session-comprobante-pill">N° {codigoComprobante}</span>
               </div>
               <h3 className="session-user-name">¡Hola, {formData.nombreCompleto || 'Asistente'}!</h3>
@@ -723,7 +723,8 @@ export default function AttendeeView({
               }}
               title="Registrar a otro participante o probar de nuevo"
             >
-              🔄 Nuevo Registro / Probar GPS
+              <RotateCcw size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
+              <span>Nuevo Registro / Probar GPS</span>
             </button>
           </div>
         </div>
@@ -791,16 +792,16 @@ export default function AttendeeView({
                 <p>
                   {geoState.obtenida
                     ? (geoState.esPresencial
-                        ? `✓ Ubicación satelital confirmada: Estás a ${geoState.distancia} metros del Auditorio de la Facultad de Medicina.`
-                        : `✓ Coordenadas registradas: Estás a ${geoState.distancia ? `${geoState.distancia} metros` : 'distancia'} de la Facultad de Medicina.`)
+                        ? `Ubicación satelital confirmada: Estás a ${geoState.distancia} metros del Auditorio de la Facultad de Medicina.`
+                        : `Coordenadas registradas: Estás a ${geoState.distancia ? `${geoState.distancia} metros` : 'distancia'} de la Facultad de Medicina.`)
                     : 'Presione el botón para obtener la ubicación satelital precisa de su dispositivo.'}
                 </p>
 
                 {geoState.obtenida && (
                   <div className="geo-tech-specs">
-                    <span>📡 <strong>Fuente de señal:</strong> {geoState.origenSenal || 'Sensor GPS'}</span>
-                    <span>🎯 <strong>Margen de precisión:</strong> ±{geoState.precision || 15} metros</span>
-                    <span>📏 <strong>Distancia al auditorio:</strong> {geoState.distancia} m</span>
+                    <span><strong>Fuente de señal:</strong> {geoState.origenSenal || 'Sensor GPS'}</span>
+                    <span><strong>Margen de precisión:</strong> ±{geoState.precision || 15} metros</span>
+                    <span><strong>Distancia al auditorio:</strong> {geoState.distancia} m</span>
                   </div>
                 )}
               </div>
@@ -824,20 +825,21 @@ export default function AttendeeView({
                     onClick={handleSimularEnSede}
                     title="Simular que estás físicamente dentro del auditorio para pruebas y demostraciones"
                   >
-                    ⚡ Probar como "En Sede" (Modo Demostración)
+                    Probar como "En Sede" (Modo Demostración)
                   </button>
                 </div>
               ) : (
                 <div className="geo-status-confirmed">
                   <div className={`geo-badge ${geoState.esPresencial ? 'verified' : 'unverified'}`}>
-                    {geoState.esPresencial ? '✓ En Sede UdeA (Presencial)' : '⚠ Registro Remoto'}
+                    {geoState.esPresencial ? 'En Sede UdeA (Presencial)' : 'Registro Remoto'}
                   </div>
                   <button
                     type="button"
                     className="btn-re-scan"
                     onClick={handleObtenerUbicacion}
                   >
-                    🔄 Re-escanear GPS
+                    <RotateCcw size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                    <span>Re-escanear GPS</span>
                   </button>
                 </div>
               )}
@@ -853,8 +855,8 @@ export default function AttendeeView({
               </div>
               <p className="radar-col-sub">Cra. 51D # 62-29, Medellín (Área de la Salud)</p>
               <div className="radar-specs-list">
-                <span>📍 <strong>Coord:</strong> 6.261341, -75.566464</span>
-                <span>⭕ <strong>Radio de presencia:</strong> {UDEA_MEDICINA_COORDS.radioMaximoMetros} metros</span>
+                <span><strong>Coord:</strong> 6.261341, -75.566464</span>
+                <span><strong>Radio de presencia:</strong> {UDEA_MEDICINA_COORDS.radioMaximoMetros} metros</span>
               </div>
             </div>
 
@@ -877,8 +879,8 @@ export default function AttendeeView({
                   : 'Presione "Obtener Ubicación Satelital"'}
               </p>
               <div className="radar-specs-list">
-                <span>🎯 <strong>Margen:</strong> {geoState.precision ? `±${geoState.precision} m` : 'No capturado'}</span>
-                <span>📌 <strong>Estado:</strong> {geoState.obtenida ? (geoState.esPresencial ? '✓ Validado en Sede' : 'Registrado como Remoto') : 'Pendiente'}</span>
+                <span><strong>Margen:</strong> {geoState.precision ? `±${geoState.precision} m` : 'No capturado'}</span>
+                <span><strong>Estado:</strong> {geoState.obtenida ? (geoState.esPresencial ? 'Validado en Sede' : 'Registrado como Remoto') : 'Pendiente'}</span>
               </div>
             </div>
           </div>
@@ -980,7 +982,7 @@ export default function AttendeeView({
                       <span className="step-day-date">{dStr}</span>
                       <span className="step-day-hours">{diaHorario.horaInicio} - {diaHorario.horaFin}</span>
                       <span className={`step-status-tag ${attendedForThisDay ? 'ok' : 'pending'}`}>
-                        {attendedForThisDay ? '✓ Registrado' : (isToday ? 'Por Registrar' : 'Pendiente')}
+                        {attendedForThisDay ? 'Registrado' : (isToday ? 'Por Registrar' : 'Pendiente')}
                       </span>
                     </div>
                   );
@@ -1035,7 +1037,7 @@ export default function AttendeeView({
                   onClick={() => setIsBadgeModalOpen(true)}
                 >
                   <Award size={20} />
-                  <span>🏷️ Ver Mi Pase Digital Oficial</span>
+                  <span>Ver Mi Pase Digital Oficial</span>
                 </button>
                 <p className="badge-cta-hint">
                   Incluye tu código QR de verificación oficial para identificarte e ingresar al auditorio.
@@ -1209,7 +1211,7 @@ export default function AttendeeView({
                         <Check size={13} />
                         <span>
                           {enrollmentStatus.hasWhitelist
-                            ? '✓ Documento verificado en la lista oficial de inscritos'
+                            ? 'Documento verificado en la lista oficial de inscritos'
                             : 'Documento disponible para registro de asistencia'}
                         </span>
                       </div>
@@ -1293,7 +1295,7 @@ export default function AttendeeView({
                       maxLength={6}
                     />
                     <span className="field-hint">
-                      💡 <strong>Campo opcional:</strong> Ingrese la placa únicamente si requiere autorizar el ingreso al parqueadero de la Facultad. Si asiste a pie o en transporte público, déjelo vacío.
+                      <strong>Nota informativa:</strong> Ingrese la placa únicamente si requiere autorizar el ingreso al parqueadero de la Facultad. Si asiste a pie o en transporte público, déjelo vacío.
                     </span>
                   </div>
                 )}
@@ -1474,8 +1476,8 @@ export default function AttendeeView({
                       <p className="qa-text">"{q.pregunta}"</p>
                       <div className="qa-footer">
                         <span className="qa-author">— {q.autor}</span>
-                        {q.respondida && <span className="badge-answered">✓ Respondida en vivo</span>}
-                        {q.destacada && <span className="badge-featured">★ Destacada</span>}
+                        {q.respondida && <span className="badge-answered">Respondida en vivo</span>}
+                        {q.destacada && <span className="badge-featured">Destacada</span>}
                       </div>
                     </div>
                   );
@@ -1577,7 +1579,7 @@ export default function AttendeeView({
                               className={`star-btn ${star <= currentEval.dominio ? 'active' : ''}`}
                               onClick={() => setField('dominio', star)}
                             >
-                              ★
+                              <Star size={20} fill="currentColor" />
                             </button>
                           ))}
                         </div>
@@ -1593,7 +1595,7 @@ export default function AttendeeView({
                               className={`star-btn ${star <= currentEval.claridad ? 'active' : ''}`}
                               onClick={() => setField('claridad', star)}
                             >
-                              ★
+                              <Star size={20} fill="currentColor" />
                             </button>
                           ))}
                         </div>
@@ -1609,7 +1611,7 @@ export default function AttendeeView({
                               className={`star-btn ${star <= currentEval.aplicabilidad ? 'active' : ''}`}
                               onClick={() => setField('aplicabilidad', star)}
                             >
-                              ★
+                              <Star size={20} fill="currentColor" />
                             </button>
                           ))}
                         </div>
@@ -1758,7 +1760,7 @@ export default function AttendeeView({
                           className={`star-btn ${star <= satisfaccionForm.cumplimiento ? 'active' : ''}`}
                           onClick={() => setSatisfaccionForm({ ...satisfaccionForm, cumplimiento: star })}
                         >
-                          ★
+                          <Star size={20} fill="currentColor" />
                         </button>
                       ))}
                     </div>
@@ -1774,7 +1776,7 @@ export default function AttendeeView({
                           className={`star-btn ${star <= satisfaccionForm.logistica ? 'active' : ''}`}
                           onClick={() => setSatisfaccionForm({ ...satisfaccionForm, logistica: star })}
                         >
-                          ★
+                          <Star size={20} fill="currentColor" />
                         </button>
                       ))}
                     </div>

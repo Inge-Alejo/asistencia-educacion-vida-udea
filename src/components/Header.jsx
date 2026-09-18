@@ -51,7 +51,10 @@ export default function Header({
             </div>
           ) : (
             <div className="header-event-locked-badge" title="Evento asignado según código QR escaneado">
-              <span className="locked-pill-tag">🔒 Evento Oficial</span>
+              <span className="locked-pill-tag">
+                <Lock size={11} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
+                Evento Oficial
+              </span>
               <div className="locked-text-wrap">
                 <strong className="locked-title">
                   {currentEvent?.titulo
