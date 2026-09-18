@@ -105,7 +105,7 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
           </div>
           <button
             type="button"
-            className="modal-close-btn"
+            className="btn-close-modal"
             onClick={onClose}
             aria-label="Cerrar ventana"
           >
@@ -113,171 +113,177 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
           </button>
         </div>
 
-        {/* Estado actual de la lista del evento */}
-        {currentInscritosData ? (
-          <div className="inscritos-status-banner active">
-            <div className="status-banner-left">
-              <CheckCircle2 size={24} color="#006633" />
+        {/* Cuerpo del Modal con padding y márgenes adecuados */}
+        <div className="modal-body inscritos-modal-body">
+          {/* Estado actual de la lista del evento */}
+          {currentInscritosData ? (
+            <div className="inscritos-status-banner active">
+              <div className="status-banner-left">
+                <CheckCircle2 size={24} color="#006633" />
+                <div>
+                  <strong>Lista de inscritos activa ({currentInscritosData.count} personas)</strong>
+                  <p>
+                    Archivo cargado: <code>{currentInscritosData.fileName}</code>
+                    {currentInscritosData.detectedColumn && ` • Columna: "${currentInscritosData.detectedColumn}"`}
+                  </p>
+                  <small>Última actualización: {new Date(currentInscritosData.actualizadoEn).toLocaleString('es-CO')}</small>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-danger-outline"
+                onClick={handleDelete}
+                disabled={isProcessing}
+                title="Eliminar lista para permitir registro libre sin restricción"
+              >
+                <Trash2 size={15} />
+                <span>Eliminar Lista</span>
+              </button>
+            </div>
+          ) : (
+            <div className="inscritos-status-banner empty">
+              <AlertTriangle size={20} color="#D97706" />
               <div>
-                <strong>Lista de inscritos activa ({currentInscritosData.count} personas)</strong>
-                <p>
-                  Archivo cargado: <code>{currentInscritosData.fileName}</code>
-                  {currentInscritosData.detectedColumn && ` • Columna: "${currentInscritosData.detectedColumn}"`}
-                </p>
-                <small>Última actualización: {new Date(currentInscritosData.actualizadoEn).toLocaleString('es-CO')}</small>
+                <strong>Registro Abierto (Sin Lista Previa)</strong>
+                <p>Actualmente cualquier persona puede registrar su asistencia. Si subes un archivo Excel o CSV, el sistema exigirá que el documento del asistente figure en dicho archivo.</p>
               </div>
             </div>
-            <button
-              type="button"
-              className="btn-danger-outline"
-              onClick={handleDelete}
-              disabled={isProcessing}
-              title="Eliminar lista para permitir registro libre sin restricción"
-            >
-              <Trash2 size={15} />
-              <span>Eliminar Lista</span>
-            </button>
-          </div>
-        ) : (
-          <div className="inscritos-status-banner empty">
-            <AlertTriangle size={20} color="#D97706" />
-            <div>
-              <strong>Registro Abierto (Sin Lista Previa)</strong>
-              <p>Actualmente cualquier persona puede registrar su asistencia. Si subes un archivo Excel o CSV, el sistema exigirá que el documento del asistente figure en dicho archivo.</p>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* Probador rápido de documento */}
-        {(currentInscritosData || parsedData) && (
-          <div className="test-search-box">
-            <label className="test-search-label">
-              <Search size={14} /> Verificar cédula en la lista oficial:
-            </label>
-            <form onSubmit={handleTestSearch} className="test-search-row">
+          {/* Probador rápido de documento */}
+          {(currentInscritosData || parsedData) && (
+            <div className="test-search-box">
+              <label className="test-search-label">
+                <Search size={14} /> Verificar cédula en la lista oficial:
+              </label>
+              <form onSubmit={handleTestSearch} className="test-search-row">
+                <input
+                  type="text"
+                  className="form-input test-search-input"
+                  placeholder="Ingresa un documento (ej: 1053873161 o con puntos)..."
+                  value={searchDocTest}
+                  onChange={(e) => {
+                    setSearchDocTest(e.target.value);
+                    setTestResult(null);
+                  }}
+                />
+                <button type="submit" className="btn-secondary">
+                  Consultar
+                </button>
+              </form>
+
+              {testResult && (
+                <div className={`test-result-badge ${testResult.found ? 'success' : 'not-found'}`}>
+                  {testResult.found ? (
+                    <>
+                      <CheckCircle2 size={16} />
+                      <span>✓ El documento <strong>{testResult.doc}</strong> SÍ figura como inscrito oficial.</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={16} />
+                      <span>✗ El documento <strong>{testResult.doc}</strong> NO se encuentra en la lista de este evento.</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Zona de Subida de Archivo (Drag & Drop) */}
+          <div
+            className="excel-dropzone"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDrop}
+          >
+            <FileSpreadsheet size={38} color="#006633" />
+            <h4>
+              {currentInscritosData ? 'Reemplazar o Actualizar Archivo Excel / CSV' : 'Subir Archivo de Personas Inscritas'}
+            </h4>
+            <p>
+              Arrastra aquí el archivo exportado de la plataforma (<strong>.xlsx</strong>, <strong>.xls</strong> o <strong>.csv</strong>) o selecciónalo desde tu equipo.
+            </p>
+
+            <label className="btn-primary-action file-picker-label">
+              <Upload size={16} />
+              <span>{isProcessing ? 'Procesando archivo...' : 'Seleccionar Archivo Excel / CSV'}</span>
               <input
-                type="text"
-                className="form-input test-search-input"
-                placeholder="Ingresa un documento (ej: 1053873161 o con puntos)..."
-                value={searchDocTest}
+                type="file"
+                accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                style={{ display: 'none' }}
+                disabled={isProcessing}
                 onChange={(e) => {
-                  setSearchDocTest(e.target.value);
-                  setTestResult(null);
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file);
                 }}
               />
-              <button type="submit" className="btn-secondary">
-                Consultar
-              </button>
-            </form>
-
-            {testResult && (
-              <div className={`test-result-badge ${testResult.found ? 'success' : 'not-found'}`}>
-                {testResult.found ? (
-                  <>
-                    <CheckCircle2 size={16} />
-                    <span>✓ El documento <strong>{testResult.doc}</strong> SÍ figura como inscrito oficial.</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle size={16} />
-                    <span>✗ El documento <strong>{testResult.doc}</strong> NO se encuentra en la lista de este evento.</span>
-                  </>
-                )}
-              </div>
-            )}
+            </label>
           </div>
-        )}
 
-        {/* Zona de Subida de Archivo (Drag & Drop) */}
-        <div
-          className="excel-dropzone"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={handleDrop}
-        >
-          <FileSpreadsheet size={38} color="#006633" />
-          <h4>
-            {currentInscritosData ? 'Reemplazar o Actualizar Archivo Excel / CSV' : 'Subir Archivo de Personas Inscritas'}
-          </h4>
-          <p>
-            Arrastra aquí el archivo exportado de la plataforma (<strong>.xlsx</strong>, <strong>.xls</strong> o <strong>.csv</strong>) o selecciónalo desde tu equipo.
-          </p>
+          {/* Mensaje de Error si la lectura falla */}
+          {errorMessage && (
+            <div className="error-banner animated-step">
+              <AlertTriangle size={18} />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
-          <label className="btn-primary-action file-picker-label">
-            <Upload size={16} />
-            <span>{isProcessing ? 'Procesando archivo...' : 'Seleccionar Archivo Excel / CSV'}</span>
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              style={{ display: 'none' }}
-              disabled={isProcessing}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileUpload(file);
-              }}
-            />
-          </label>
+          {/* Vista Previa de Archivo Analizado pendiente por guardar */}
+          {parsedData && (
+            <div className="parsed-preview-card animated-step">
+              <div className="parsed-preview-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FileText size={18} color="#006633" />
+                  <strong>Archivo procesado: {parsedData.fileName}</strong>
+                </div>
+                <span className="parsed-count-badge">
+                  {parsedData.count} personas inscritas detectadas
+                </span>
+              </div>
+
+              <div className="parsed-preview-body">
+                <p style={{ margin: '0 0 0.5rem', fontSize: '0.82rem', color: '#475569' }}>
+                  Columna de documento identificada automáticamente: <strong>"{parsedData.detectedColumn}"</strong>
+                </p>
+                <div className="parsed-sample-chips">
+                  <span className="sample-label">Muestra de documentos:</span>
+                  {parsedData.sample.map(doc => (
+                    <span key={doc} className="sample-doc-chip">{doc}</span>
+                  ))}
+                  {parsedData.count > parsedData.sample.length && (
+                    <span className="sample-more-chip">+{parsedData.count - parsedData.sample.length} más</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="parsed-preview-actions">
+                <button
+                  type="button"
+                  className="btn-primary-action btn-confirm-save-enrollment"
+                  onClick={handleSave}
+                  disabled={isProcessing}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>Confirmar y Guardar {parsedData.count} Inscritos en la Nube</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setParsedData(null)}
+                  disabled={isProcessing}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Mensaje de Error si la lectura falla */}
-        {errorMessage && (
-          <div className="error-banner animated-step" style={{ marginTop: '1rem' }}>
-            <AlertTriangle size={18} />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* Vista Previa de Archivo Analizado pendiente por guardar */}
-        {parsedData && (
-          <div className="parsed-preview-card animated-step">
-            <div className="parsed-preview-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <FileText size={18} color="#006633" />
-                <strong>Archivo procesado: {parsedData.fileName}</strong>
-              </div>
-              <span className="parsed-count-badge">
-                {parsedData.count} personas inscritas detectadas
-              </span>
-            </div>
-
-            <div className="parsed-preview-body">
-              <p style={{ margin: '0 0 0.5rem', fontSize: '0.82rem', color: '#475569' }}>
-                Columna de documento identificada automáticamente: <strong>"{parsedData.detectedColumn}"</strong>
-              </p>
-              <div className="parsed-sample-chips">
-                <span className="sample-label">Muestra de documentos:</span>
-                {parsedData.sample.map(doc => (
-                  <span key={doc} className="sample-doc-chip">{doc}</span>
-                ))}
-                {parsedData.count > parsedData.sample.length && (
-                  <span className="sample-more-chip">+{parsedData.count - parsedData.sample.length} más</span>
-                )}
-              </div>
-            </div>
-
-            <div className="parsed-preview-actions">
-              <button
-                type="button"
-                className="btn-primary-action btn-confirm-save-enrollment"
-                onClick={handleSave}
-                disabled={isProcessing}
-              >
-                <CheckCircle2 size={16} />
-                <span>Confirmar y Guardar {parsedData.count} Inscritos en la Nube</span>
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setParsedData(null)}
-                disabled={isProcessing}
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Pie del modal */}
-        <div className="modal-footer" style={{ marginTop: '1.25rem' }}>
+        <div className="modal-footer">
+          <div style={{ fontSize: '0.8rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <span>🔒 Control de admisión y asistencia institucional</span>
+          </div>
           <button type="button" className="btn-secondary" onClick={onClose}>
             <span>Cerrar</span>
           </button>
