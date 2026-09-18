@@ -1092,7 +1092,10 @@ export function subscribeToEventInscritos(eventoId, onUpdate) {
           } catch {}
           onUpdate(cloudData?.documents || []);
         } else {
-          onUpdate(getEventInscritos(eventoId));
+          try {
+            localStorage.removeItem(STORAGE_KEY_INSCRITOS_PREFIX + eventoId);
+          } catch {}
+          onUpdate([]);
         }
       });
     } catch (err) {

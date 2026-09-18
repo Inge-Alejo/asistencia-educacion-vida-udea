@@ -95,7 +95,7 @@ export async function authenticateAdmin(password) {
   const inputHash = await sha256(trimmed);
 
   // Comprobar contra hash seguro opcional en variable de entorno (VITE_ADMIN_HASH)
-  const envHash = import.meta.env.VITE_ADMIN_HASH;
+  const envHash = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_ADMIN_HASH : null;
   if (envHash && inputHash === envHash.trim()) {
     resetFailedAttempts();
     sessionStorage.setItem(AUTH_STORAGE_KEY, 'true');

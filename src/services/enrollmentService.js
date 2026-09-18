@@ -263,7 +263,10 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
  * @returns {{ isEnrolled: boolean, hasWhitelist: boolean }}
  */
 export function isDocumentEnrolled(inscritosList, inputDoc) {
-  if (!Array.isArray(inscritosList) || inscritosList.length === 0) {
+  const isSet = inscritosList instanceof Set;
+  const isArr = Array.isArray(inscritosList);
+
+  if ((!isSet && !isArr) || (isArr && inscritosList.length === 0) || (isSet && inscritosList.size === 0)) {
     // Si no hay lista cargada para este evento, el registro es libre
     return { isEnrolled: true, hasWhitelist: false };
   }
@@ -273,7 +276,7 @@ export function isDocumentEnrolled(inscritosList, inputDoc) {
     return { isEnrolled: false, hasWhitelist: true };
   }
 
-  const found = inscritosList.includes(normalizedInput);
+  const found = isSet ? inscritosList.has(normalizedInput) : inscritosList.includes(normalizedInput);
   return { isEnrolled: found, hasWhitelist: true };
 }
 

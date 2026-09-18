@@ -21,13 +21,15 @@ import {
 } from 'firebase/firestore';
 
 // Configuración de conexión Cloud Firestore (Firebase) para sincronización en vivo
+const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDYFLei8xJPwrMHQegMS6FF2P3SYBPbx00",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "udea-medicina-eventos.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "udea-medicina-eventos",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "udea-medicina-eventos.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "983460169904",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:983460169904:web:68ed632f1bc487df3ed375"
+  apiKey: env.VITE_FIREBASE_API_KEY || "AIzaSyDYFLei8xJPwrMHQegMS6FF2P3SYBPbx00",
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "udea-medicina-eventos.firebaseapp.com",
+  projectId: env.VITE_FIREBASE_PROJECT_ID || "udea-medicina-eventos",
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "udea-medicina-eventos.firebasestorage.app",
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "983460169904",
+  appId: env.VITE_FIREBASE_APP_ID || "1:983460169904:web:68ed632f1bc487df3ed375"
 };
 
 // Determinar si las credenciales de Firebase están activas

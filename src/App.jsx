@@ -76,6 +76,14 @@ export default function App() {
       if (cloudOrLocalEvents && cloudOrLocalEvents.length > 0) {
         setEvents(cloudOrLocalEvents);
         setCurrentEvent((prev) => {
+          if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const targetUrlId = params.get('evento');
+            if (targetUrlId) {
+              const urlMatch = cloudOrLocalEvents.find(e => e.id === targetUrlId);
+              if (urlMatch) return urlMatch;
+            }
+          }
           if (!prev) return cloudOrLocalEvents[0];
           const found = cloudOrLocalEvents.find(e => e.id === prev.id);
           return found || cloudOrLocalEvents[0];

@@ -135,13 +135,19 @@ export default function AttendeeView({
   const currentDoc = (formData?.documento || '').trim();
   const normalizedCurrentDoc = normalizeDocumentId(currentDoc);
 
+  // Set en memoria para validación O(1) instantánea sin degradación de rendimiento
+  const inscritosSet = useMemo(() => {
+    if (!Array.isArray(inscritosList) || inscritosList.length === 0) return null;
+    return new Set(inscritosList);
+  }, [inscritosList]);
+
   // Verificación de si el documento actual figura en la lista de inscritos oficiales del evento
   const enrollmentStatus = useMemo(() => {
     if (!normalizedCurrentDoc || normalizedCurrentDoc.length < 4) {
-      return { isEnrolled: true, hasWhitelist: Boolean(inscritosList && inscritosList.length > 0) };
+      return { isEnrolled: true, hasWhitelist: Boolean(inscritosSet && inscritosSet.size > 0) };
     }
-    return isDocumentEnrolled(inscritosList, normalizedCurrentDoc);
-  }, [inscritosList, normalizedCurrentDoc]);
+    return isDocumentEnrolled(inscritosSet, normalizedCurrentDoc);
+  }, [inscritosSet, normalizedCurrentDoc]);
 
   // Historial de asistencias registradas por este participante en este evento (todas las sesiones)
   const misAsistenciasEvento = useMemo(() => {
