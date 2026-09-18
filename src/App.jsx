@@ -13,6 +13,7 @@ import {
   saveEvent,
   deleteEvent,
   getAttendance,
+  getMealDeliveries,
   getQuestions,
   getEvaluations,
   getSatisfaction,
@@ -96,6 +97,7 @@ export default function App() {
 
   // Estados de datos para el evento actual
   const [asistencias, setAsistencias] = useState(() => currentEventId ? getAttendance(currentEventId) : []);
+  const [entregasComidas, setEntregasComidas] = useState(() => currentEventId ? getMealDeliveries(currentEventId) : []);
   const [preguntas, setPreguntas] = useState(() => currentEventId ? getQuestions(currentEventId) : []);
   const [evaluaciones, setEvaluaciones] = useState(() => currentEventId ? getEvaluations(currentEventId) : []);
   const [satisfaccion, setSatisfaccion] = useState(() => currentEventId ? getSatisfaction(currentEventId) : []);
@@ -104,6 +106,7 @@ export default function App() {
   const refreshEventData = useCallback(() => {
     if (!currentEventId) return;
     setAsistencias(getAttendance(currentEventId));
+    setEntregasComidas(getMealDeliveries(currentEventId));
     setPreguntas(getQuestions(currentEventId));
     setEvaluaciones(getEvaluations(currentEventId));
     setSatisfaccion(getSatisfaction(currentEventId));
@@ -121,11 +124,13 @@ export default function App() {
     setCurrentEvent(event);
     if (event?.id) {
       setAsistencias(getAttendance(event.id));
+      setEntregasComidas(getMealDeliveries(event.id));
       setPreguntas(getQuestions(event.id));
       setEvaluaciones(getEvaluations(event.id));
       setSatisfaccion(getSatisfaction(event.id));
     } else {
       setAsistencias([]);
+      setEntregasComidas([]);
       setPreguntas([]);
       setEvaluaciones([]);
       setSatisfaccion([]);
@@ -150,6 +155,7 @@ export default function App() {
     setCurrentEvent(eventData);
     if (eventData?.id) {
       setAsistencias(getAttendance(eventData.id));
+      setEntregasComidas(getMealDeliveries(eventData.id));
       setPreguntas(getQuestions(eventData.id));
       setEvaluaciones(getEvaluations(eventData.id));
       setSatisfaccion(getSatisfaction(eventData.id));
@@ -251,6 +257,7 @@ export default function App() {
               events={events}
               onSelectEvent={handleSelectEvent}
               asistencias={asistencias}
+              entregasComidas={entregasComidas}
               preguntas={preguntas}
               evaluaciones={evaluaciones}
               satisfaccion={satisfaccion}

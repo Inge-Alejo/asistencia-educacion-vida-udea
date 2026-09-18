@@ -1,6 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2 } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2, UtensilsCrossed, Coffee } from 'lucide-react';
 import { getEventDaysList } from '../services/networkTime';
+
+const DEFAULT_MEALS = [
+  { id: 'comida-1', nombre: 'Refrigerio Mañana', horario: '09:30 - 10:30' },
+  { id: 'comida-2', nombre: 'Almuerzo Institucional', horario: '12:30 - 14:00' },
+  { id: 'comida-3', nombre: 'Refrigerio Tarde', horario: '16:00 - 17:00' }
+];
 
 export default function EventModal({ isOpen, onClose, onSave, initialEvent = null }) {
   const [prevEventId, setPrevEventId] = useState(initialEvent?.id || null);
@@ -15,6 +21,12 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
   const [horaFin, setHoraFin] = useState(initialEvent?.horaFin || '17:00');
   const [lugar, setLugar] = useState(initialEvent?.lugar || 'Auditorio Manuel Uribe Ángel - Facultad de Medicina UdeA');
   const [habilitarPlacaVehiculo, setHabilitarPlacaVehiculo] = useState(initialEvent?.habilitarPlacaVehiculo ?? true);
+  const [habilitarAlimentacion, setHabilitarAlimentacion] = useState(Boolean(initialEvent?.habilitarAlimentacion));
+  const [comidasConfig, setComidasConfig] = useState(() => (
+    Array.isArray(initialEvent?.comidasConfig) && initialEvent.comidasConfig.length > 0
+      ? initialEvent.comidasConfig
+      : DEFAULT_MEALS
+  ));
   const [microsoftFormsUrl, setMicrosoftFormsUrl] = useState(initialEvent?.microsoftFormsUrl || '');
 
   const [ponentes, setPonentes] = useState(() => (
@@ -37,6 +49,12 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
     setHorariosPorDia(initialEvent?.horariosPorDia || {});
     setLugar(initialEvent?.lugar || 'Auditorio Manuel Uribe Ángel - Facultad de Medicina UdeA');
     setHabilitarPlacaVehiculo(initialEvent?.habilitarPlacaVehiculo ?? true);
+    setHabilitarAlimentacion(Boolean(initialEvent?.habilitarAlimentacion));
+    setComidasConfig(
+      Array.isArray(initialEvent?.comidasConfig) && initialEvent.comidasConfig.length > 0
+        ? initialEvent.comidasConfig
+        : DEFAULT_MEALS
+    );
     setMicrosoftFormsUrl(initialEvent?.microsoftFormsUrl || '');
     setPonentes(initialEvent?.ponentes?.length
       ? initialEvent.ponentes
@@ -125,6 +143,14 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       lugar,
       coordenadas: initialEvent?.coordenadas || { lat: 6.261341, lng: -75.566464 },
       habilitarPlacaVehiculo,
+      habilitarAlimentacion,
+      comidasConfig: habilitarAlimentacion
+        ? comidasConfig.filter(c => c.nombre && c.nombre.trim()).map(c => ({
+            id: c.id || `comida-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            nombre: c.nombre.trim(),
+            horario: (c.horario || '').trim()
+          }))
+        : [],
       microsoftFormsUrl: microsoftFormsUrl.trim(),
       ponentes: ponentes.filter(p => p.nombre.trim() !== '')
     };
@@ -440,6 +466,137 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               <span className="slider round"></span>
             </label>
           </div>
+
+          {/* CONTROL EXCLUSIVO: Habilitar Control de Almuerzos y Refrigerios */}
+          <div className="form-toggle-card">
+            <div className="toggle-info">
+              <div className="toggle-icon-wrap meals" style={{ background: '#E8F5E9', color: '#006633' }}>
+                <UtensilsCrossed size={22} />
+              </div>
+              <div>
+                <label className="toggle-title" htmlFor="switch-alimentacion">
+                  Habilitar Control de Almuerzos y Refrigerios
+                </label>
+                <p className="toggle-description">
+                  Activa el módulo de escaneo de QR en el Panel Administrativo para registrar la entrega de almuerzos o refrigerios y evitar que un participante reclame más de una vez.
+                </p>
+              </div>
+            </div>
+            <label className="switch">
+              <input
+                id="switch-alimentacion"
+                type="checkbox"
+                checked={habilitarAlimentacion}
+                onChange={(e) => setHabilitarAlimentacion(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
+          </div>
+
+          {/* Constructor Dinámico de Comidas / Refrigerios */}
+          {habilitarAlimentacion && (
+            <div className="form-section-card meals-config-card animated-step" style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '8px', padding: '1rem', marginBottom: '1.25rem' }}>
+              <div className="section-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 600, color: '#0F5938', fontSize: '0.92rem' }}>
+                  <Coffee size={18} />
+                  <span>Comidas y Refrigerios del Evento</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-add-mini"
+                  style={{ background: '#0F5938', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '5px', fontSize: '0.78rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                  onClick={() => {
+                    const nextNum = comidasConfig.length + 1;
+                    setComidasConfig([
+                      ...comidasConfig,
+                      {
+                        id: `comida-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+                        nombre: `Refrigerio ${nextNum}`,
+                        horario: '10:00 - 11:00'
+                      }
+                    ]);
+                  }}
+                >
+                  <Plus size={13} />
+                  <span>Agregar Comida</span>
+                </button>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '0 0 0.85rem', lineHeight: 1.35 }}>
+                Define las comidas o refrigerios disponibles. En el escáner administrativo podrás seleccionar cuál comida estás entregando en cada momento.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                {comidasConfig.map((comida, idx) => (
+                  <div
+                    key={comida.id || idx}
+                    style={{
+                      display: 'flex',
+                      gap: '0.5rem',
+                      alignItems: 'center',
+                      background: '#FFFFFF',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '6px',
+                      padding: '0.5rem 0.75rem',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                    }}
+                  >
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F5938', background: '#E8F5E9', width: '22px', height: '22px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {idx + 1}
+                    </span>
+                    <div style={{ flex: 2 }}>
+                      <label style={{ fontSize: '0.72rem', color: '#475569', display: 'block', marginBottom: '2px', fontWeight: 500 }}>
+                        Nombre de la Comida / Refrigerio <span style={{ color: '#DC2626' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.83rem' }}
+                        placeholder="Ej: Refrigerio Mañana, Almuerzo..."
+                        value={comida.nombre}
+                        onChange={(e) => {
+                          const updated = [...comidasConfig];
+                          updated[idx] = { ...updated[idx], nombre: e.target.value };
+                          setComidasConfig(updated);
+                        }}
+                        required
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '0.72rem', color: '#475569', display: 'block', marginBottom: '2px', fontWeight: 500 }}>
+                        Horario (Opcional)
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.83rem' }}
+                        placeholder="Ej: 12:30 - 14:00"
+                        value={comida.horario || ''}
+                        onChange={(e) => {
+                          const updated = [...comidasConfig];
+                          updated[idx] = { ...updated[idx], horario: e.target.value };
+                          setComidasConfig(updated);
+                        }}
+                      />
+                    </div>
+                    {comidasConfig.length > 1 && (
+                      <button
+                        type="button"
+                        style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '6px', borderRadius: '4px', alignSelf: 'flex-end', marginBottom: '2px', transition: 'color 0.15s' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = '#DC2626'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = '#94A3B8'; }}
+                        onClick={() => {
+                          setComidasConfig(comidasConfig.filter((_, i) => i !== idx));
+                        }}
+                        title="Eliminar esta comida"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Conexión con Microsoft Forms */}
           <div className="form-group">

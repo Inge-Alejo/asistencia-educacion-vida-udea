@@ -15,8 +15,9 @@ import {
   updateDoc,
   deleteDoc
 } from './firebase.js';
+import { normalizeDocumentId } from './enrollmentService.js';
 
-export { isFirebaseConfigured };
+export { isFirebaseConfigured, normalizeDocumentId };
 
 const STORAGE_KEY_EVENTS = 'udea_med_events_v1';
 const STORAGE_KEY_ATTENDANCE = 'udea_med_attendance_v1';
@@ -24,6 +25,7 @@ const STORAGE_KEY_QUESTIONS = 'udea_med_questions_v1';
 const STORAGE_KEY_EVALUATIONS = 'udea_med_evaluations_v1';
 const STORAGE_KEY_SATISFACTION = 'udea_med_satisfaction_v1';
 const STORAGE_KEY_VERIFICATIONS = 'udea_med_verifications_v1';
+const STORAGE_KEY_MEALS = 'udea_med_meals_deliveries_v1';
 
 const VERIFICATION_SALT = 'udea_medicina_escarapela_2026_salt_seguridad';
 
@@ -816,6 +818,126 @@ export async function deleteSatisfaction(satId) {
   return list;
 }
 
+// =========================================================================
+// MÓDULO DE CONTROL DE ALMUERZOS, REFRIGERIOS Y ALIMENTACIÓN
+// =========================================================================
+
+export function getMealDeliveries(eventId = null) {
+  initStorage();
+  try {
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEY_MEALS) || '[]');
+    return eventId ? list.filter(m => m.eventoId === eventId) : list;
+  } catch {
+    return [];
+  }
+}
+
+// Verifica en tiempo real (en Firestore con fallback local) si un participante ya reclamó una comida específica
+export async function checkMealAlreadyClaimed(eventoId, comidaId, documento) {
+  if (!eventoId || !comidaId || !documento) return { claimed: false };
+  const cleanDoc = normalizeDocumentId(documento);
+  const deliveryId = `${eventoId}_${comidaId}_${cleanDoc}`;
+
+  // 1. Verificación directa en Cloud Firestore (evita duplicados multi-dispositivo en milisegundos)
+  if (isFirebaseConfigured() && db) {
+    try {
+      const snap = await getDoc(doc(db, 'entregas_comidas', deliveryId));
+      if (snap.exists()) {
+        const record = snap.data();
+        return { claimed: true, record, fromCloud: true };
+      }
+    } catch (err) {
+      console.warn('Aviso al verificar entrega de comida en Firestore:', err);
+    }
+  }
+
+  // 2. Consulta en caché local segura
+  const localList = getMealDeliveries(eventoId);
+  const found = localList.find(m => m.comidaId === comidaId && normalizeDocumentId(m.documento) === cleanDoc);
+  if (found) {
+    return { claimed: true, record: found, fromCloud: false };
+  }
+
+  return { claimed: false };
+}
+
+// Registra la entrega de un almuerzo/refrigerio asegurando persistencia en Cloud Firestore y caché local
+export async function recordMealDelivery(deliveryData) {
+  if (!deliveryData?.eventoId || !deliveryData?.comidaId || !deliveryData?.documento) {
+    return { success: false, message: 'Datos incompletos para registrar la entrega.' };
+  }
+
+  const cleanDoc = normalizeDocumentId(deliveryData.documento);
+  const deliveryId = `${deliveryData.eventoId}_${deliveryData.comidaId}_${cleanDoc}`;
+
+  // Doble validación en vivo para garantizar que no haya sido reclamado en otra pantalla justo antes
+  if (isFirebaseConfigured() && db) {
+    try {
+      const existingSnap = await getDoc(doc(db, 'entregas_comidas', deliveryId));
+      if (existingSnap.exists()) {
+        return {
+          success: false,
+          alreadyClaimed: true,
+          record: existingSnap.data(),
+          message: 'Este beneficio ya fue reclamado en otro dispositivo.'
+        };
+      }
+    } catch {}
+  }
+
+  const now = new Date();
+  const newDelivery = {
+    ...deliveryData,
+    id: deliveryId,
+    documento: cleanDoc,
+    fechaDia: deliveryData.fechaDia || getColombiaLocalDateStr(),
+    horaEntrega: now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    fechaHoraISO: now.toISOString(),
+    registradoEn: now.toLocaleString('es-CO')
+  };
+
+  // 1. Guardar en caché local
+  const list = getMealDeliveries();
+  const existingIndex = list.findIndex(m => m.id === deliveryId);
+  if (existingIndex >= 0) {
+    list[existingIndex] = newDelivery;
+  } else {
+    list.unshift(newDelivery);
+  }
+  localStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(list));
+
+  // 2. Guardar en Cloud Firestore en tiempo real
+  if (isFirebaseConfigured() && db) {
+    try {
+      await setDoc(doc(db, 'entregas_comidas', deliveryId), newDelivery, { merge: true });
+    } catch (err) {
+      console.warn('Aviso guardando entrega en Firestore:', err);
+    }
+  }
+
+  // Notificar reactividad a todas las pestañas locales
+  window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_MEALS }));
+  return { success: true, record: newDelivery };
+}
+
+// Elimina/revoca una entrega de comida (en caso de anulación administrativa)
+export async function deleteMealDelivery(deliveryId) {
+  if (!deliveryId) return [];
+  const list = getMealDeliveries().filter(m => m.id !== deliveryId);
+  localStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(list));
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'entregas_comidas', deliveryId));
+    } catch (err) {
+      console.warn('Aviso eliminando entrega en Firestore:', err);
+    }
+  }
+
+  window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_MEALS }));
+  return list;
+}
+
 // Suscripción en Tiempo Real Multi-dispositivo (Firestore Snapshot en vivo)
 export function subscribeToEventData(eventId, onUpdate) {
   if (!eventId) return () => {};
@@ -824,7 +946,13 @@ export function subscribeToEventData(eventId, onUpdate) {
 
   // 1. Escuchar eventos locales entre pestañas del mismo navegador
   const storageHandler = (e) => {
-    if ([STORAGE_KEY_ATTENDANCE, STORAGE_KEY_QUESTIONS, STORAGE_KEY_EVALUATIONS, STORAGE_KEY_SATISFACTION].includes(e.key)) {
+    if ([
+      STORAGE_KEY_ATTENDANCE,
+      STORAGE_KEY_QUESTIONS,
+      STORAGE_KEY_EVALUATIONS,
+      STORAGE_KEY_SATISFACTION,
+      STORAGE_KEY_MEALS
+    ].includes(e.key)) {
       if (onUpdate) onUpdate();
     }
   };
@@ -895,6 +1023,21 @@ export function subscribeToEventData(eventId, onUpdate) {
       );
       unsubs.push(unsubSat);
 
+      // Sincronización en vivo de Entregas de Almuerzos y Refrigerios
+      const unsubMeals = onSnapshot(
+        query(collection(db, 'entregas_comidas'), where('eventoId', '==', eventId)),
+        (snapshot) => {
+          const cloudMeals = [];
+          snapshot.forEach(docSnap => cloudMeals.push(docSnap.data()));
+          const localOther = getMealDeliveries().filter(m => m.eventoId !== eventId);
+          const combined = [...cloudMeals, ...localOther];
+          localStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(combined));
+          if (onUpdate) onUpdate();
+        },
+        (err) => console.warn('Firestore entregas_comidas snapshot:', err)
+      );
+      unsubs.push(unsubMeals);
+
       // Sincronización en vivo de Lista Oficial de Inscritos (Excel / CSV)
       const unsubInscritos = onSnapshot(
         doc(db, 'inscritos', eventId),
@@ -953,7 +1096,8 @@ export function exportDatabaseBackupJSON() {
       attendance: JSON.parse(localStorage.getItem(STORAGE_KEY_ATTENDANCE) || '[]'),
       questions: JSON.parse(localStorage.getItem(STORAGE_KEY_QUESTIONS) || '[]'),
       evaluations: JSON.parse(localStorage.getItem(STORAGE_KEY_EVALUATIONS) || '[]'),
-      satisfaction: JSON.parse(localStorage.getItem(STORAGE_KEY_SATISFACTION) || '[]')
+      satisfaction: JSON.parse(localStorage.getItem(STORAGE_KEY_SATISFACTION) || '[]'),
+      meals: JSON.parse(localStorage.getItem(STORAGE_KEY_MEALS) || '[]')
     }
   };
 
@@ -981,6 +1125,9 @@ export function importDatabaseBackupJSON(jsonString) {
     localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(backup.data.questions || []));
     localStorage.setItem(STORAGE_KEY_EVALUATIONS, JSON.stringify(backup.data.evaluations || []));
     localStorage.setItem(STORAGE_KEY_SATISFACTION, JSON.stringify(backup.data.satisfaction || []));
+    if (backup.data.meals) {
+      localStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(backup.data.meals || []));
+    }
 
     return {
       success: true,

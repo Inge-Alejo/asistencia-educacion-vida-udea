@@ -4,10 +4,11 @@ import {
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
   ExternalLink, Trash2, Shield, KeyRound, LogOut, Upload, X, Award,
   Database, HardDrive, Server, Activity, Wifi, Camera, Edit3,
-  CheckCircle2, Globe, Phone, Cloud, AlertTriangle
+  CheckCircle2, Globe, Phone, Cloud, AlertTriangle, UtensilsCrossed
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import QRScannerModal from './QRScannerModal';
+import MealScannerModal from './MealScannerModal';
 import EventSelectorModal from './EventSelectorModal';
 import InscritosModal from './InscritosModal';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
@@ -19,6 +20,7 @@ import {
   deleteAllAttendance,
   deleteEvaluation,
   deleteSatisfaction,
+  deleteMealDelivery,
   isFirebaseConfigured,
   exportDatabaseBackupJSON,
   importDatabaseBackupJSON,
@@ -59,6 +61,7 @@ export default function AdminPanel({
   events = [],
   onSelectEvent,
   asistencias = [],
+  entregasComidas = [],
   preguntas = [],
   evaluaciones = [],
   satisfaccion = [],
@@ -75,8 +78,13 @@ export default function AdminPanel({
   const [selectedGeoRecord, setSelectedGeoRecord] = useState(null);
   const [selectedBadgeAttendee, setSelectedBadgeAttendee] = useState(null);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+  const [isMealScannerOpen, setIsMealScannerOpen] = useState(false);
   const [isEditSelectorOpen, setIsEditSelectorOpen] = useState(false);
   const [isInscritosModalOpen, setIsInscritosModalOpen] = useState(false);
+
+  // Estados para control de Alimentación y Refrigerios
+  const [mealFilterId, setMealFilterId] = useState('ALL');
+  const [mealSearchTerm, setMealSearchTerm] = useState('');
 
   // Estados para filtros de Preguntas en Vivo (corrige error de carga)
   const [searchTermQuestions, setSearchTermQuestions] = useState('');
@@ -236,11 +244,26 @@ export default function AdminPanel({
     return matchPonente && matchSearch && matchEstado;
   });
 
+  // Filtrado de Entregas de Alimentación
+  const filteredMealDeliveries = useMemo(() => {
+    const list = (entregasComidas || []).filter(e => e.eventoId === evento?.id);
+    return list.filter(d => {
+      const matchMeal = mealFilterId === 'ALL' || d.comidaId === mealFilterId;
+      const term = (mealSearchTerm || '').trim().toLowerCase();
+      const matchSearch = !term ||
+        (d.nombreCompleto && d.nombreCompleto.toLowerCase().includes(term)) ||
+        (d.documento && String(d.documento).includes(term)) ||
+        (d.comidaNombre && d.comidaNombre.toLowerCase().includes(term));
+      return matchMeal && matchSearch;
+    });
+  }, [entregasComidas, evento?.id, mealFilterId, mealSearchTerm]);
+
   const handleDescargarExcel = () => {
     try {
       exportEventDataToExcel({
         evento,
         asistencias,
+        entregasComidas,
         preguntas,
         evaluaciones,
         satisfaccion
@@ -303,6 +326,26 @@ export default function AdminPanel({
             <Camera size={16} />
             <span>Escanear QR en Puerta</span>
           </button>
+          {evento?.habilitarAlimentacion && (
+            <button
+              type="button"
+              className="btn-secondary btn-meals-action"
+              onClick={() => setIsMealScannerOpen(true)}
+              style={{
+                background: '#E8F5E9',
+                borderColor: '#86EFAC',
+                color: '#0F5938',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem'
+              }}
+              title="Abrir lector QR de la cámara del celular para entregar almuerzos o refrigerios"
+            >
+              <UtensilsCrossed size={16} />
+              <span>Escanear Almuerzos / Refrigerios</span>
+            </button>
+          )}
           <button className="btn-secondary" onClick={onOpenNewEventModal}>
             <Plus size={16} />
             <span>Crear Evento</span>
@@ -496,6 +539,15 @@ export default function AdminPanel({
           <FileSpreadsheet size={16} />
           <span>Excel y Microsoft Forms</span>
         </button>
+        {evento?.habilitarAlimentacion && (
+          <button
+            className={`tab-link ${activeTab === 'alimentacion' ? 'active' : ''}`}
+            onClick={() => setActiveTab('alimentacion')}
+          >
+            <UtensilsCrossed size={16} />
+            <span>Alimentación ({(entregasComidas || []).filter(e => e.eventoId === evento.id).length})</span>
+          </button>
+        )}
         <button
           className={`tab-link ${activeTab === 'database' ? 'active' : ''}`}
           onClick={() => setActiveTab('database')}
@@ -1140,7 +1192,194 @@ export default function AdminPanel({
         </div>
       )}
 
-      {/* PESTAÑA 6: ESTADO Y CAPACIDAD DE LA BASE DE DATOS EN TIEMPO REAL */}
+      {/* PESTAÑA 6: CONTROL DE ALIMENTACIÓN Y REFRIGERIOS */}
+      {activeTab === 'alimentacion' && (
+        <div className="tab-panel animated-step">
+          <div className="pane-header-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0F5938', margin: '0 0 0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <UtensilsCrossed size={20} />
+                <span>Control y Entrega de Almuerzos y Refrigerios</span>
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748B' }}>
+                Escanea el código QR de la escarapela digital para validar y registrar la entrega en tiempo real con Cloud Firestore.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn-primary-action"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.55rem 1rem', fontSize: '0.88rem' }}
+                onClick={() => setIsMealScannerOpen(true)}
+              >
+                <Camera size={16} />
+                <span>Abrir Escáner de Comidas</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tarjetas de Comidas Configuradas y Progreso */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
+            {(evento.comidasConfig || []).map((comida) => {
+              const entregadas = (entregasComidas || []).filter(e => e.eventoId === evento.id && e.comidaId === comida.id).length;
+              const porcentaje = totalAsistentes > 0 ? Math.round((entregadas / totalAsistentes) * 100) : 0;
+              const isSelected = mealFilterId === comida.id;
+              return (
+                <div
+                  key={comida.id}
+                  onClick={() => setMealFilterId(isSelected ? 'ALL' : comida.id)}
+                  style={{
+                    background: isSelected ? '#F0FDF4' : '#FFFFFF',
+                    border: isSelected ? '2px solid #006633' : '1px solid #E2E8F0',
+                    borderRadius: '8px',
+                    padding: '0.85rem 1rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1E293B' }}>{comida.nombre}</span>
+                    <UtensilsCrossed size={15} color={isSelected ? '#006633' : '#94A3B8'} />
+                  </div>
+                  {comida.horario && (
+                    <span style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '0.5rem' }}>
+                      <Clock size={11} /> {comida.horario}
+                    </span>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '0.4rem' }}>
+                    <strong style={{ fontSize: '1.2rem', color: '#0F5938' }}>{entregadas}</strong>
+                    <span style={{ fontSize: '0.75rem', color: '#64748B' }}>de {totalAsistentes} ({porcentaje}%)</span>
+                  </div>
+                  <div style={{ background: '#E2E8F0', height: '5px', borderRadius: '3px', marginTop: '0.4rem', overflow: 'hidden' }}>
+                    <div style={{ background: '#006633', height: '100%', width: `${Math.min(100, porcentaje)}%`, transition: 'width 0.3s' }}></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Filtros y Búsqueda de Entregas */}
+          <div className="table-filters" style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="search-input-wrap" style={{ flex: 1, minWidth: '220px' }}>
+              <Search size={15} className="search-icon" />
+              <input
+                type="text"
+                className="form-input search-input"
+                placeholder="Buscar entrega por nombre o cédula..."
+                value={mealSearchTerm}
+                onChange={(e) => setMealSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="filter-select-wrap">
+              <Filter size={15} className="filter-icon" />
+              <select
+                className="form-input filter-select"
+                value={mealFilterId}
+                onChange={(e) => setMealFilterId(e.target.value)}
+              >
+                <option value="ALL">Todas las Comidas</option>
+                {(evento.comidasConfig || []).map((c) => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            </div>
+            {mealFilterId !== 'ALL' && (
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ fontSize: '0.78rem', padding: '0.4rem 0.65rem' }}
+                onClick={() => setMealFilterId('ALL')}
+              >
+                Limpiar Filtro
+              </button>
+            )}
+          </div>
+
+          {/* Tabla de Entregas de Alimentación */}
+          {filteredMealDeliveries.length === 0 ? (
+            <div className="empty-tab-state" style={{ textAlign: 'center', padding: '2.5rem 1rem', background: '#F8FAFC', borderRadius: '8px', border: '1px dashed #CBD5E1' }}>
+              <UtensilsCrossed size={40} color="#94A3B8" style={{ margin: '0 auto 0.75rem', display: 'block' }} />
+              <h4 style={{ margin: '0 0 0.35rem', color: '#334155' }}>No hay entregas registradas aún</h4>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>
+                Abre el escáner con la cámara del celular para comenzar a registrar entregas de comida a los asistentes.
+              </p>
+              <button
+                type="button"
+                className="btn-primary-action"
+                style={{ marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                onClick={() => setIsMealScannerOpen(true)}
+              >
+                <Camera size={15} />
+                <span>Abrir Escáner Ahora</span>
+              </button>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Hora</th>
+                    <th>Documento</th>
+                    <th>Nombre Asistente</th>
+                    <th>Comida / Refrigerio</th>
+                    <th>Método</th>
+                    <th>Operador</th>
+                    <th style={{ textAlign: 'center' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMealDeliveries.map((delivery) => (
+                    <tr key={delivery.id}>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: '0.82rem', color: '#64748B' }}>
+                        <Clock size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                        {delivery.horaEntrega || '—'}
+                      </td>
+                      <td style={{ fontWeight: 600, color: '#1E293B', whiteSpace: 'nowrap' }}>
+                        {delivery.tipoDocumento || 'CC'}: {delivery.documento}
+                      </td>
+                      <td style={{ fontWeight: 500, color: '#0F172A' }}>
+                        {delivery.nombreCompleto}
+                      </td>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#E8F5E9', color: '#0F5938', padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 600 }}>
+                          <UtensilsCrossed size={12} />
+                          {delivery.comidaNombre}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                          {delivery.metodo === 'MANUAL' ? 'Manual' : 'Cámara QR'}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                        {delivery.operador || 'Logística UdeA'}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          className="btn-action-icon delete"
+                          onClick={async () => {
+                            if (window.confirm(`¿Deseas anular la entrega de "${delivery.comidaNombre}" a ${delivery.nombreCompleto} (${delivery.documento})? Podrá volver a reclamar.`)) {
+                              await deleteMealDelivery(delivery.id);
+                              if (onDataUpdated) onDataUpdated();
+                            }
+                          }}
+                          title="Anular entrega de este participante"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PESTAÑA 7: ESTADO Y CAPACIDAD DE LA BASE DE DATOS EN TIEMPO REAL */}
       {activeTab === 'database' && (
         <div className="tab-panel">
           {/* Header con Badge Pulsante de Estado Firestore */}
@@ -1558,6 +1797,18 @@ export default function AdminPanel({
           isOpen={isQRScannerOpen}
           onClose={() => setIsQRScannerOpen(false)}
           eventoActual={evento}
+          onDataUpdated={onDataUpdated}
+        />
+      )}
+
+      {/* Modal de Escaneo de Alimentación / Almuerzos / Refrigerios con Cámara */}
+      {isMealScannerOpen && (
+        <MealScannerModal
+          isOpen={isMealScannerOpen}
+          onClose={() => setIsMealScannerOpen(false)}
+          eventoActual={evento}
+          asistencias={asistencias}
+          entregasComidas={entregasComidas}
           onDataUpdated={onDataUpdated}
         />
       )}

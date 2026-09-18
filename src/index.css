@@ -7631,5 +7631,529 @@ input:checked + .slider::before {
   }
 }
 
+/* ==========================================================================
+   MÓDULO DE CONTROL DE ALIMENTACIÓN Y REFRIGERIOS (MODAL ESCÁNER QR)
+   Facultad de Medicina - Universidad de Antioquia
+   ========================================================================== */
 
+.meal-scanner-overlay {
+  background: rgba(10, 25, 18, 0.78) !important;
+  backdrop-filter: blur(8px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 1050 !important;
+  padding: 1rem !important;
+}
 
+.meal-scanner-container {
+  max-width: 620px !important;
+  width: 100% !important;
+  background: #FFFFFF !important;
+  border-radius: 16px !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 102, 51, 0.12) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: 94vh !important;
+  animation: modalEnter 0.22s ease-out !important;
+}
+
+.meal-scanner-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  padding: 1.15rem 1.4rem !important;
+  background: linear-gradient(135deg, #0F5938 0%, #004D25 100%) !important;
+  color: #FFFFFF !important;
+  border-bottom: 2px solid #08381B !important;
+}
+
+.meal-scanner-header-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.25rem !important;
+}
+
+.meal-badge-title {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.6px !important;
+  color: #A7F3D0 !important;
+}
+
+.meal-event-title {
+  font-size: 1.15rem !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+  color: #FFFFFF !important;
+  max-width: 480px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* Barra de selección de comida */
+.meal-selector-bar {
+  background: #F8FAFC !important;
+  padding: 0.85rem 1.25rem !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+.meal-selector-label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  color: #475569 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.4px !important;
+  margin-bottom: 0.6rem !important;
+}
+
+.meal-chips-list {
+  display: flex !important;
+  gap: 0.5rem !important;
+  overflow-x: auto !important;
+  padding-bottom: 0.25rem !important;
+}
+
+.meal-chip-btn {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 0.15rem !important;
+  background: #FFFFFF !important;
+  border: 1.5px solid #CBD5E1 !important;
+  border-radius: 10px !important;
+  padding: 0.55rem 0.85rem !important;
+  cursor: pointer !important;
+  transition: all 0.16s ease !important;
+  white-space: nowrap !important;
+  min-width: 130px !important;
+  text-align: left !important;
+}
+
+.meal-chip-btn:hover {
+  border-color: #006633 !important;
+  background: #F0FDF4 !important;
+}
+
+.meal-chip-btn.active {
+  background: #E8F5E9 !important;
+  border-color: #006633 !important;
+  box-shadow: 0 0 0 2px rgba(0, 102, 51, 0.18) !important;
+}
+
+.meal-chip-name {
+  font-size: 0.88rem !important;
+  font-weight: 700 !important;
+  color: #1E293B !important;
+}
+
+.meal-chip-btn.active .meal-chip-name {
+  color: #0F5938 !important;
+}
+
+.meal-chip-time {
+  font-size: 0.72rem !important;
+  color: #64748B !important;
+}
+
+.meal-chip-badge {
+  font-size: 0.7rem !important;
+  font-weight: 600 !important;
+  color: #0F5938 !important;
+  background: #DCFCE7 !important;
+  padding: 1px 6px !important;
+  border-radius: 8px !important;
+  margin-top: 0.2rem !important;
+}
+
+/* KPI Strip */
+.meal-kpi-strip {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+  padding: 0.65rem 1.25rem !important;
+}
+
+.meal-kpi-item {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.1rem !important;
+}
+
+.meal-kpi-sub {
+  font-size: 0.72rem !important;
+  color: #64748B !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
+}
+
+.meal-kpi-val {
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  color: #1E293B !important;
+}
+
+/* Viewport Section */
+.meal-viewport-section {
+  position: relative !important;
+  background: #020617 !important;
+  min-height: 280px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+
+.scanner-video-wrapper {
+  position: relative !important;
+  width: 100% !important;
+  max-height: 380px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #000000 !important;
+}
+
+.scanner-video-wrapper.paused .scanner-video-feed {
+  filter: brightness(0.4) blur(4px) !important;
+}
+
+.scanner-video-feed {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 380px !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+.scanner-crosshair-overlay {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 220px !important;
+  height: 220px !important;
+  pointer-events: none !important;
+}
+
+.scanner-bracket {
+  position: absolute !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-color: #34D399 !important;
+  border-style: solid !important;
+}
+
+.scanner-bracket.top-left {
+  top: 0 !important;
+  left: 0 !important;
+  border-width: 3.5px 0 0 3.5px !important;
+  border-top-left-radius: 8px !important;
+}
+
+.scanner-bracket.top-right {
+  top: 0 !important;
+  right: 0 !important;
+  border-width: 3.5px 3.5px 0 0 !important;
+  border-top-right-radius: 8px !important;
+}
+
+.scanner-bracket.bottom-left {
+  bottom: 0 !important;
+  left: 0 !important;
+  border-width: 0 0 3.5px 3.5px !important;
+  border-bottom-left-radius: 8px !important;
+}
+
+.scanner-bracket.bottom-right {
+  bottom: 0 !important;
+  right: 0 !important;
+  border-width: 0 3.5px 3.5px 0 !important;
+  border-bottom-right-radius: 8px !important;
+}
+
+.scanner-guide-text {
+  position: absolute !important;
+  bottom: -32px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  font-size: 0.74rem !important;
+  color: #D1FAE5 !important;
+  background: rgba(6, 40, 24, 0.85) !important;
+  padding: 3px 10px !important;
+  border-radius: 12px !important;
+  white-space: nowrap !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Floating Result Card */
+.meal-scan-result-card {
+  position: absolute !important;
+  top: 12px !important;
+  bottom: 12px !important;
+  left: 12px !important;
+  right: 12px !important;
+  border-radius: 14px !important;
+  padding: 1.25rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  z-index: 10 !important;
+  animation: slideUpResultCard 0.22s ease-out !important;
+}
+
+.meal-scan-result-card.success {
+  background: #0B2519 !important;
+  border: 1.5px solid #059669 !important;
+  box-shadow: 0 12px 30px rgba(5, 150, 105, 0.35) !important;
+}
+
+.meal-scan-result-card.already_claimed {
+  background: #2D1414 !important;
+  border: 1.5px solid #EF4444 !important;
+  box-shadow: 0 12px 30px rgba(239, 68, 68, 0.35) !important;
+}
+
+.meal-scan-result-card.not_found {
+  background: #291807 !important;
+  border: 1.5px solid #F59E0B !important;
+  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.35) !important;
+}
+
+.result-content-wrap {
+  display: flex !important;
+  gap: 1rem !important;
+  align-items: flex-start !important;
+}
+
+.result-icon-circle {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+.result-icon-circle.success {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #34D399 !important;
+}
+
+.result-icon-circle.duplicate {
+  background: rgba(239, 68, 68, 0.2) !important;
+  color: #F87171 !important;
+}
+
+.result-icon-circle.warning {
+  background: rgba(245, 158, 11, 0.2) !important;
+  color: #FBBF24 !important;
+}
+
+.result-text-body {
+  flex: 1 !important;
+}
+
+.result-status-title {
+  font-size: 0.8rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.6px !important;
+  text-transform: uppercase !important;
+  display: block !important;
+  color: #34D399 !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.result-status-title.danger {
+  color: #F87171 !important;
+}
+
+.result-status-title.warning {
+  color: #FBBF24 !important;
+}
+
+.result-attendee-name {
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  color: #FFFFFF !important;
+  margin: 0 0 0.5rem !important;
+}
+
+.result-duplicate-warning {
+  font-size: 0.85rem !important;
+  color: #FECACA !important;
+  margin: 0.35rem 0 0.65rem !important;
+  line-height: 1.4 !important;
+}
+
+.result-error-msg {
+  font-size: 0.85rem !important;
+  color: #FDE68A !important;
+  margin: 0.35rem 0 !important;
+}
+
+.result-badges-row {
+  display: flex !important;
+  gap: 0.45rem !important;
+  flex-wrap: wrap !important;
+}
+
+.result-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.3rem !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #E2E8F0 !important;
+  padding: 3px 8px !important;
+  border-radius: 8px !important;
+  font-size: 0.75rem !important;
+}
+
+.result-pill.highlight {
+  background: rgba(52, 211, 153, 0.25) !important;
+  color: #A7F3D0 !important;
+  font-weight: 600 !important;
+}
+
+.result-pill.danger {
+  background: rgba(239, 68, 68, 0.3) !important;
+  color: #FECACA !important;
+  font-weight: 600 !important;
+}
+
+/* Resume Bar */
+.result-resume-bar {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+  padding-top: 0.75rem !important;
+  margin-top: 0.75rem !important;
+}
+
+.auto-resume-text {
+  font-size: 0.78rem !important;
+  color: #CBD5E1 !important;
+}
+
+.btn-next-scan {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  background: #006633 !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 8px !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  margin-left: auto !important;
+  transition: background 0.15s !important;
+}
+
+.btn-next-scan:hover {
+  background: #0F5938 !important;
+}
+
+/* Controles de Escaneo */
+.meal-scanner-controls-row {
+  display: flex !important;
+  gap: 0.45rem !important;
+  padding: 0.65rem 1rem !important;
+  background: #F8FAFC !important;
+  border-top: 1px solid #E2E8F0 !important;
+  overflow-x: auto !important;
+}
+
+.btn-scanner-tool {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  padding: 0.45rem 0.75rem !important;
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  border-radius: 8px !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.15s !important;
+}
+
+.btn-scanner-tool:hover {
+  border-color: #006633 !important;
+  color: #006633 !important;
+}
+
+.btn-scanner-tool.active {
+  background: #E8F5E9 !important;
+  border-color: #006633 !important;
+  color: #0F5938 !important;
+}
+
+/* Formulario de Entrada Manual */
+.manual-doc-deliver-form {
+  padding: 0.85rem 1.25rem 1rem !important;
+  background: #F0FDF4 !important;
+  border-top: 1px solid #BBF7D0 !important;
+}
+
+.manual-input-wrap {
+  position: relative !important;
+  display: flex !important;
+  gap: 0.5rem !important;
+  align-items: center !important;
+}
+
+.manual-input-wrap .input-inner-icon {
+  position: absolute !important;
+  left: 10px !important;
+  color: #64748B !important;
+  pointer-events: none !important;
+}
+
+.manual-doc-input {
+  padding-left: 2.2rem !important;
+  flex: 1 !important;
+  background: #FFFFFF !important;
+}
+
+.btn-manual-submit {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  padding: 0.55rem 0.95rem !important;
+  background: #006633 !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+}
+
+.btn-manual-submit:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+}
+
+.manual-help-text {
+  margin: 0.4rem 0 0 !important;
+  font-size: 0.72rem !important;
+  color: #475569 !important;
+  line-height: 1.35 !important;
+}
