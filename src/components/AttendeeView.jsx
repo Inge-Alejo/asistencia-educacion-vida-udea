@@ -165,6 +165,13 @@ export default function AttendeeView({
     ) || null;
   }, [asistencias, currentEventId, normalizedCurrentDoc]);
 
+  // Datos precargados del participante en la lista oficial de inscritos (si fueron cargados desde Excel/CSV)
+  const inscritosParticipants = evento?.inscritosData?.participants;
+  const inscritoData = useMemo(() => {
+    if (!normalizedCurrentDoc || !inscritosParticipants || typeof inscritosParticipants !== 'object') return null;
+    return inscritosParticipants[normalizedCurrentDoc] || null;
+  }, [normalizedCurrentDoc, inscritosParticipants]);
+
   // Asistencia específica para la fecha o sesión de hoy
   const hoyStr = officialTime.fechaStr || getColombiaLocalDateStr();
   const asistenciaHoy = useMemo(() => {
@@ -219,18 +226,38 @@ export default function AttendeeView({
   // Determinar si el documento ingresado actualmente está debidamente validado y vinculado
   const isCurrentDocVerified = useMemo(() => {
     if (!normalizedCurrentDoc) return false;
-    const targetRecord = registroExistente || registroPrevioEvento;
+    const targetRecord = registroExistente || registroPrevioEvento || inscritoData;
     if (!targetRecord) return false;
+    // Si proviene de lista oficial pero dicha lista no incluía correo, se asume verificado directamente
+    if (!registroExistente && !registroPrevioEvento && inscritoData && !inscritoData.correo) {
+      return true;
+    }
     const isDocMatch = normalizeDocumentId(verifiedDoc) === normalizedCurrentDoc || 
       (sessionInfo && normalizeDocumentId(sessionInfo.documento) === normalizedCurrentDoc);
-    const isNameMatch = Boolean(formData.nombreCompleto && areNamesMatching(formData.nombreCompleto, targetRecord.nombreCompleto));
+    const isNameMatch = !targetRecord.nombreCompleto || Boolean(formData.nombreCompleto && areNamesMatching(formData.nombreCompleto, targetRecord.nombreCompleto));
     return Boolean(isDocMatch && isNameMatch);
-  }, [normalizedCurrentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroExistente, registroPrevioEvento]);
+  }, [normalizedCurrentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroExistente, registroPrevioEvento, inscritoData]);
+
+  // Autocompletar automáticamente si el participante está en la lista oficial y no se requiere desafío de correo
+  useEffect(() => {
+    if (inscritoData && !inscritoData.correo && !registroExistente && !registroPrevioEvento) {
+      if (!formData.nombreCompleto && inscritoData.nombreCompleto) {
+        setFormData(prev => ({
+          ...prev,
+          tipoDocumento: inscritoData.tipoDocumento || prev.tipoDocumento,
+          nombreCompleto: inscritoData.nombreCompleto || prev.nombreCompleto,
+          telefono: inscritoData.telefono || prev.telefono,
+          vinculacion: inscritoData.vinculacion || prev.vinculacion
+        }));
+        setVerifiedDoc(currentDoc);
+      }
+    }
+  }, [inscritoData, registroExistente, registroPrevioEvento, currentDoc, formData.nombreCompleto]);
 
   // Función para validar el correo y autocompletar o autenticar en nuevo dispositivo
   const handleVerifyChallengeEmail = (e) => {
     e?.preventDefault();
-    const targetRecord = registroExistente || registroPrevioEvento;
+    const targetRecord = registroExistente || registroPrevioEvento || inscritoData;
     if (!targetRecord) return;
 
     const inputEmail = challengeEmail.trim().toLowerCase();
@@ -266,7 +293,7 @@ export default function AttendeeView({
       try {
         localStorage.setItem(`udea_session_attendee_${evento?.id}`, JSON.stringify({
           tipoDocumento: targetRecord.tipoDocumento,
-          documento: targetRecord.documento,
+          documento: targetRecord.documento || currentDoc,
           nombreCompleto: targetRecord.nombreCompleto,
           correo: targetRecord.correo,
           telefono: targetRecord.telefono,
@@ -284,7 +311,9 @@ export default function AttendeeView({
       setChallengeError(
         registroExistente
           ? 'El correo ingresado no coincide con el registrado en la asistencia de hoy para este documento.'
-          : 'El correo ingresado no coincide con el registrado en jornadas anteriores para este documento.'
+          : registroPrevioEvento
+            ? 'El correo ingresado no coincide con el registrado en jornadas anteriores para este documento.'
+            : 'El correo ingresado no coincide con el registrado en la lista oficial de inscritos para este documento.'
       );
     }
   };
@@ -538,6 +567,14 @@ export default function AttendeeView({
     }
     if (cleanDoc.length < 4 || cleanDoc.length > 20 || !/^[A-Z0-9]+$/.test(cleanDoc)) {
       setErrorAsistencia('El número de documento debe contener entre 4 y 20 caracteres válidos (números o letras).');
+      return;
+    }
+
+    // Bloquear registro si la fecha actual es anterior a la fecha de inicio del evento
+    if (dayStatus.esAntesDeFecha) {
+      setErrorAsistencia(
+        `El registro de asistencia aún no está disponible. El evento está programado para iniciar el ${dayStatus.fechaInicio || evento.fecha}.`
+      );
       return;
     }
 
@@ -1156,6 +1193,30 @@ export default function AttendeeView({
             </div>
           ) : (
             <form onSubmit={handleRegistrarAsistencia} className="attendance-form">
+              {dayStatus.esAntesDeFecha && (
+                <div style={{
+                  background: '#FFFBEB',
+                  border: '1.5px solid #FCD34D',
+                  padding: '0.9rem 1.1rem',
+                  borderRadius: '10px',
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.75rem',
+                  color: '#92400E',
+                  fontSize: '0.9rem'
+                }}>
+                  <AlertTriangle size={22} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <strong style={{ display: 'block', marginBottom: '2px', color: '#78350F' }}>
+                      Registro de asistencia aún no habilitado
+                    </strong>
+                    <span>
+                      Este evento está programado para iniciar el <strong>{dayStatus.fechaInicio || evento.fecha}</strong>. Podrás confirmar tu asistencia oficial a partir de dicha fecha.
+                    </span>
+                  </div>
+                </div>
+              )}
               {evento?.esMultidia && !yaRegistroHoy && misAsistenciasEvento.length > 0 && (
                 <div style={{ background: '#F0FDF4', border: '1.5px solid #86EFAC', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534', fontSize: '0.88rem' }}>
                   <CheckCircle2 size={18} color="#006633" />
@@ -1357,6 +1418,80 @@ export default function AttendeeView({
                         {challengeError && <p className="challenge-err-text">{challengeError}</p>}
                       </div>
                     )
+                  ) : inscritoData ? (
+                    isCurrentDocVerified ? (
+                      <div className="doc-autofilled-hint animated-step">
+                        <CheckCircle2 size={14} color="#059669" />
+                        <span>Datos vinculados de la lista de inscritos ({maskFullName(inscritoData.nombreCompleto)})</span>
+                        <button
+                          type="button"
+                          className="btn-change-participant-mini"
+                          onClick={handleResetParticipant}
+                          title="Limpiar campos para ingresar con otro documento"
+                        >
+                          Cambiar
+                        </button>
+                      </div>
+                    ) : inscritoData.correo ? (
+                      <div className="security-challenge-card animated-step">
+                        <div className="security-challenge-header">
+                          <ShieldCheck size={16} color="#006633" />
+                          <span>Inscripción oficial detectada: <strong>{maskFullName(inscritoData.nombreCompleto)}</strong> ({maskEmail(inscritoData.correo)})</span>
+                        </div>
+                        <p className="security-challenge-desc">
+                          Por seguridad y protección de datos personales (Ley 1581), para autocompletar automáticamente tus datos en este dispositivo, confirma tu correo electrónico:
+                        </p>
+                        <div className="security-challenge-form-row">
+                          <input
+                            type="email"
+                            className="form-input challenge-input"
+                            placeholder="Confirma tu correo registrado..."
+                            value={challengeEmail}
+                            onChange={(e) => {
+                              setChallengeEmail(e.target.value);
+                              setChallengeError('');
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleVerifyChallengeEmail(e);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn-challenge-action"
+                            onClick={handleVerifyChallengeEmail}
+                          >
+                            <KeyRound size={14} />
+                            <span>Validar y Autocompletar</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-change-participant-mini"
+                            onClick={handleResetParticipant}
+                            title="Limpiar campos para ingresar con otro documento"
+                            style={{ alignSelf: 'center' }}
+                          >
+                            Ingresar con otro documento
+                          </button>
+                        </div>
+                        {challengeError && <p className="challenge-err-text">{challengeError}</p>}
+                      </div>
+                    ) : (
+                      <div className="doc-autofilled-hint animated-step">
+                        <CheckCircle2 size={14} color="#059669" />
+                        <span>Inscripción verificada: {inscritoData.nombreCompleto}</span>
+                        <button
+                          type="button"
+                          className="btn-change-participant-mini"
+                          onClick={handleResetParticipant}
+                          title="Limpiar campos para ingresar con otro documento"
+                        >
+                          Cambiar
+                        </button>
+                      </div>
+                    )
                   ) : (enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled && normalizedCurrentDoc.length >= 4) ? (
                     <div className="doc-not-enrolled-alert animated-step">
                       <div className="doc-not-enrolled-header">
@@ -1530,12 +1665,20 @@ export default function AttendeeView({
 
                 <button
                   type="submit"
-                  className={`btn-primary-action ${enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled ? 'btn-disabled' : ''}`}
-                  disabled={enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled}
-                  title={enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled ? 'No figura en la lista oficial de inscritos' : ''}
+                  className={`btn-primary-action ${(enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled) || dayStatus.esAntesDeFecha ? 'btn-disabled' : ''}`}
+                  disabled={(enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled) || dayStatus.esAntesDeFecha}
+                  title={
+                    dayStatus.esAntesDeFecha
+                      ? `El evento inicia el ${dayStatus.fechaInicio || evento?.fecha}`
+                      : enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled
+                      ? 'No figura en la lista oficial de inscritos'
+                      : ''
+                  }
                 >
                   <span>
-                    {enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled
+                    {dayStatus.esAntesDeFecha
+                      ? `Asistencia No Disponible (Inicia ${dayStatus.fechaInicio || evento?.fecha})`
+                      : enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled
                       ? 'No Figura en Lista de Inscritos'
                       : evento?.esMultidia
                       ? `Confirmar Asistencia Día ${dayStatus.diaNumero || 1} (${officialTime.fechaStr})`

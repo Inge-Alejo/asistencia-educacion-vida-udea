@@ -403,6 +403,42 @@ export function subscribeToEvents(onUpdate) {
     } catch (err) {
       console.warn('Error al suscribir eventos en Firestore:', err);
     }
+
+    // Sincronización multi-dispositivo en tiempo real de la colección de listas de inscritos
+    try {
+      const unsubInscritos = onSnapshot(collection(db, 'inscritos'), (snapshot) => {
+        let changed = false;
+        const currentEvents = getEvents();
+        snapshot.forEach(docSnap => {
+          const cloudInscritos = docSnap.data();
+          if (cloudInscritos && cloudInscritos.eventoId) {
+            try {
+              localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + cloudInscritos.eventoId, JSON.stringify(cloudInscritos));
+            } catch {}
+            const ev = currentEvents.find(e => e.id === cloudInscritos.eventoId);
+            if (ev) {
+              ev.inscritosData = cloudInscritos;
+              ev.inscritosResumen = {
+                total: cloudInscritos.count || (cloudInscritos.documents || []).length,
+                fileName: cloudInscritos.fileName || 'Inscritos.xlsx',
+                fechaCarga: cloudInscritos.actualizadoEn,
+                habilitado: (cloudInscritos.count || (cloudInscritos.documents || []).length) > 0
+              };
+              changed = true;
+            }
+          }
+        });
+        if (changed) {
+          localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(currentEvents));
+          if (onUpdate) onUpdate(currentEvents);
+        }
+      }, (err) => {
+        console.warn('Aviso sincronización Firestore inscritos:', err?.message);
+      });
+      unsubs.push(unsubInscritos);
+    } catch (err) {
+      console.warn('Error al suscribir colección inscritos en Firestore:', err);
+    }
   }
 
   return () => {
@@ -465,6 +501,7 @@ export async function recordAttendance(record) {
     eventoId: newRecord.eventoId,
     nombreCompleto: newRecord.nombreCompleto,
     tipoDocumento: newRecord.tipoDocumento || 'CC',
+    documento: newRecord.documento,
     documentoMasked: maskDocumento(newRecord.documento),
     vinculacion: newRecord.vinculacion || 'Asistente',
     placaVehiculo: newRecord.placaVehiculo || '',
@@ -580,6 +617,13 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
             message: 'El código de verificación no coincide con el registro oficial. Este pase digital ha sido modificado o no es válido.'
           };
         }
+        // Si faltaba el documento completo, recuperarlo del almacenamiento local de asistencias
+        if (!data.documento) {
+          const localMatch = getAttendance().find(a => a.id === cleanId);
+          if (localMatch?.documento) {
+            data.documento = localMatch.documento;
+          }
+        }
         return { success: true, record: data, fromCloud: true };
       }
     } catch {
@@ -597,6 +641,12 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
           success: false,
           message: 'El código de verificación no coincide con el registro original.'
         };
+      }
+      if (!data.documento) {
+        const localMatch = getAttendance().find(a => a.id === cleanId);
+        if (localMatch?.documento) {
+          data.documento = localMatch.documento;
+        }
       }
       return { success: true, record: data, fromCloud: false };
     }
@@ -622,6 +672,7 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
         eventoId: found.eventoId,
         nombreCompleto: found.nombreCompleto,
         tipoDocumento: found.tipoDocumento || 'CC',
+        documento: found.documento,
         documentoMasked: maskDocumento(found.documento),
         vinculacion: found.vinculacion || 'Asistente',
         placaVehiculo: found.placaVehiculo || '',
@@ -1198,6 +1249,7 @@ export async function saveEventInscritos(eventoId, data) {
   const payload = {
     eventoId,
     documents: data.documents || [],
+    participants: data.participants || {},
     count: (data.documents || []).length,
     fileName: data.fileName || 'Inscritos.xlsx',
     detectedColumn: data.detectedColumn || '',

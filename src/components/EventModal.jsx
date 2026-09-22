@@ -155,7 +155,9 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
           }))
         : [],
       microsoftFormsUrl: microsoftFormsUrl.trim(),
-      ponentes: ponentes.filter(p => p.nombre.trim() !== '')
+      ponentes: ponentes.filter(p => p.nombre.trim() !== ''),
+      inscritosResumen: initialEvent?.inscritosResumen || null,
+      inscritosData: initialEvent?.inscritosData || null
     };
 
     onSave(eventPayload);

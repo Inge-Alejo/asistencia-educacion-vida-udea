@@ -215,12 +215,21 @@ export function checkEventDayStatus(evento, fechaYMD) {
   const horaInicio = horarioDia?.horaInicio || evento?.horaInicio || '08:00';
   const horaFin = horarioDia?.horaFin || evento?.horaFin || '18:00';
 
+  const fechaInicio = days.length > 0 ? days[0] : (evento?.fecha || '');
+  const fechaFin = days.length > 0 ? days[days.length - 1] : (evento?.fecha || '');
+  const esAntesDeFecha = Boolean(fechaYMD && fechaInicio && fechaYMD < fechaInicio);
+  const esDespuesDeFecha = Boolean(fechaYMD && fechaFin && fechaYMD > fechaFin);
+
   return {
     esDiaActivo: index !== -1,
     diaNumero,
     totalDias: days.length,
     fechaDia: fechaYMD,
     diasList: days,
+    fechaInicio,
+    fechaFin,
+    esAntesDeFecha,
+    esDespuesDeFecha,
     horaInicio,
     horaFin,
     tieneHorarioEspecial: Boolean(horarioDia && (horarioDia.horaFin !== evento?.horaFin || horarioDia.horaInicio !== evento?.horaInicio))

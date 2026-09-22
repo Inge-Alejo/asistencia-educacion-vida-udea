@@ -588,7 +588,7 @@ export default function QRScannerModal({
                       <CreditCard size={14} /> Documento de Identidad
                     </span>
                     <span className="detail-value highlight">
-                      {record.tipoDocumento || 'CC'} {record.documento}
+                      {record.tipoDocumento || 'CC'} {record.documento || record.documentoMasked || 'N/A'}
                     </span>
                   </div>
 

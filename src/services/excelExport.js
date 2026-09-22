@@ -25,26 +25,59 @@ export function exportEventDataToExcel({
     ? entregasComidas
     : (safeEvento.id ? getMealDeliveries(safeEvento.id) : []);
 
+  // Determinar comidas configuradas o entregadas para consolidar en la hoja de asistencias
+  const hasMeals = safeEvento.habilitarAlimentacion || safeEntregas.length > 0;
+  const configuredMeals = Array.isArray(safeEvento.comidasConfig) && safeEvento.comidasConfig.length > 0
+    ? safeEvento.comidasConfig.map(c => (typeof c === 'string' ? c : c.nombre)).filter(Boolean)
+    : Array.from(new Set(safeEntregas.map(e => e.comidaNombre).filter(Boolean)));
+
   // 1. Hoja de Asistencias y Geolocalización
-  const asistenciasData = safeAsistencias.map((a, index) => ({
-    'N°': index + 1,
-    'Código Asistencia': sanitizeExcelFormula(a.id),
-    'Tipo Doc.': sanitizeExcelFormula(a.tipoDocumento || 'CC'),
-    'Documento': sanitizeExcelFormula(a.documento),
-    'Nombre Completo': sanitizeExcelFormula(a.nombreCompleto),
-    'Correo Electrónico': sanitizeExcelFormula(a.correo),
-    'Teléfono / Celular': sanitizeExcelFormula(a.telefono),
-    'Vinculación / Rol': sanitizeExcelFormula(a.vinculacion),
-    'Placa Vehículo': sanitizeExcelFormula(a.placaVehiculo || 'No registrada / No requería'),
-    'Fecha y Hora': a.fechaRegistro,
-    'Estado Presencial': a.geolocalizacion?.esPresencial ? 'EN SEDE / PRESENCIAL' : 'FUERA DE RANGO / REMOTO',
-    'Distancia a Facultad (m)': a.geolocalizacion?.distanciaSedeMetros ?? 'N/A',
-    'Latitud': a.geolocalizacion?.latitud ?? 'N/A',
-    'Longitud': a.geolocalizacion?.longitud ?? 'N/A',
-    'Precisión GPS (m)': a.geolocalizacion?.precisionMetros ?? 'N/A',
-    'Habeas Data (Ley 1581/2012)': a.habeasDataAceptado !== false ? 'AUTORIZADO Y FIRMADO' : 'PENDIENTE',
-    'Fecha Aceptación Habeas Data': a.fechaHabeasData || a.fechaRegistro
-  }));
+  const asistenciasData = safeAsistencias.map((a, index) => {
+    const row = {
+      'N°': index + 1,
+      'Código Asistencia': sanitizeExcelFormula(a.id),
+      'Tipo Doc.': sanitizeExcelFormula(a.tipoDocumento || 'CC'),
+      'Documento': sanitizeExcelFormula(a.documento),
+      'Nombre Completo': sanitizeExcelFormula(a.nombreCompleto),
+      'Correo Electrónico': sanitizeExcelFormula(a.correo),
+      'Teléfono / Celular': sanitizeExcelFormula(a.telefono),
+      'Vinculación / Rol': sanitizeExcelFormula(a.vinculacion),
+      'Placa Vehículo': sanitizeExcelFormula(a.placaVehiculo || 'No registrada / No requería'),
+      'Fecha y Hora': a.fechaRegistro,
+      'Estado Presencial': a.geolocalizacion?.esPresencial ? 'EN SEDE / PRESENCIAL' : 'FUERA DE RANGO / REMOTO',
+      'Distancia a Facultad (m)': a.geolocalizacion?.distanciaSedeMetros ?? 'N/A',
+      'Latitud': a.geolocalizacion?.latitud ?? 'N/A',
+      'Longitud': a.geolocalizacion?.longitud ?? 'N/A',
+      'Precisión GPS (m)': a.geolocalizacion?.precisionMetros ?? 'N/A',
+      'Habeas Data (Ley 1581/2012)': a.habeasDataAceptado !== false ? 'AUTORIZADO Y FIRMADO' : 'PENDIENTE',
+      'Fecha Aceptación Habeas Data': a.fechaHabeasData || a.fechaRegistro
+    };
+
+    if (hasMeals) {
+      const attendeeDeliveries = safeEntregas.filter(
+        e => String(e.documento || '').trim().toLowerCase() === String(a.documento || '').trim().toLowerCase()
+      );
+
+      if (configuredMeals.length > 0) {
+        configuredMeals.forEach(mealName => {
+          const match = attendeeDeliveries.find(
+            e => (e.comidaNombre || '').trim().toLowerCase() === mealName.trim().toLowerCase()
+          );
+          row[`Alimentación: ${mealName}`] = match
+            ? `SÍ (${match.horaEntrega || 'Reclamado'})`
+            : 'NO RECLAMADO';
+        });
+        row['Total Comidas Reclamadas'] = `${attendeeDeliveries.length} / ${configuredMeals.length}`;
+      } else {
+        row['Comidas Reclamadas'] = attendeeDeliveries.length > 0
+          ? attendeeDeliveries.map(e => `${e.comidaNombre || 'Comida'} (${e.horaEntrega || ''})`).join(', ')
+          : 'NO RECLAMADO';
+        row['Total Comidas Reclamadas'] = attendeeDeliveries.length;
+      }
+    }
+
+    return row;
+  });
 
   const wsAsistencias = XLSX.utils.json_to_sheet(asistenciasData.length > 0 ? asistenciasData : [
     { 'Mensaje': 'No se registran asistencias para este evento aún.' }

@@ -84,6 +84,80 @@ function isDocumentNumberHeader(headerText) {
   return false;
 }
 
+function isNameHeader(headerText) {
+  const clean = cleanHeaderCell(headerText);
+  if (!clean) return false;
+  return (
+    clean === 'nombre completo' ||
+    clean === 'nombres y apellidos' ||
+    clean === 'apellidos y nombres' ||
+    clean === 'nombre' ||
+    clean === 'nombres' ||
+    clean === 'participante' ||
+    clean === 'asistente' ||
+    clean.includes('nombre completo') ||
+    clean.includes('nombres y apellidos') ||
+    clean.startsWith('nombre')
+  );
+}
+
+function isEmailHeader(headerText) {
+  const clean = cleanHeaderCell(headerText);
+  if (!clean) return false;
+  return (
+    clean === 'correo electronico' ||
+    clean === 'correo' ||
+    clean === 'email' ||
+    clean === 'e-mail' ||
+    clean === 'correo udea' ||
+    clean.includes('correo electronico') ||
+    clean.includes('correo') ||
+    clean.includes('email')
+  );
+}
+
+function isPhoneHeader(headerText) {
+  const clean = cleanHeaderCell(headerText);
+  if (!clean) return false;
+  return (
+    clean === 'telefono' ||
+    clean === 'celular' ||
+    clean === 'movil' ||
+    clean === 'tel' ||
+    clean === 'numero de celular' ||
+    clean.includes('celular') ||
+    clean.includes('telefono') ||
+    clean.includes('movil')
+  );
+}
+
+function isVinculacionHeader(headerText) {
+  const clean = cleanHeaderCell(headerText);
+  if (!clean) return false;
+  return (
+    clean === 'vinculacion' ||
+    clean === 'rol' ||
+    clean === 'estamento' ||
+    clean === 'tipo de vinculacion' ||
+    clean === 'dependencia' ||
+    clean.includes('vinculacion') ||
+    clean.includes('estamento') ||
+    clean.includes('rol')
+  );
+}
+
+function isTipoDocHeader(headerText) {
+  const clean = cleanHeaderCell(headerText);
+  if (!clean) return false;
+  return (
+    clean === 'tipo de documento' ||
+    clean === 'tipo documento' ||
+    clean === 'tipo doc' ||
+    clean.includes('tipo de doc') ||
+    clean.includes('tipo doc')
+  );
+}
+
 /**
  * Parser robusto de texto CSV que tolera delimitadores (; , \t),
  * campos entre comillas con saltos de línea y caracteres especiales.
@@ -132,11 +206,11 @@ function parseCSVMatrix(text) {
 }
 
 /**
- * Analiza un archivo de Excel (.xlsx, .xls) o CSV (.csv) y extrae los números de documento normalizados.
- * Detecta dinámicamente en qué fila se encuentran los encabezados sin importar metadatos previos.
+ * Analiza un archivo de Excel (.xlsx, .xls) o CSV (.csv) y extrae los participantes e inscritos.
+ * Detecta dinámicamente columnas de documento, nombre, correo, teléfono y vinculación.
  * @param {File | ArrayBuffer | string} fileData
  * @param {string} fileName
- * @returns {Promise<{ success: boolean, count: number, documents: string[], fileName: string, detectedColumn: string, sample: string[], message?: string }>}
+ * @returns {Promise<{ success: boolean, count: number, documents: string[], participants: object, fileName: string, detectedColumn: string, sample: string[], message?: string }>}
  */
 export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx') {
   try {
@@ -179,9 +253,14 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
       throw new Error('El archivo cargado está vacío o no contiene datos legibles.');
     }
 
-    // 1. Buscar la fila donde se encuentran los encabezados y la columna del documento
+    // 1. Buscar la fila donde se encuentran los encabezados y columnas
     let headerRowIndex = -1;
     let docColIndex = -1;
+    let nameColIndex = -1;
+    let emailColIndex = -1;
+    let phoneColIndex = -1;
+    let vinculacionColIndex = -1;
+    let tipoDocColIndex = -1;
     let detectedColumnName = '';
 
     for (let r = 0; r < Math.min(rows.length, 20); r++) {
@@ -206,8 +285,21 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
       );
     }
 
-    // 2. Extraer todos los documentos de las filas siguientes (alfanuméricos con letras y números)
+    // Detectar las demás columnas auxiliares en la fila de encabezado
+    const headerRow = rows[headerRowIndex];
+    for (let c = 0; c < headerRow.length; c++) {
+      if (c === docColIndex) continue;
+      const val = headerRow[c];
+      if (nameColIndex === -1 && isNameHeader(val)) nameColIndex = c;
+      else if (emailColIndex === -1 && isEmailHeader(val)) emailColIndex = c;
+      else if (phoneColIndex === -1 && isPhoneHeader(val)) phoneColIndex = c;
+      else if (vinculacionColIndex === -1 && isVinculacionHeader(val)) vinculacionColIndex = c;
+      else if (tipoDocColIndex === -1 && isTipoDocHeader(val)) tipoDocColIndex = c;
+    }
+
+    // 2. Extraer todos los documentos y participantes de las filas siguientes
     const documentsSet = new Set();
+    const participants = {};
     const originalSample = [];
 
     for (let r = headerRowIndex + 1; r < rows.length; r++) {
@@ -221,6 +313,24 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
       if (normalizedDoc && normalizedDoc.length >= 4) {
         if (!documentsSet.has(normalizedDoc)) {
           documentsSet.add(normalizedDoc);
+
+          const nombreCompleto = nameColIndex !== -1 && row[nameColIndex] ? String(row[nameColIndex]).trim() : '';
+          const correo = emailColIndex !== -1 && row[emailColIndex] ? String(row[emailColIndex]).trim().toLowerCase() : '';
+          const telefono = phoneColIndex !== -1 && row[phoneColIndex] ? String(row[phoneColIndex]).trim() : '';
+          const vinculacion = vinculacionColIndex !== -1 && row[vinculacionColIndex] ? String(row[vinculacionColIndex]).trim() : 'Asistente';
+          const tipoDocRaw = tipoDocColIndex !== -1 && row[tipoDocColIndex] ? String(row[tipoDocColIndex]).trim().toUpperCase() : 'CC';
+          const tipoDocumento = ['CC', 'TI', 'CE', 'PASAPORTE', 'PEP', 'PPT'].includes(tipoDocRaw) ? tipoDocRaw : 'CC';
+
+          participants[normalizedDoc] = {
+            documento: normalizedDoc,
+            documentoOriginal: String(rawValue).trim(),
+            tipoDocumento,
+            nombreCompleto,
+            correo,
+            telefono,
+            vinculacion
+          };
+
           if (originalSample.length < 8) {
             originalSample.push(normalizedDoc);
           }
@@ -238,6 +348,7 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
       success: true,
       count: documents.length,
       documents,
+      participants,
       fileName,
       detectedColumn: detectedColumnName,
       sample: originalSample
@@ -248,6 +359,7 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
       success: false,
       count: 0,
       documents: [],
+      participants: {},
       fileName,
       detectedColumn: '',
       sample: [],
