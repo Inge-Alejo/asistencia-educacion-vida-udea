@@ -4,11 +4,12 @@ import {
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
   ExternalLink, Trash2, Shield, KeyRound, LogOut, Upload, X, Award,
   Database, HardDrive, Server, Activity, Wifi, Camera, Edit3,
-  CheckCircle2, Globe, Phone, Cloud, AlertTriangle, UtensilsCrossed
+  CheckCircle2, Globe, Phone, Cloud, AlertTriangle, UtensilsCrossed, Barcode
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import QRScannerModal from './QRScannerModal';
 import MealScannerModal from './MealScannerModal';
+import BarcodeScannerDeskModal from './BarcodeScannerDeskModal';
 import EventSelectorModal from './EventSelectorModal';
 import InscritosModal from './InscritosModal';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
@@ -79,6 +80,7 @@ export default function AdminPanel({
   const [selectedBadgeAttendee, setSelectedBadgeAttendee] = useState(null);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const [isMealScannerOpen, setIsMealScannerOpen] = useState(false);
+  const [isBarcodeDeskModalOpen, setIsBarcodeDeskModalOpen] = useState(false);
   const [isEditSelectorOpen, setIsEditSelectorOpen] = useState(false);
   const [isInscritosModalOpen, setIsInscritosModalOpen] = useState(false);
 
@@ -319,12 +321,31 @@ export default function AdminPanel({
         <div className="admin-buttons-group">
           <button
             type="button"
-            className="btn-primary-action btn-scanner-action"
+            className="btn-primary-action btn-honeywell-desk-action"
+            onClick={() => setIsBarcodeDeskModalOpen(true)}
+            style={{
+              background: '#0F5938',
+              borderColor: '#0F5938',
+              color: '#FFFFFF',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              boxShadow: '0 2px 6px rgba(15, 89, 56, 0.25)'
+            }}
+            title="Abrir estación para escáner físico de pistola Honeywell Xenon 1900 USB en computador"
+          >
+            <Barcode size={17} />
+            <span>Pistola Escáner USB (PC)</span>
+          </button>
+          <button
+            type="button"
+            className="btn-secondary btn-scanner-action"
             onClick={() => setIsQRScannerOpen(true)}
             title="Escanear en vivo con la cámara del celular o webcam para verificar y acreditar credenciales"
           >
             <Camera size={16} />
-            <span>Escanear QR en Puerta</span>
+            <span>Cámara QR Móvil</span>
           </button>
           {evento?.habilitarAlimentacion && (
             <button
@@ -1818,6 +1839,18 @@ export default function AdminPanel({
           isOpen={isMealScannerOpen}
           onClose={() => setIsMealScannerOpen(false)}
           eventoActual={evento}
+          asistencias={asistencias}
+          entregasComidas={entregasComidas}
+          onDataUpdated={onDataUpdated}
+        />
+      )}
+
+      {/* Modal de Escaneo con Pistola USB Honeywell Xenon 1900 (PC / Computador) */}
+      {isBarcodeDeskModalOpen && (
+        <BarcodeScannerDeskModal
+          isOpen={isBarcodeDeskModalOpen}
+          onClose={() => setIsBarcodeDeskModalOpen(false)}
+          evento={evento}
           asistencias={asistencias}
           entregasComidas={entregasComidas}
           onDataUpdated={onDataUpdated}

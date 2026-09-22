@@ -691,6 +691,108 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
   };
 }
 
+// Búsqueda universal de participante para escaneo con lector físico Honeywell Xenon USB o manual
+// Acepta: Código de barras con Cédula, Comprobante ATT-..., URL completa de QR, o ID alfanumérico
+export async function lookupAttendeeUniversal(eventoId, rawInput) {
+  if (!rawInput || typeof rawInput !== 'string') {
+    return { found: false, message: 'Código o número de documento no proporcionado.' };
+  }
+
+  let code = rawInput.trim();
+  let token = null;
+
+  // Si el escáner leyó la URL completa del QR (ej: https://.../?verificar=ATT-123&token=xyz)
+  if (code.includes('verificar=') || code.includes('verify=') || code.includes('credencial=')) {
+    const urlMatch = code.match(/[?&](?:verificar|verify|credencial)=([^&]+)/i);
+    if (urlMatch && urlMatch[1]) {
+      code = decodeURIComponent(urlMatch[1]).trim();
+    }
+    const tokenMatch = code.match(/[?&]token=([^&]+)/i);
+    if (tokenMatch && tokenMatch[1]) {
+      token = decodeURIComponent(tokenMatch[1]).trim();
+    }
+  }
+
+  // Normalizar documento si es cédula
+  const normDoc = normalizeDocumentId(code);
+
+  // 1. Si empieza por ATT- o parece ID de comprobante, intentar verificarlo
+  if (code.toUpperCase().startsWith('ATT-') || code.length > 15) {
+    const res = await verifyAttendanceRecord(code, token);
+    if (res.success && res.record) {
+      return {
+        found: true,
+        source: 'asistencia',
+        isRegisteredAttendance: true,
+        record: res.record,
+        message: 'Asistencia oficial confirmada.'
+      };
+    }
+  }
+
+  // 2. Buscar en la lista de asistencias del evento por documento o comprobante
+  const asistencias = getAttendance(eventoId);
+  const matchAsistencia = asistencias.find(a =>
+    a.id === code ||
+    (normDoc && normalizeDocumentId(a.documento) === normDoc)
+  );
+
+  if (matchAsistencia) {
+    return {
+      found: true,
+      source: 'asistencia',
+      isRegisteredAttendance: true,
+      record: matchAsistencia,
+      message: 'Asistencia oficial confirmada.'
+    };
+  }
+
+  // 3. Si no está en asistencias, buscar en la lista de inscritos precargada (Excel/CSV)
+  const inscritosData = getEventInscritosData(eventoId);
+  if (inscritosData?.participants && normDoc && inscritosData.participants[normDoc]) {
+    const p = inscritosData.participants[normDoc];
+    return {
+      found: true,
+      source: 'inscrito',
+      isRegisteredAttendance: false,
+      record: {
+        id: `PRE-${normDoc}`,
+        documento: p.documento || normDoc,
+        tipoDocumento: p.tipoDocumento || 'CC',
+        nombreCompleto: p.nombreCompleto || 'Participante Inscrito',
+        correo: p.correo || '',
+        telefono: p.telefono || '',
+        vinculacion: p.vinculacion || 'Inscrito Oficial',
+        placaVehiculo: ''
+      },
+      message: 'Figura en la lista oficial de inscritos, pero aún no ha completado el formulario de asistencia presencial de hoy.'
+    };
+  }
+
+  // 4. Si es comprobante ATT- que no estaba en local pero puede estar en Firestore asistencias
+  if (isFirebaseConfigured() && db && code.toUpperCase().startsWith('ATT-')) {
+    try {
+      const snap = await getDoc(doc(db, 'asistencias', code));
+      if (snap.exists()) {
+        const attData = snap.data();
+        return {
+          found: true,
+          source: 'asistencia',
+          isRegisteredAttendance: true,
+          record: attData,
+          message: 'Asistencia oficial confirmada (recuperada de Cloud Firestore).'
+        };
+      }
+    } catch {}
+  }
+
+  return {
+    found: false,
+    rawInput: code,
+    message: `No se encontró ningún participante con el documento o código "${code}".`
+  };
+}
+
 // Métodos de Preguntas en Vivo
 export function getQuestions(eventId = null) {
   initStorage();

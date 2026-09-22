@@ -1,6 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
+import JsBarcode from 'jsbarcode';
 import { ESCUDO_UDEA_QR_BASE64 } from '../assets/escudoQrBase64';
 import {
   FileDown,
@@ -13,6 +14,7 @@ import {
   Sparkles,
   ExternalLink,
   CheckCircle2,
+  Barcode,
   X
 } from 'lucide-react';
 
@@ -23,7 +25,32 @@ export default function DigitalBadge({
   isModal = false
 }) {
   const badgeCardRef = useRef(null);
+  const barcodeSvgRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
+
+  // Renderizar código de barras 1D Code 128 con la cédula/documento del asistente
+  useEffect(() => {
+    if (barcodeSvgRef.current && asistente) {
+      const val = String(asistente.documento || asistente.id || 'UDEA').trim();
+      try {
+        JsBarcode(barcodeSvgRef.current, val, {
+          format: 'CODE128',
+          width: 2.1,
+          height: 48,
+          displayValue: true,
+          font: 'Inter, system-ui, sans-serif',
+          fontSize: 13,
+          fontOptions: 'bold',
+          textMargin: 4,
+          lineColor: '#0F5938',
+          background: '#FFFFFF',
+          margin: 6
+        });
+      } catch (err) {
+        console.warn('Error al generar código de barras Code 128:', err);
+      }
+    }
+  }, [asistente]);
 
   if (!asistente || !evento) return null;
 
@@ -43,7 +70,7 @@ export default function DigitalBadge({
     if (!card) return null;
 
     const width = 680;
-    const height = 980;
+    const height = 1100;
 
     // Crear canvas con escala 2x para nitidez cristalina
     const canvas = document.createElement('canvas');
@@ -199,6 +226,46 @@ export default function DigitalBadge({
     ctx.fillText(`Comprobante: ${asistente.id}`, width / 2, 782);
     ctx.fillText(`Registrado: ${asistente.fechaRegistro || ''}`, width / 2, 798);
 
+    // Código de Barras 1D Code 128 (Lector Honeywell Xenon / Escáner USB)
+    try {
+      const barcodeCanvas = document.createElement('canvas');
+      const barcodeVal = String(asistente.documento || asistente.id || 'UDEA').trim();
+      JsBarcode(barcodeCanvas, barcodeVal, {
+        format: 'CODE128',
+        width: 3.2,
+        height: 65,
+        displayValue: true,
+        fontSize: 18,
+        font: 'Inter, sans-serif',
+        fontOptions: 'bold',
+        textMargin: 6,
+        lineColor: '#0F5938',
+        background: '#FFFFFF',
+        margin: 10
+      });
+
+      const bcW = Math.min(barcodeCanvas.width, 460);
+      const bcH = (bcW / barcodeCanvas.width) * barcodeCanvas.height;
+      const bcX = (width - bcW) / 2;
+      const bcY = 828;
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(bcX - 12, bcY - 6, bcW + 24, bcH + 12, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.drawImage(barcodeCanvas, bcX, bcY, bcW, bcH);
+
+      ctx.fillStyle = '#0F5938';
+      ctx.font = '600 11px "Inter", sans-serif';
+      ctx.fillText('Lector Honeywell • Código de Barras Oficial', width / 2, bcY + bcH + 20);
+    } catch (e) {
+      console.warn('Error al renderizar código de barras en canvas:', e);
+    }
+
     // Franja inferior institucional redondeada abajo
     ctx.save();
     ctx.beginPath();
@@ -231,7 +298,7 @@ export default function DigitalBadge({
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [105, 155] // Dimensiones de pase digital móvil / credencial portátil
+        format: [105, 170] // Dimensiones de pase digital móvil / credencial portátil con código de barras
       });
 
       pdf.addImage(imgData, 'PNG', 0, 0, 105, 155, undefined, 'FAST');
@@ -359,6 +426,16 @@ export default function DigitalBadge({
               {asistente.diaNumero ? ` (Día ${asistente.diaNumero})` : ''}
             </span>
           </div>
+        </div>
+
+        {/* Código de Barras 1D Code 128 Oficial (Lector Honeywell Xenon / Escáner USB de PC) */}
+        <div className="badge-barcode-section">
+          <div className="badge-barcode-wrapper">
+            <svg ref={barcodeSvgRef} className="badge-barcode-svg"></svg>
+          </div>
+          <span className="badge-barcode-caption">
+            <Barcode size={13} /> Escáner USB Honeywell • Documento {asistente.tipoDocumento || 'CC'}
+          </span>
         </div>
 
         {/* Pie de la Credencial con cierre armónico y márgenes simétricos */}
