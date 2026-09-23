@@ -776,23 +776,23 @@ export default function BarcodeScannerDeskModal({
 
                 {/* Si no se encontró el asistente, permitir registro rápido in-situ */}
                 {lastScanResult.type === 'NOT_FOUND' && (
-                  <div style={{ marginTop: '0.85rem', padding: '0.9rem', background: '#FFFFFF', borderRadius: '10px', border: '1px solid #FECACA' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#991B1B', fontWeight: 700, fontSize: '0.88rem' }}>
+                  <div className="desk-quick-reg-card">
+                    <div className="desk-quick-reg-header">
+                      <div className="desk-quick-reg-title">
                         <UserPlus size={16} />
                         <span>Registrar Asistencia en Sitio con Documento {lastScanResult.scannedCode}</span>
                       </div>
                       {lastScanResult.nombreExtraido && (
-                        <span style={{ fontSize: '0.75rem', background: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                        <span className="desk-quick-reg-badge">
                           ✓ Nombre extraído del documento físico
                         </span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div className="desk-quick-reg-form">
                       <select
                         value={quickRegTipoDoc}
                         onChange={(e) => setQuickRegTipoDoc(e.target.value)}
-                        style={{ padding: '7px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 600, background: '#F8FAFC' }}
+                        className="desk-quick-reg-select"
                         title="Tipo de Documento"
                       >
                         <option value="CC">CC - Cédula Ciudadanía</option>
@@ -806,12 +806,12 @@ export default function BarcodeScannerDeskModal({
                         placeholder="Nombre completo del participante..."
                         value={quickRegName}
                         onChange={(e) => setQuickRegName(e.target.value)}
-                        style={{ flex: 1, minWidth: '180px', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem' }}
+                        className="desk-quick-reg-input"
                       />
                       <select
                         value={quickRegVinculacion}
                         onChange={(e) => setQuickRegVinculacion(e.target.value)}
-                        style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem' }}
+                        className="desk-quick-reg-select"
                       >
                         <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
                         <option value="Residente / Posgrado UdeA">Residente / Posgrado</option>
@@ -824,7 +824,7 @@ export default function BarcodeScannerDeskModal({
                         type="button"
                         onClick={handleQuickRegister}
                         disabled={!quickRegName.trim() || isQuickRegistering}
-                        style={{ background: '#0F5938', color: '#FFFFFF', border: 'none', borderRadius: '6px', padding: '7px 14px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
+                        className="btn-desk-quick-save"
                       >
                         {isQuickRegistering ? 'Guardando...' : 'Guardar Asistencia'}
                       </button>
