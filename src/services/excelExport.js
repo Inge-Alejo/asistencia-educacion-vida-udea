@@ -4,7 +4,7 @@
 
 import * as XLSX from 'xlsx';
 import { sanitizeExcelFormula } from './sanitizer';
-import { getMealDeliveries } from './storage';
+import { getMealDeliveries, normalizeDocumentId } from './storage';
 
 export function exportEventDataToExcel({
   evento = {},
@@ -55,7 +55,7 @@ export function exportEventDataToExcel({
 
     if (hasMeals) {
       const attendeeDeliveries = safeEntregas.filter(
-        e => String(e.documento || '').trim().toLowerCase() === String(a.documento || '').trim().toLowerCase()
+        e => normalizeDocumentId(e.documento) === normalizeDocumentId(a.documento)
       );
 
       if (configuredMeals.length > 0) {
@@ -152,8 +152,12 @@ export function exportEventDataToExcel({
       'Nombre Asistente': sanitizeExcelFormula(c.nombreCompleto),
       'Comida / Refrigerio': sanitizeExcelFormula(c.comidaNombre),
       'Hora Entrega': c.horaEntrega || '',
-      'Fecha Entrega': c.fechaEntrega || '',
-      'Método Registro': c.metodo === 'MANUAL' ? 'Manual por Cédula' : 'Cámara QR',
+      'Fecha Entrega': c.fechaEntrega || c.fechaDia || (c.registradoEn ? String(c.registradoEn).split(' ')[0] : ''),
+      'Método Registro': (c.metodo === 'BARCODE_SCANNER_USB' || c.metodo === 'HONEYWELL_USB_DESK' || c.metodo === 'ESCANER_USB')
+        ? 'Escáner de Código de Barras USB'
+        : c.metodo === 'MANUAL'
+        ? 'Manual por Cédula'
+        : 'Cámara QR',
       'Operador Logístico': sanitizeExcelFormula(c.operador || 'Logística UdeA')
     }));
 

@@ -691,7 +691,7 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
   };
 }
 
-// Búsqueda universal de participante para escaneo con lector físico Honeywell Xenon USB o manual
+// Búsqueda universal de participante para escaneo con lector de código de barras USB o manual
 // Acepta: Código de barras con Cédula, Comprobante ATT-..., URL completa de QR, o ID alfanumérico
 export async function lookupAttendeeUniversal(eventoId, rawInput) {
   if (!rawInput || typeof rawInput !== 'string') {
@@ -1040,11 +1040,13 @@ export async function recordMealDelivery(deliveryData) {
   }
 
   const now = new Date();
+  const fechaDia = deliveryData.fechaDia || deliveryData.fechaEntrega || getColombiaLocalDateStr();
   const newDelivery = {
     ...deliveryData,
     id: deliveryId,
     documento: cleanDoc,
-    fechaDia: deliveryData.fechaDia || getColombiaLocalDateStr(),
+    fechaDia,
+    fechaEntrega: deliveryData.fechaEntrega || fechaDia,
     horaEntrega: now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     fechaHoraISO: now.toISOString(),
     registradoEn: now.toLocaleString('es-CO')

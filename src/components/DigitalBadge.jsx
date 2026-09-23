@@ -226,7 +226,7 @@ export default function DigitalBadge({
     ctx.fillText(`Comprobante: ${asistente.id}`, width / 2, 782);
     ctx.fillText(`Registrado: ${asistente.fechaRegistro || ''}`, width / 2, 798);
 
-    // Código de Barras 1D Code 128 (Lector Honeywell Xenon / Escáner USB)
+    // Código de Barras 1D Code 128 (Escáner de Código de Barras USB)
     try {
       const barcodeCanvas = document.createElement('canvas');
       const barcodeVal = String(asistente.documento || asistente.id || 'UDEA').trim();
@@ -261,7 +261,7 @@ export default function DigitalBadge({
 
       ctx.fillStyle = '#0F5938';
       ctx.font = '600 11px "Inter", sans-serif';
-      ctx.fillText('Lector Honeywell • Código de Barras Oficial', width / 2, bcY + bcH + 20);
+      ctx.fillText('Código de Barras Oficial • ' + (asistente.tipoDocumento || 'CC') + ' ' + (asistente.documento || ''), width / 2, bcY + bcH + 20);
     } catch (e) {
       console.warn('Error al renderizar código de barras en canvas:', e);
     }
@@ -428,13 +428,13 @@ export default function DigitalBadge({
           </div>
         </div>
 
-        {/* Código de Barras 1D Code 128 Oficial (Lector Honeywell Xenon / Escáner USB de PC) */}
+        {/* Código de Barras 1D Code 128 Oficial (Escáner USB de PC) */}
         <div className="badge-barcode-section">
           <div className="badge-barcode-wrapper">
             <svg ref={barcodeSvgRef} className="badge-barcode-svg"></svg>
           </div>
           <span className="badge-barcode-caption">
-            <Barcode size={13} /> Escáner USB Honeywell • Documento {asistente.tipoDocumento || 'CC'}
+            <Barcode size={13} /> Escáner de Código de Barras • Documento {asistente.tipoDocumento || 'CC'}
           </span>
         </div>
 

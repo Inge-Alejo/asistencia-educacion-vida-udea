@@ -321,7 +321,7 @@ export default function AdminPanel({
         <div className="admin-buttons-group">
           <button
             type="button"
-            className="btn-primary-action btn-honeywell-desk-action"
+            className="btn-primary-action btn-scanner-desk-action"
             onClick={() => setIsBarcodeDeskModalOpen(true)}
             style={{
               background: '#0F5938',
@@ -333,10 +333,10 @@ export default function AdminPanel({
               gap: '0.45rem',
               boxShadow: '0 2px 6px rgba(15, 89, 56, 0.25)'
             }}
-            title="Abrir estación para escáner físico de pistola Honeywell Xenon 1900 USB en computador"
+            title="Abrir estación para lector de código de barras USB en computador"
           >
             <Barcode size={17} />
-            <span>Pistola Escáner USB (PC)</span>
+            <span>Escáner de Barras USB (PC)</span>
           </button>
           <button
             type="button"
@@ -1381,7 +1381,11 @@ export default function AdminPanel({
                       </td>
                       <td>
                         <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-                          {delivery.metodo === 'MANUAL' ? 'Manual' : 'Cámara QR'}
+                          {(delivery.metodo === 'BARCODE_SCANNER_USB' || delivery.metodo === 'HONEYWELL_USB_DESK' || delivery.metodo === 'ESCANER_USB')
+                            ? 'Escáner USB'
+                            : delivery.metodo === 'MANUAL'
+                            ? 'Manual'
+                            : 'Cámara QR'}
                         </span>
                       </td>
                       <td style={{ fontSize: '0.78rem', color: '#64748B' }}>
@@ -1845,7 +1849,7 @@ export default function AdminPanel({
         />
       )}
 
-      {/* Modal de Escaneo con Pistola USB Honeywell Xenon 1900 (PC / Computador) */}
+      {/* Modal de Escaneo con Lector de Barras USB (PC / Computador) */}
       {isBarcodeDeskModalOpen && (
         <BarcodeScannerDeskModal
           isOpen={isBarcodeDeskModalOpen}

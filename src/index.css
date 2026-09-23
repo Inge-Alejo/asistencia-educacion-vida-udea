@@ -8561,7 +8561,7 @@ input:checked+.slider::before {
 }
 
 /* =========================================================================
-   ESTACIÓN DE ESCÁNER USB HONEYWELL XENON 1900 (MODO COMPUTADOR / PC)
+   ESTACIÓN DE ESCÁNER DE CÓDIGO DE BARRAS USB (MODO COMPUTADOR / PC)
    ========================================================================= */
 .desk-scanner-dialog {
   max-width: 1050px !important;

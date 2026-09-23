@@ -15,17 +15,21 @@ import {
   Car,
   Search,
   Sparkles,
-  RotateCcw
+  RotateCcw,
+  UserPlus
 } from 'lucide-react';
 import {
   lookupAttendeeUniversal,
   checkMealAlreadyClaimed,
   recordMealDelivery,
+  recordAttendance,
   getMealDeliveries,
-  getAttendance
+  getAttendance,
+  normalizeDocumentId,
+  getColombiaLocalDateStr
 } from '../services/storage';
 
-// Generador de sonidos institucionales sin dependencias externas usando Web Audio API
+// Generador de tonos institucionales con Web Audio API de baja latencia
 function playScannerTone(type = 'success') {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -133,6 +137,11 @@ export default function BarcodeScannerDeskModal({
   // Historial de escaneos de la sesión actual
   const [scanHistory, setScanHistory] = useState([]);
 
+  // Estados para registro rápido in-situ (cuando no figura en la lista)
+  const [quickRegName, setQuickRegName] = useState('');
+  const [quickRegVinculacion, setQuickRegVinculacion] = useState('Estudiante Pregrado Medicina UdeA');
+  const [isQuickRegistering, setIsQuickRegistering] = useState(false);
+
   // Referencias para auto-enfoque e interceptor de ráfagas USB
   const manualInputRef = useRef(null);
   const keystrokeBufferRef = useRef('');
@@ -158,6 +167,89 @@ export default function BarcodeScannerDeskModal({
     const list = Array.isArray(asistencias) ? asistencias : getAttendance(evento?.id);
     return list.filter(a => a.eventoId === evento?.id).length;
   }, [asistencias, evento?.id]);
+
+  // Registro rápido para asistentes no listados (walk-in)
+  const handleQuickRegister = async () => {
+    if (!lastScanResult?.scannedCode || !quickRegName.trim() || isQuickRegistering) return;
+    setIsQuickRegistering(true);
+    const scannedAtTime = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    try {
+      const docClean = normalizeDocumentId(lastScanResult.scannedCode);
+      const newAtt = {
+        eventoId: evento?.id,
+        nombreCompleto: quickRegName.trim(),
+        tipoDocumento: 'CC',
+        documento: docClean,
+        correo: '',
+        telefono: '',
+        vinculacion: quickRegVinculacion,
+        placaVehiculo: '',
+        habeasDataAceptado: true,
+        fechaHabeasData: new Date().toLocaleString('es-CO'),
+        metodoRegistro: 'ESCANER_USB',
+        esPresencial: true,
+        geolocalizacion: {
+          esPresencial: true,
+          distanciaSedeMetros: 0,
+          modo: 'ESCANER_USB_PRESENCIAL',
+          verificadoPorOperador: operador.trim() || 'Logística UdeA'
+        }
+      };
+
+      const resAtt = await recordAttendance(newAtt);
+      if (resAtt.success) {
+        if (soundEnabled) playScannerTone('success');
+
+        let deliveryRecord = null;
+        // Si además está en modo entrega de comida, registrarla de inmediato
+        if (scanMode === 'meal' && activeMealObj) {
+          const saveMeal = await recordMealDelivery({
+            eventoId: evento?.id,
+            comidaId: activeMealObj.id,
+            comidaNombre: activeMealObj.nombre,
+            documento: docClean,
+            tipoDocumento: 'CC',
+            nombreCompleto: quickRegName.trim(),
+            vinculacion: quickRegVinculacion,
+            comprobanteId: resAtt.record?.id || 'N/A',
+            fechaEntrega: getColombiaLocalDateStr(),
+            metodo: 'BARCODE_SCANNER_USB',
+            operador: operador.trim() || 'Logística UdeA'
+          });
+          if (saveMeal.success) {
+            deliveryRecord = saveMeal.record;
+          }
+        }
+
+        const successRes = {
+          success: true,
+          type: scanMode === 'meal' ? 'MEAL_DELIVERED' : 'CHECKIN_REGISTERED',
+          attendee: resAtt.record || newAtt,
+          attendeeDoc: docClean,
+          attendeeName: quickRegName.trim(),
+          timestamp: scannedAtTime,
+          mealsCount: deliveryRecord ? 1 : 0,
+          deliveryRecord,
+          mealNombre: activeMealObj?.nombre,
+          title: scanMode === 'meal' ? `¡Asistencia y ${activeMealObj?.nombre} Registrados!` : '¡Asistencia Registrada con Éxito!',
+          message: `Participante ${quickRegName.trim()} (CC ${docClean}) registrado y guardado oficialmente en el sistema.`
+        };
+
+        setLastScanResult(successRes);
+        setScanHistory(prev => [successRes, ...prev.slice(0, 24)]);
+        setQuickRegName('');
+        if (onDataUpdated) onDataUpdated();
+      } else {
+        alert(resAtt.message || 'No se pudo guardar la asistencia.');
+      }
+    } catch (e) {
+      console.error('Error en registro rápido:', e);
+      alert('Error registrando asistencia: ' + (e?.message || 'Error'));
+    } finally {
+      setIsQuickRegistering(false);
+    }
+  };
 
   // Procesar código escaneado (ya sea por ráfaga rápida de la pistola USB o digitado)
   const processScanCode = useCallback(async (rawCode) => {
@@ -195,24 +287,89 @@ export default function BarcodeScannerDeskModal({
       // CASO A: MODO ACREDITACIÓN / CONTROL DE ACCESO (PUERTA)
       // =========================================================================
       if (scanMode === 'checkin') {
-        if (soundEnabled) playScannerTone('success');
-
         // Consultar cuántas comidas lleva reclamadas este asistente en este evento
         const allDeliveries = getMealDeliveries(evento?.id).filter(
-          m => String(m.documento).trim().toLowerCase() === String(attendeeDoc).trim().toLowerCase()
+          m => normalizeDocumentId(m.documento) === normalizeDocumentId(attendeeDoc)
         );
 
+        // Subcaso A.1: El participante proviene de la lista oficial de inscritos (aún no en asistencias)
+        if (lookup.source === 'inscrito') {
+          const newAttendanceRecord = {
+            eventoId: evento?.id,
+            nombreCompleto: attendee.nombreCompleto || 'Participante Inscrito',
+            tipoDocumento: attendee.tipoDocumento || 'CC',
+            documento: attendeeDoc,
+            correo: attendee.correo || '',
+            telefono: attendee.telefono || '',
+            vinculacion: attendee.vinculacion || 'Asistente Acreditado',
+            placaVehiculo: attendee.placaVehiculo || '',
+            habeasDataAceptado: true,
+            fechaHabeasData: new Date().toLocaleString('es-CO'),
+            metodoRegistro: 'ESCANER_USB',
+            esPresencial: true,
+            geolocalizacion: {
+              esPresencial: true,
+              distanciaSedeMetros: 0,
+              modo: 'ESCANER_USB_PRESENCIAL',
+              verificadoPorOperador: operador.trim() || 'Logística UdeA'
+            }
+          };
+
+          const saveAttRes = await recordAttendance(newAttendanceRecord);
+
+          if (saveAttRes.success) {
+            if (soundEnabled) playScannerTone('success');
+            const checkinResult = {
+              success: true,
+              type: 'CHECKIN_REGISTERED',
+              source: 'inscrito_registrado',
+              attendee: saveAttRes.record || newAttendanceRecord,
+              attendeeDoc,
+              attendeeName,
+              timestamp: scannedAtTime,
+              mealsCount: allDeliveries.length,
+              title: '¡Asistencia Registrada con Escáner!',
+              message: `Participante de la lista oficial registrado y guardado exitosamente en la base de datos.`
+            };
+            setLastScanResult(checkinResult);
+            setScanHistory(prev => [checkinResult, ...prev.slice(0, 24)]);
+            if (onDataUpdated) onDataUpdated();
+            return;
+          } else {
+            // Ya estaba registrado para este día
+            if (soundEnabled) playScannerTone('success');
+            const checkinResult = {
+              success: true,
+              type: 'CHECKIN_CONFIRMED',
+              source: lookup.source,
+              attendee,
+              attendeeDoc,
+              attendeeName,
+              timestamp: scannedAtTime,
+              mealsCount: allDeliveries.length,
+              title: 'Asistencia Previamente Registrada',
+              message: saveAttRes.message || 'El participante ya contaba con registro oficial de asistencia.'
+            };
+            setLastScanResult(checkinResult);
+            setScanHistory(prev => [checkinResult, ...prev.slice(0, 24)]);
+            if (onDataUpdated) onDataUpdated();
+            return;
+          }
+        }
+
+        // Subcaso A.2: Ya es una asistencia registrada en la base de datos
+        if (soundEnabled) playScannerTone('success');
         const checkinResult = {
           success: true,
-          type: 'CHECKIN_SUCCESS',
+          type: 'CHECKIN_CONFIRMED',
           source: lookup.source,
           attendee,
           attendeeDoc,
           attendeeName,
           timestamp: scannedAtTime,
           mealsCount: allDeliveries.length,
-          title: lookup.isRegisteredAttendance ? 'Asistencia Oficial Verificada' : 'Inscrito Oficial Detectado',
-          message: lookup.message
+          title: 'Asistencia Oficial Confirmada',
+          message: `Participante verificado en la base de datos (${attendee.fechaRegistro || 'hoy'}).`
         };
 
         setLastScanResult(checkinResult);
@@ -252,7 +409,36 @@ export default function BarcodeScannerDeskModal({
           return;
         }
 
-        // 2. Registrar la entrega inmediata
+        // 2. Si el participante proviene de la lista de inscritos y no tenía asistencia previa,
+        // registrar también su asistencia oficial en el evento
+        if (lookup.source === 'inscrito' && !lookup.isRegisteredAttendance) {
+          try {
+            await recordAttendance({
+              eventoId: evento?.id,
+              nombreCompleto: attendee.nombreCompleto || 'Participante Inscrito',
+              tipoDocumento: attendee.tipoDocumento || 'CC',
+              documento: attendeeDoc,
+              correo: attendee.correo || '',
+              telefono: attendee.telefono || '',
+              vinculacion: attendee.vinculacion || 'Asistente Acreditado',
+              placaVehiculo: attendee.placaVehiculo || '',
+              habeasDataAceptado: true,
+              fechaHabeasData: new Date().toLocaleString('es-CO'),
+              metodoRegistro: 'ESCANER_USB',
+              esPresencial: true,
+              geolocalizacion: {
+                esPresencial: true,
+                distanciaSedeMetros: 0,
+                modo: 'ESCANER_USB_PRESENCIAL',
+                verificadoPorOperador: operador.trim() || 'Logística UdeA'
+              }
+            });
+          } catch (attErr) {
+            console.warn('Aviso registrando asistencia al entregar comida:', attErr);
+          }
+        }
+
+        // 3. Registrar la entrega inmediata
         const saveRes = await recordMealDelivery({
           eventoId: evento?.id,
           comidaId: mealId,
@@ -260,7 +446,10 @@ export default function BarcodeScannerDeskModal({
           documento: attendeeDoc,
           tipoDocumento: attendee.tipoDocumento || 'CC',
           nombreCompleto: attendeeName,
-          metodo: 'HONEYWELL_USB_DESK',
+          vinculacion: attendee.vinculacion || 'Asistente',
+          comprobanteId: attendee.id || 'N/A',
+          fechaEntrega: getColombiaLocalDateStr(),
+          metodo: 'BARCODE_SCANNER_USB',
           operador: operador.trim() || 'Logística UdeA'
         });
 
@@ -277,7 +466,7 @@ export default function BarcodeScannerDeskModal({
             deliveryRecord: saveRes.record,
             timestamp: scannedAtTime,
             title: `¡${mealNombre} Entregado Con Éxito!`,
-            message: `Entrega autorizada para ${attendeeName} (${attendee.tipoDocumento || 'CC'} ${attendeeDoc}).`
+            message: `Entrega guardada en el sistema para ${attendeeName} (${attendee.tipoDocumento || 'CC'} ${attendeeDoc}).`
           };
 
           setLastScanResult(deliverySuccess);
@@ -318,14 +507,14 @@ export default function BarcodeScannerDeskModal({
     onDataUpdated
   ]);
 
-  // Interceptor global de pulsaciones de teclado para lectores USB tipo Honeywell Xenon HID Wedge
-  // Las pistolas USB emiten los caracteres rápidamente (<45ms entre tecla) y rematan con 'Enter'
+  // Interceptor global de pulsaciones de teclado para lectores de código de barras USB (HID Wedge)
+  // Los escáneres USB emiten caracteres rápidamente (<45ms entre tecla) y finalizan con 'Enter'
   useEffect(() => {
     if (!isOpen) return;
 
     const handleGlobalKeyDown = (e) => {
-      // Ignorar si el usuario está enfocado escribiendo en el campo del nombre del operador
-      if (document.activeElement?.name === 'operadorInput') return;
+      // Ignorar si el usuario está enfocado escribiendo en inputs de texto específicos
+      if (document.activeElement?.name === 'operadorInput' || document.activeElement?.name === 'quickRegInput') return;
 
       const now = Date.now();
       const timeDiff = now - lastKeyTimeRef.current;
@@ -377,8 +566,8 @@ export default function BarcodeScannerDeskModal({
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3 className="scanner-dialog-title">Estación de Escaneo USB • Honeywell Xenon</h3>
-                <span className="scanner-model-badge">XENON 1900 HID</span>
+                <h3 className="scanner-dialog-title">Estación de Escaneo USB (PC)</h3>
+                <span className="scanner-model-badge">ESCÁNER USB</span>
               </div>
               <p className="scanner-dialog-subtitle">
                 Lectura instantánea de códigos de barra (Code 128) y códigos QR desde el computador para acreditación y refrigerios.
@@ -389,7 +578,7 @@ export default function BarcodeScannerDeskModal({
           <div className="desk-scanner-controls-top">
             <div className="scanner-online-indicator" title="Conexión USB de teclado HID activa en este computador">
               <span className="online-pulse-dot"></span>
-              <span>Pistola USB en línea</span>
+              <span>Lector USB en línea</span>
             </div>
 
             <button
@@ -399,33 +588,38 @@ export default function BarcodeScannerDeskModal({
               title={soundEnabled ? 'Sonidos activados' : 'Sonidos silenciados'}
             >
               {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              <span>{soundEnabled ? 'Audio ON' : 'Silencio'}</span>
+              <span>{soundEnabled ? 'Audio ON' : 'Audio OFF'}</span>
             </button>
 
-            <button className="btn-close-modal" onClick={onClose} aria-label="Cerrar estación de escaneo">
+            <button
+              type="button"
+              className="btn-close-modal"
+              onClick={onClose}
+              aria-label="Cerrar estación"
+            >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* Barra de Modos de Operación */}
-        <div className="desk-scanner-mode-bar">
-          <div className="scanner-mode-tabs">
+        {/* Barra de Modalidad: Acreditación vs Entrega de Alimentos */}
+        <div className="desk-scanner-modality-bar">
+          <div className="modality-switch-buttons">
             <button
               type="button"
-              className={`mode-tab-btn ${scanMode === 'checkin' ? 'active' : ''}`}
+              className={`btn-modality ${scanMode === 'checkin' ? 'active checkin' : ''}`}
               onClick={() => {
                 setScanMode('checkin');
                 manualInputRef.current?.focus();
               }}
             >
               <UserCheck size={17} />
-              <span>Acreditación y Control de Acceso (Puerta)</span>
+              <span>Acreditación / Puerta (Asistencia)</span>
             </button>
 
             <button
               type="button"
-              className={`mode-tab-btn ${scanMode === 'meal' ? 'active' : ''}`}
+              className={`btn-modality ${scanMode === 'meal' ? 'active meal' : ''}`}
               onClick={() => {
                 setScanMode('meal');
                 manualInputRef.current?.focus();
@@ -515,7 +709,7 @@ export default function BarcodeScannerDeskModal({
                   ref={manualInputRef}
                   type="text"
                   className="scanner-main-input"
-                  placeholder="Apunte el Honeywell Xenon al código de barras o QR (o digite la Cédula)..."
+                  placeholder="Apunte el escáner al código de barras o QR (o digite la Cédula)..."
                   value={manualInput}
                   onChange={(e) => setManualInput(e.target.value)}
                   autoComplete="off"
@@ -536,7 +730,7 @@ export default function BarcodeScannerDeskModal({
             <div className="scanner-hint-text">
               <Sparkles size={13} color="#059669" />
               <span>
-                <strong>Listo para disparar:</strong> Al presionar el gatillo del escáner Honeywell Xenon 1900 frente al código de barras o QR de la escarapela, se procesará automáticamente.
+                <strong>Listo para escanear:</strong> Al presionar el gatillo del escáner frente al código de barras o QR de la escarapela, se procesará y guardará automáticamente.
               </span>
             </div>
 
@@ -562,6 +756,46 @@ export default function BarcodeScannerDeskModal({
                     <Clock size={13} /> {lastScanResult.timestamp}
                   </span>
                 </div>
+
+                {/* Si no se encontró el asistente, permitir registro rápido in-situ */}
+                {lastScanResult.type === 'NOT_FOUND' && (
+                  <div style={{ marginTop: '0.85rem', padding: '0.9rem', background: '#FFFFFF', borderRadius: '10px', border: '1px solid #FECACA' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.5rem', color: '#991B1B', fontWeight: 700, fontSize: '0.88rem' }}>
+                      <UserPlus size={16} />
+                      <span>Registrar Asistencia en Sitio con Documento {lastScanResult.scannedCode}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        name="quickRegInput"
+                        placeholder="Nombre completo del participante..."
+                        value={quickRegName}
+                        onChange={(e) => setQuickRegName(e.target.value)}
+                        style={{ flex: 1, minWidth: '180px', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem' }}
+                      />
+                      <select
+                        value={quickRegVinculacion}
+                        onChange={(e) => setQuickRegVinculacion(e.target.value)}
+                        style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem' }}
+                      >
+                        <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
+                        <option value="Residente / Posgrado UdeA">Residente / Posgrado</option>
+                        <option value="Docente / Investigador UdeA">Docente / Investigador</option>
+                        <option value="Egresado UdeA">Egresado</option>
+                        <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
+                        <option value="Asistente Académico">Otro / Asistente Académico</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleQuickRegister}
+                        disabled={!quickRegName.trim() || isQuickRegistering}
+                        style={{ background: '#0F5938', color: '#FFFFFF', border: 'none', borderRadius: '6px', padding: '7px 14px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
+                      >
+                        {isQuickRegistering ? 'Guardando...' : 'Guardar Asistencia'}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Si se encontró un asistente */}
                 {lastScanResult.attendee && (
@@ -629,9 +863,9 @@ export default function BarcodeScannerDeskModal({
                   <Barcode size={44} color="#0F5938" />
                   <div className="laser-sweep-bar"></div>
                 </div>
-                <h4>Esperando lectura del escáner Honeywell...</h4>
+                <h4>Esperando lectura del escáner USB...</h4>
                 <p>
-                  Apunte la pistola al código de barras Code 128 o código QR de la credencial del participante. Los datos se validarán en tiempo real.
+                  Apunte el lector al código de barras 1D o código QR de la credencial del participante. Los datos se validarán y guardarán automáticamente en tiempo real.
                 </p>
               </div>
             )}
@@ -650,7 +884,7 @@ export default function BarcodeScannerDeskModal({
                   type="button"
                   className="btn-clear-history"
                   onClick={() => setScanHistory([])}
-                  title="Limpiar lista de esta pantalla"
+                  title="Limpiar bitácora de escaneos visibles de la sesión"
                 >
                   <RotateCcw size={13} />
                   <span>Limpiar</span>
@@ -661,36 +895,39 @@ export default function BarcodeScannerDeskModal({
             <div className="session-history-feed">
               {scanHistory.length === 0 ? (
                 <div className="empty-feed-placeholder">
-                  <p>Aún no se registran escaneos en esta sesión.</p>
-                  <small>Los resultados de cada lectura aparecerán aquí automáticamente con fecha y hora.</small>
+                  <Barcode size={32} />
+                  <p>Aún no se han realizado escaneos en esta sesión.</p>
+                  <small>Al leer con el escáner USB aparecerán aquí en orden cronológico.</small>
                 </div>
               ) : (
                 scanHistory.map((item, index) => (
                   <div
-                    key={`${item.timestamp}-${index}`}
+                    key={index}
                     className={`history-feed-item ${item.success ? 'success' : (item.type === 'ALREADY_CLAIMED' ? 'warning' : 'error')}`}
                   >
-                    <div className="item-badge-time">{item.timestamp}</div>
+                    <span className="item-badge-time">{item.timestamp}</span>
                     <div className="item-content">
                       <div className="item-header-row">
-                        <strong className="item-name">{item.attendeeName || item.scannedCode || 'Desconocido'}</strong>
+                        <strong className="item-name">
+                          {item.attendeeName || item.scannedCode || 'Código'}
+                        </strong>
                         <span className={`item-pill ${item.success ? 'pill-green' : (item.type === 'ALREADY_CLAIMED' ? 'pill-amber' : 'pill-red')}`}>
-                          {item.type === 'CHECKIN_SUCCESS'
-                            ? 'Acreditado'
-                            : item.type === 'MEAL_DELIVERED'
-                            ? item.mealNombre
+                          {item.type === 'MEAL_DELIVERED'
+                            ? 'COMIDA ENTREGADA'
+                            : item.type === 'CHECKIN_REGISTERED'
+                            ? 'ASISTENCIA REGISTRADA'
+                            : item.type === 'CHECKIN_CONFIRMED'
+                            ? 'VERIFICADO'
                             : item.type === 'ALREADY_CLAIMED'
-                            ? 'Duplicado'
-                            : 'No Encontrado'}
+                            ? 'DUPLICADO'
+                            : 'NO ENCONTRADO'}
                         </span>
                       </div>
-
                       {item.attendeeDoc && (
                         <div className="item-doc-text">
-                          {item.attendee?.tipoDocumento || 'CC'}: {item.attendeeDoc} • {item.attendee?.vinculacion || 'Participante'}
+                          {item.attendee?.tipoDocumento || 'CC'}: {item.attendeeDoc}
                         </div>
                       )}
-
                       <p className="item-message-text">{item.message}</p>
                     </div>
                   </div>
