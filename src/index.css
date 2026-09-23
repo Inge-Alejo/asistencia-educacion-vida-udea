@@ -9976,4 +9976,141 @@ input:checked+.slider::before {
   font-size: 0.74rem !important;
   color: #64748B !important;
   line-height: 1.35 !important;
+}
+
+/* ==========================================================================
+   BANNERS Y NOTIFICACIONES DE ESCÁNER DE DOCUMENTOS (USB & AUTOCOMPLETADO)
+   ========================================================================== */
+
+.scanner-toast-banner {
+  margin: 0 0 1.25rem 0 !important;
+  padding: 0.85rem 1.25rem !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 1rem !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06) !important;
+  transition: all 0.3s ease !important;
+}
+
+.scanner-toast-banner.success_inscrito {
+  background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%) !important;
+  border: 1.5px solid #10B981 !important;
+  color: #065F46 !important;
+}
+
+.scanner-toast-banner.already_registered {
+  background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%) !important;
+  border: 1.5px solid #3B82F6 !important;
+  color: #1E40AF !important;
+}
+
+.scanner-toast-banner.warning_notinlist {
+  background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%) !important;
+  border: 1.5px solid #F59E0B !important;
+  color: #92400E !important;
+}
+
+.scanner-toast-banner.info {
+  background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%) !important;
+  border: 1.5px solid #94A3B8 !important;
+  color: #334155 !important;
+}
+
+.scanner-toast-body {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.85rem !important;
+}
+
+.scanner-toast-icon {
+  flex-shrink: 0 !important;
+}
+
+.scanner-toast-title {
+  display: block !important;
+  font-size: 0.96rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 2px !important;
+}
+
+.scanner-toast-msg {
+  margin: 0 !important;
+  font-size: 0.85rem !important;
+  line-height: 1.4 !important;
+  opacity: 0.95 !important;
+}
+
+.scanner-toast-close {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  color: inherit !important;
+  padding: 6px !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  opacity: 0.7 !important;
+  transition: opacity 0.15s ease !important;
+}
+
+.scanner-toast-close:hover {
+  opacity: 1 !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+.usb-scanner-ready-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  margin-top: 0.65rem !important;
+  padding: 0.35rem 0.85rem !important;
+  background: rgba(0, 102, 51, 0.08) !important;
+  border: 1px solid rgba(0, 102, 51, 0.22) !important;
+  border-radius: 20px !important;
+  color: #006633 !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+}
+
+.doc-autofilled-banner {
+  margin-top: 0.75rem !important;
+  background: #F0FDF4 !important;
+  border: 1.5px solid #86EFAC !important;
+  color: #166534 !important;
+  padding: 0.85rem 1rem !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.75rem !important;
+  flex-wrap: wrap !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  box-shadow: 0 2px 8px rgba(22, 101, 52, 0.06) !important;
+}
+
+.doc-autofilled-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 0.65rem !important;
+  flex: 1 !important;
+  min-width: 250px !important;
+}
+
+.doc-autofilled-icon {
+  flex-shrink: 0 !important;
+  color: #059669 !important;
+  margin-top: 2px !important;
+}
+
+.doc-autofilled-text {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  font-size: 0.85rem !important;
+  line-height: 1.4 !important;
 }

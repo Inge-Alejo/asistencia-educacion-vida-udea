@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import {
   MapPin, CheckCircle2, AlertTriangle, Send, Star, Car, User, Mail,
   Phone, CreditCard, MessageSquare, ThumbsUp, HelpCircle,
   Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check,
-  Navigation, Radio, Award, Calendar, KeyRound, RotateCcw, UserPlus
+  Navigation, Radio, Award, Calendar, KeyRound, RotateCcw, UserPlus,
+  Barcode, Sparkles, X
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import {
@@ -15,7 +16,8 @@ import {
   recordEvaluation,
   recordSatisfaction,
   getEventInscritos,
-  subscribeToEventInscritos
+  subscribeToEventInscritos,
+  parseColombianDocumentBarcode
 } from '../services/storage';
 import { maskFullName, maskEmail, areNamesMatching, sanitizeText } from '../services/sanitizer';
 import { getOfficialColombiaTime, getEventDaysList, checkEventDayStatus, getColombiaLocalDateStr } from '../services/networkTime';
@@ -223,36 +225,216 @@ export default function AttendeeView({
   const [challengeError, setChallengeError] = useState('');
   const [verifiedDoc, setVerifiedDoc] = useState(() => (sessionInfo?.documento ? String(sessionInfo.documento).trim() : null));
 
+  // Rastreador del último documento autocompletado para no sobreescribir ediciones manuales
+  const lastAutoFilledDocRef = useRef(null);
+
+  // Buffer y temporizador para lector de código de barras USB (teclado HID)
+  const keystrokeBufferRef = useRef('');
+  const lastKeyTimeRef = useRef(0);
+  const [scannerNotification, setScannerNotification] = useState(null);
+
   // Determinar si el documento ingresado actualmente está debidamente validado y vinculado
   const isCurrentDocVerified = useMemo(() => {
     if (!normalizedCurrentDoc) return false;
     const targetRecord = registroExistente || registroPrevioEvento || inscritoData;
     if (!targetRecord) return false;
-    // Si proviene de lista oficial pero dicha lista no incluía correo, se asume verificado directamente
-    if (!registroExistente && !registroPrevioEvento && inscritoData && !inscritoData.correo) {
+
+    // Si coincide con la lista oficial de inscritos mediante el número de documento, está validado directamente
+    if (!registroExistente && !registroPrevioEvento && inscritoData) {
       return true;
     }
+
     const isDocMatch = normalizeDocumentId(verifiedDoc) === normalizedCurrentDoc || 
       (sessionInfo && normalizeDocumentId(sessionInfo.documento) === normalizedCurrentDoc);
     const isNameMatch = !targetRecord.nombreCompleto || Boolean(formData.nombreCompleto && areNamesMatching(formData.nombreCompleto, targetRecord.nombreCompleto));
     return Boolean(isDocMatch && isNameMatch);
   }, [normalizedCurrentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroExistente, registroPrevioEvento, inscritoData]);
 
-  // Autocompletar automáticamente si el participante está en la lista oficial y no se requiere desafío de correo
+  // Autocompletar automáticamente si el documento coincide con un participante de la lista oficial
   useEffect(() => {
-    if (inscritoData && !inscritoData.correo && !registroExistente && !registroPrevioEvento) {
-      if (!formData.nombreCompleto && inscritoData.nombreCompleto) {
+    if (inscritoData && !registroExistente && !registroPrevioEvento && normalizedCurrentDoc) {
+      if (lastAutoFilledDocRef.current !== normalizedCurrentDoc) {
+        lastAutoFilledDocRef.current = normalizedCurrentDoc;
         setFormData(prev => ({
           ...prev,
-          tipoDocumento: inscritoData.tipoDocumento || prev.tipoDocumento,
-          nombreCompleto: inscritoData.nombreCompleto || prev.nombreCompleto,
-          telefono: inscritoData.telefono || prev.telefono,
-          vinculacion: inscritoData.vinculacion || prev.vinculacion
+          tipoDocumento: inscritoData.tipoDocumento || prev.tipoDocumento || 'CC',
+          documento: inscritoData.documento || prev.documento || currentDoc,
+          nombreCompleto: inscritoData.nombreCompleto || prev.nombreCompleto || '',
+          correo: inscritoData.correo || prev.correo || '',
+          telefono: inscritoData.telefono || prev.telefono || '',
+          vinculacion: inscritoData.vinculacion || prev.vinculacion || 'Estudiante Pregrado Medicina UdeA',
+          placaVehiculo: inscritoData.placaVehiculo || prev.placaVehiculo || '',
+          habeasDataAceptado: true
         }));
-        setVerifiedDoc(currentDoc);
+        setVerifiedDoc(normalizedCurrentDoc);
       }
     }
-  }, [inscritoData, registroExistente, registroPrevioEvento, currentDoc, formData.nombreCompleto]);
+  }, [inscritoData, registroExistente, registroPrevioEvento, normalizedCurrentDoc, currentDoc]);
+
+  // Función para procesar lecturas desde el escáner de código de barras USB
+  const handleProcessBarcodeScan = useCallback((rawCode) => {
+    if (!rawCode || typeof rawCode !== 'string') return;
+    const cleanRaw = rawCode.trim();
+
+    // 1. Decodificar código de documento colombiano (Cédula de Ciudadanía, TI, CE, MRZ o directo)
+    const parsed = parseColombianDocumentBarcode(cleanRaw);
+    let extractedDoc = '';
+    let extractedTipo = 'CC';
+    let extractedName = '';
+
+    if (parsed && parsed.documento) {
+      extractedDoc = parsed.documento;
+      extractedTipo = parsed.tipoDocumento || 'CC';
+      extractedName = parsed.nombreCompleto || '';
+    } else {
+      // Si leyó el código 1D de escarapela o un número directo
+      if (cleanRaw.toUpperCase().startsWith('ATT-')) {
+        const foundAtt = (asistencias || []).find(a => a.id === cleanRaw && a.eventoId === currentEventId);
+        if (foundAtt) {
+          setCodigoComprobante(foundAtt.id);
+          setIsBadgeModalOpen(true);
+          setScannerNotification({
+            type: 'already_registered',
+            title: '¡Escarapela Digital Identificada!',
+            message: `Asistencia ya confirmada para ${foundAtt.nombreCompleto} (${foundAtt.documento}). Visualizando escarapela.`
+          });
+          return;
+        }
+      }
+      extractedDoc = cleanRaw.replace(/\D/g, '') || cleanRaw;
+    }
+
+    const normDoc = normalizeDocumentId(extractedDoc);
+    if (!normDoc) return;
+
+    // 2. Verificar si ya registró asistencia hoy para este evento
+    const yaRegistrado = (asistencias || []).find(
+      a => a.eventoId === currentEventId && normalizeDocumentId(a.documento) === normDoc
+    );
+
+    if (yaRegistrado) {
+      setFormData(prev => ({
+        ...prev,
+        tipoDocumento: yaRegistrado.tipoDocumento || extractedTipo,
+        documento: yaRegistrado.documento,
+        nombreCompleto: yaRegistrado.nombreCompleto,
+        correo: yaRegistrado.correo || prev.correo,
+        telefono: yaRegistrado.telefono || prev.telefono,
+        vinculacion: yaRegistrado.vinculacion || prev.vinculacion,
+        placaVehiculo: yaRegistrado.placaVehiculo || prev.placaVehiculo,
+        habeasDataAceptado: true
+      }));
+      setVerifiedDoc(normDoc);
+      setCodigoComprobante(yaRegistrado.id);
+      setAsistenciaRegistrada(true);
+      setMaxUnlockedStep(5);
+      setActiveStep(3);
+      setScannerNotification({
+        type: 'already_registered',
+        title: '¡Asistencia de Hoy Ya Registrada!',
+        message: `${yaRegistrado.nombreCompleto} (${yaRegistrado.documento}) ya cuenta con asistencia confirmada para la jornada de hoy.`
+      });
+      return;
+    }
+
+    // 3. Comparar con el listado oficial de inscritos del evento
+    const matchedInscrito = inscritosParticipants?.[normDoc];
+
+    if (matchedInscrito) {
+      // ¡Encontrado en la lista oficial! Autocompletar todo inmediatamente
+      lastAutoFilledDocRef.current = normDoc;
+      setFormData({
+        tipoDocumento: matchedInscrito.tipoDocumento || extractedTipo || 'CC',
+        documento: matchedInscrito.documento || extractedDoc,
+        nombreCompleto: matchedInscrito.nombreCompleto || extractedName,
+        correo: matchedInscrito.correo || '',
+        telefono: matchedInscrito.telefono || '',
+        vinculacion: matchedInscrito.vinculacion || 'Estudiante Pregrado Medicina UdeA',
+        placaVehiculo: matchedInscrito.placaVehiculo || '',
+        habeasDataAceptado: true
+      });
+      setVerifiedDoc(normDoc);
+      setMaxUnlockedStep(prev => Math.max(prev, 2));
+      setActiveStep(2);
+
+      // Lanzar confeti y notificación de éxito
+      confetti({ particleCount: 65, spread: 70, origin: { y: 0.6 } });
+      setScannerNotification({
+        type: 'success_inscrito',
+        title: '¡Participante Identificado en Lista Oficial!',
+        message: `Documento ${extractedDoc} reconocido. Datos de ${matchedInscrito.nombreCompleto} autocompletados desde el listado oficial. Revisa y pulsa Confirmar Asistencia.`
+      });
+    } else {
+      // No figura en la lista oficial de inscritos
+      if (extractedName) {
+        lastAutoFilledDocRef.current = normDoc;
+        setFormData(prev => ({
+          ...prev,
+          tipoDocumento: extractedTipo,
+          documento: extractedDoc,
+          nombreCompleto: extractedName,
+          habeasDataAceptado: true
+        }));
+        setVerifiedDoc(normDoc);
+        setMaxUnlockedStep(prev => Math.max(prev, 2));
+        setActiveStep(2);
+        setScannerNotification({
+          type: 'warning_notinlist',
+          title: '¡Documento Físico Leído con Escáner!',
+          message: `${extractedTipo} ${extractedDoc} (${extractedName}) leída. No figuras en el listado previo de inscritos, pero puedes ingresar tus datos de contacto abajo para registrarte.`
+        });
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          documento: extractedDoc
+        }));
+        setMaxUnlockedStep(prev => Math.max(prev, 2));
+        setActiveStep(2);
+        setScannerNotification({
+          type: 'info',
+          title: 'Documento Escaneado',
+          message: `Documento ${extractedDoc} capturado. Completa tus datos para confirmar tu asistencia.`
+        });
+      }
+    }
+  }, [asistencias, currentEventId, inscritosParticipants]);
+
+  // Interceptor global de pulsaciones para Escáner de Código de Barras USB (HID Wedge)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      // Si el foco está en un área de texto multilínea (ej: redactando una pregunta), no capturar ráfagas
+      if (document.activeElement?.tagName === 'TEXTAREA') return;
+
+      const now = Date.now();
+      const timeDiff = now - lastKeyTimeRef.current;
+      lastKeyTimeRef.current = now;
+
+      if (e.key === 'Enter') {
+        const buffered = keystrokeBufferRef.current.trim();
+        keystrokeBufferRef.current = '';
+
+        if (buffered.length >= 3) {
+          e.preventDefault();
+          handleProcessBarcodeScan(buffered);
+        }
+        return;
+      }
+
+      // Reiniciar buffer si la pausa entre teclas excede 180ms y el buffer aún era pequeño (escritura humana lenta)
+      if (timeDiff > 180 && keystrokeBufferRef.current.length < 5) {
+        keystrokeBufferRef.current = '';
+      }
+
+      if (e.key.length === 1) {
+        keystrokeBufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
+    };
+  }, [handleProcessBarcodeScan]);
 
   // Función para validar el correo y autocompletar o autenticar en nuevo dispositivo
   const handleVerifyChallengeEmail = (e) => {
@@ -320,6 +502,8 @@ export default function AttendeeView({
 
   // Restablecer y limpiar formulario para ingresar con otro documento
   const handleResetParticipant = () => {
+    lastAutoFilledDocRef.current = null;
+    setScannerNotification(null);
     setVerifiedDoc(null);
     setChallengeEmail('');
     setChallengeError('');
@@ -345,6 +529,8 @@ export default function AttendeeView({
     );
     if (!confirm) return;
 
+    lastAutoFilledDocRef.current = null;
+    setScannerNotification(null);
     setVerifiedDoc(null);
     setChallengeEmail('');
     setChallengeError('');
@@ -835,6 +1021,27 @@ export default function AttendeeView({
         </div>
       )}
 
+      {/* Banner de notificación interactiva por escáner de código de barras USB */}
+      {scannerNotification && (
+        <div className={`scanner-toast-banner ${scannerNotification.type} animated-step`}>
+          <div className="scanner-toast-body">
+            <Barcode size={22} className="scanner-toast-icon" />
+            <div>
+              <strong className="scanner-toast-title">{scannerNotification.title}</strong>
+              <p className="scanner-toast-msg">{scannerNotification.message}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="scanner-toast-close"
+            onClick={() => setScannerNotification(null)}
+            title="Cerrar notificación"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* BARRA DE PROGRESO SECUENCIAL INTERACTIVA */}
       <nav className="stepper-progress-nav" aria-label="Progreso secuencial del registro">
         <div className="stepper-track">
@@ -889,6 +1096,10 @@ export default function AttendeeView({
               <p className="module-desc">
                 Compruebe su presencia en la sede o auditorio de la Facultad de Medicina para certificar su asistencia presencial.
               </p>
+              <div className="usb-scanner-ready-badge">
+                <Barcode size={15} />
+                <span>Lector de cédulas USB activo: Puedes escanear tu documento físico en cualquier momento para avanzar y autocompletar tu asistencia.</span>
+              </div>
             </div>
           </div>
 
@@ -1069,6 +1280,10 @@ export default function AttendeeView({
               <p className="module-desc">
                 Ingrese sus datos personales para la emisión oficial del certificado de Educación a lo Largo de la Vida.
               </p>
+              <div className="usb-scanner-ready-badge">
+                <Barcode size={15} />
+                <span>Lector de cédulas USB activo: Si escaneas tu cédula física, tus datos del listado de inscritos se autocompletarán al instante.</span>
+              </div>
             </div>
           </div>
 
@@ -1419,79 +1634,26 @@ export default function AttendeeView({
                       </div>
                     )
                   ) : inscritoData ? (
-                    isCurrentDocVerified ? (
-                      <div className="doc-autofilled-hint animated-step">
-                        <CheckCircle2 size={14} color="#059669" />
-                        <span>Datos vinculados de la lista de inscritos ({maskFullName(inscritoData.nombreCompleto)})</span>
-                        <button
-                          type="button"
-                          className="btn-change-participant-mini"
-                          onClick={handleResetParticipant}
-                          title="Limpiar campos para ingresar con otro documento"
-                        >
-                          Cambiar
-                        </button>
-                      </div>
-                    ) : inscritoData.correo ? (
-                      <div className="security-challenge-card animated-step">
-                        <div className="security-challenge-header">
-                          <ShieldCheck size={16} color="#006633" />
-                          <span>Inscripción oficial detectada: <strong>{maskFullName(inscritoData.nombreCompleto)}</strong> ({maskEmail(inscritoData.correo)})</span>
+                    <div className="doc-autofilled-banner animated-step">
+                      <div className="doc-autofilled-header">
+                        <CheckCircle2 size={18} className="doc-autofilled-icon" />
+                        <div className="doc-autofilled-text">
+                          <strong>¡Participante identificado en la lista oficial de inscritos!</strong>
+                          <span>
+                            Datos de asistencia autocompletados para <strong>{inscritoData.nombreCompleto}</strong> ({inscritoData.tipoDocumento || 'CC'} {formData.documento}). Puedes verificar la información y pulsar "Confirmar Asistencia".
+                          </span>
                         </div>
-                        <p className="security-challenge-desc">
-                          Por seguridad y protección de datos personales (Ley 1581), para autocompletar automáticamente tus datos en este dispositivo, confirma tu correo electrónico:
-                        </p>
-                        <div className="security-challenge-form-row">
-                          <input
-                            type="email"
-                            className="form-input challenge-input"
-                            placeholder="Confirma tu correo registrado..."
-                            value={challengeEmail}
-                            onChange={(e) => {
-                              setChallengeEmail(e.target.value);
-                              setChallengeError('');
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleVerifyChallengeEmail(e);
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="btn-challenge-action"
-                            onClick={handleVerifyChallengeEmail}
-                          >
-                            <KeyRound size={14} />
-                            <span>Validar y Autocompletar</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-change-participant-mini"
-                            onClick={handleResetParticipant}
-                            title="Limpiar campos para ingresar con otro documento"
-                            style={{ alignSelf: 'center' }}
-                          >
-                            Ingresar con otro documento
-                          </button>
-                        </div>
-                        {challengeError && <p className="challenge-err-text">{challengeError}</p>}
                       </div>
-                    ) : (
-                      <div className="doc-autofilled-hint animated-step">
-                        <CheckCircle2 size={14} color="#059669" />
-                        <span>Inscripción verificada: {inscritoData.nombreCompleto}</span>
-                        <button
-                          type="button"
-                          className="btn-change-participant-mini"
-                          onClick={handleResetParticipant}
-                          title="Limpiar campos para ingresar con otro documento"
-                        >
-                          Cambiar
-                        </button>
-                      </div>
-                    )
+                      <button
+                        type="button"
+                        className="btn-change-participant-mini"
+                        onClick={handleResetParticipant}
+                        title="Limpiar campos para ingresar con otro documento"
+                        style={{ alignSelf: 'center' }}
+                      >
+                        Cambiar documento
+                      </button>
+                    </div>
                   ) : (enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled && normalizedCurrentDoc.length >= 4) ? (
                     <div className="doc-not-enrolled-alert animated-step">
                       <div className="doc-not-enrolled-header">

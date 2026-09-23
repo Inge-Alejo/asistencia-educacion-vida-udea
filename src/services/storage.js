@@ -976,7 +976,7 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
         correo: p.correo || '',
         telefono: p.telefono || '',
         vinculacion: p.vinculacion || 'Inscrito Oficial',
-        placaVehiculo: ''
+        placaVehiculo: p.placaVehiculo || ''
       },
       message: 'Figura en la lista oficial de inscritos, pero aún no ha completado el formulario de asistencia presencial de hoy.'
     };
