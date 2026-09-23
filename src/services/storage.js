@@ -691,8 +691,63 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
   };
 }
 
+// Decodificador inteligente de códigos de barras de Cédulas de Ciudadanía Colombianas (PDF417 físico o 1D)
+export function parseColombianCedulaBarcode(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const str = raw.trim();
+
+  // Documento directo limpio (ej: '1037625123', 'CC 1037625123', '1.037.625.123')
+  const cleanSimple = str.replace(/[.\s-]/g, '');
+  const simpleMatch = cleanSimple.match(/^(?:CC|TI|CE|PASAPORTE)?(\d{6,11})$/i);
+  if (simpleMatch) {
+    return {
+      documento: simpleMatch[1],
+      nombreCompleto: '',
+      tipoDocumento: 'CC',
+      source: 'DIRECT_DOC'
+    };
+  }
+
+  // Código PDF417 del reverso de Cédula Física Colombiana (Registraduría Nacional / PubDSK)
+  if (str.includes('PubDSK') || str.length > 45) {
+    const cleaned = str.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
+
+    // Extraer número de cédula (omitiendo ceros iniciales de padding de 10 dígitos)
+    const matches = [...cleaned.matchAll(/\b0*(\d{7,10})\b/g)];
+    let bestDoc = null;
+    for (const m of matches) {
+      const num = m[1];
+      if (num.length >= 7 && num.length <= 10) {
+        bestDoc = num;
+        break;
+      }
+    }
+
+    // Extraer nombres y apellidos en mayúsculas
+    const nameMatches = cleaned.match(/[A-ZÁÉÍÓÚÑ]{3,}(?:\s+[A-ZÁÉÍÓÚÑ]{2,})+/g);
+    let nombreCompleto = '';
+    if (nameMatches && nameMatches.length > 0) {
+      const filtered = nameMatches.filter(n => !n.includes('PubDSK') && !n.includes('COL'));
+      if (filtered.length > 0) {
+        nombreCompleto = filtered[0].trim();
+      }
+    }
+
+    if (bestDoc) {
+      return {
+        documento: bestDoc,
+        nombreCompleto,
+        tipoDocumento: 'CC',
+        source: 'CEDULA_PDF417'
+      };
+    }
+  }
+
+  return null;
+}
+
 // Búsqueda universal de participante para escaneo con lector de código de barras USB o manual
-// Acepta: Código de barras con Cédula, Comprobante ATT-..., URL completa de QR, o ID alfanumérico
+// Acepta: Cédula física colombiana (PDF417), Código de barras 1D de escarapela, Comprobante ATT-..., URL completa de QR, o Cédula digitada
 export async function lookupAttendeeUniversal(eventoId, rawInput) {
   if (!rawInput || typeof rawInput !== 'string') {
     return { found: false, message: 'Código o número de documento no proporcionado.' };
@@ -700,6 +755,12 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
 
   let code = rawInput.trim();
   let token = null;
+
+  // Si es un escaneo directo de la Cédula Física de Ciudadanía Colombiana (reverso con PDF417)
+  const parsedCedula = parseColombianCedulaBarcode(code);
+  if (parsedCedula?.documento) {
+    code = parsedCedula.documento;
+  }
 
   // Si el escáner leyó la URL completa del QR (ej: https://.../?verificar=ATT-123&token=xyz)
   if (code.includes('verificar=') || code.includes('verify=') || code.includes('credencial=')) {
@@ -789,6 +850,7 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
   return {
     found: false,
     rawInput: code,
+    parsedCedula: parsedCedula || null,
     message: `No se encontró ningún participante con el documento o código "${code}".`
   };
 }

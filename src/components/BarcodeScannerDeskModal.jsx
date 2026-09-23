@@ -266,13 +266,19 @@ export default function BarcodeScannerDeskModal({
 
       if (!lookup.found) {
         if (soundEnabled) playScannerTone('error');
+        const extractedDoc = lookup.parsedCedula?.documento || cleanCode;
+        if (lookup.parsedCedula?.nombreCompleto) {
+          setQuickRegName(lookup.parsedCedula.nombreCompleto);
+        }
         const errResult = {
           success: false,
           type: 'NOT_FOUND',
-          scannedCode: cleanCode,
+          scannedCode: extractedDoc,
           timestamp: scannedAtTime,
           title: 'Asistente No Encontrado',
-          message: `El código o documento "${cleanCode}" no figura en la lista de asistencias ni en los inscritos de este evento.`
+          message: lookup.parsedCedula
+            ? `Cédula ${extractedDoc} leída exitosamente de la cédula física, pero aún no figura en la lista. Puede registrar su asistencia oficial abajo con un clic.`
+            : `El código o documento "${cleanCode}" no figura en la lista de asistencias ni en los inscritos de este evento.`
         };
         setLastScanResult(errResult);
         setScanHistory(prev => [errResult, ...prev.slice(0, 24)]);
