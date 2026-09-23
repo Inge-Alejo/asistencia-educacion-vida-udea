@@ -691,60 +691,210 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
   };
 }
 
-// Decodificador inteligente de códigos de barras de Cédulas de Ciudadanía Colombianas (PDF417 físico o 1D)
-export function parseColombianCedulaBarcode(raw) {
+// Decodificador universal inteligente de documentos de identidad colombianos
+// Soporta:
+// 1. Cédula Tradicional Amarilla con hologramas (Código PDF417 de la Registraduría Nacional)
+// 2. Tarjeta de Identidad Biometríca para menores de edad (TI con código PDF417)
+// 3. Cédula Digital de policarbonato (Zona MRZ TD1 ICAO 9303 de 3 líneas o QR)
+// 4. Cédula de Extranjería (CE) y Pasaporte
+// 5. Código de barras 1D de escarapela o documento numérico directo
+//
+// GARANTÍA DE PRIVACIDAD Y HABEAS DATA (Ley 1581 de 2012 / SIC):
+// Principio de Minimización de Datos en Memoria Volátil:
+// El escáner puede emitir en el PDF417 datos de salud/biométricos como RH (factor sanguíneo)
+// y el código dactilar AFIS. Estos datos sensibles son DESCARTADOS INMEDIATAMENTE en RAM,
+// nunca se retornan, nunca se persisten en LocalStorage ni se sincronizan a Cloud Firestore.
+export function parseColombianDocumentBarcode(raw) {
   if (!raw || typeof raw !== 'string') return null;
   const str = raw.trim();
 
-  // Documento directo limpio (ej: '1037625123', 'CC 1037625123', '1.037.625.123')
+  // 1. Número directo limpio (ej: digitado manualmente o código de barras 1D de escarapela)
   const cleanSimple = str.replace(/[.\s-]/g, '');
-  const simpleMatch = cleanSimple.match(/^(?:CC|TI|CE|PASAPORTE)?(\d{6,11})$/i);
-  if (simpleMatch) {
+  const simpleMatch = cleanSimple.match(/^(?:(CC|TI|CE|PAS|PA|RC))?(\d{6,11})$/i);
+  if (simpleMatch && str.length <= 15) {
     return {
-      documento: simpleMatch[1],
+      documento: simpleMatch[2],
       nombreCompleto: '',
-      tipoDocumento: 'CC',
+      primerNombre: '',
+      segundoNombre: '',
+      primerApellido: '',
+      segundoApellido: '',
+      tipoDocumento: (simpleMatch[1] || 'CC').toUpperCase(),
       source: 'DIRECT_DOC'
     };
   }
 
-  // Código PDF417 del reverso de Cédula Física Colombiana (Registraduría Nacional / PubDSK)
-  if (str.includes('PubDSK') || str.length > 45) {
+  // 2. Cédula Digital / Documentos con zona mecánica MRZ (3 líneas ICAO Doc 9303 TD1)
+  if (str.includes('<') && (str.includes('COL') || str.includes('I<') || str.includes('ID'))) {
+    const mrzLines = str.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+    let line1 = '', line2 = '', line3 = '';
+    if (mrzLines.length >= 3) {
+      line1 = mrzLines[0];
+      line2 = mrzLines[1];
+      line3 = mrzLines[2];
+    } else if (str.length >= 90) {
+      line1 = str.substring(0, 30);
+      line2 = str.substring(30, 60);
+      line3 = str.substring(60, 90);
+    }
+
+    if (line3 && line3.includes('<<')) {
+      const parts = line3.split('<<');
+      const apellidosRaw = parts[0] || '';
+      const nombresRaw = parts[1] || '';
+
+      const apellidosList = apellidosRaw.split('<').filter(Boolean);
+      const nombresList = nombresRaw.split('<').filter(Boolean);
+
+      const primerApellido = apellidosList[0] || '';
+      const segundoApellido = apellidosList.slice(1).join(' ') || '';
+      const primerNombre = nombresList[0] || '';
+      const segundoNombre = nombresList.slice(1).join(' ') || '';
+
+      const nombres = [primerNombre, segundoNombre].filter(Boolean).join(' ');
+      const apellidos = [primerApellido, segundoApellido].filter(Boolean).join(' ');
+      const nombreCompleto = `${nombres} ${apellidos}`.replace(/\s+/g, ' ').trim();
+
+      // Extraer número de documento
+      let docNum = '';
+      const docMatch = line1.match(/COL([A-Z0-9]+)/) || line2.match(/^([0-9]{7,11})/);
+      if (docMatch) {
+        docNum = docMatch[1].replace(/<.*$/, '').replace(/^[0]+/, '');
+      } else {
+        const anyNumber = line2.match(/(\d{7,11})/);
+        if (anyNumber) docNum = anyNumber[1];
+      }
+
+      let tipoDoc = 'CC';
+      if (line1.startsWith('IR') || line1.startsWith('IE') || str.includes('EXTRANJER')) tipoDoc = 'CE';
+      else if (line1.startsWith('IT') || str.includes('IDENTIDAD')) tipoDoc = 'TI';
+
+      // Detectar si por fecha de nacimiento en MRZ es menor de 18 años (TI)
+      const mrzBirth = line2.match(/^.{0,10}(\d{2})(\d{2})(\d{2})/);
+      if (mrzBirth) {
+        const yy = parseInt(mrzBirth[1], 10);
+        const fullYear = yy > 30 ? 1900 + yy : 2000 + yy;
+        const currentYear = new Date().getFullYear();
+        if ((currentYear - fullYear) < 18) tipoDoc = 'TI';
+      }
+
+      if (docNum) {
+        return {
+          documento: docNum,
+          nombreCompleto,
+          primerNombre,
+          segundoNombre,
+          primerApellido,
+          segundoApellido,
+          tipoDocumento: tipoDoc,
+          source: 'CEDULA_DIGITAL_MRZ'
+        };
+      }
+    }
+  }
+
+  // 3. Código PDF417 de la Registraduría Nacional (Cédula Tradicional Amarilla o Tarjeta de Identidad TI)
+  if (str.length > 50 || str.includes('PubDSK')) {
     const cleaned = str.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
 
-    // Extraer número de cédula (omitiendo ceros iniciales de padding de 10 dígitos)
-    const matches = [...cleaned.matchAll(/\b0*(\d{7,10})\b/g)];
-    let bestDoc = null;
-    for (const m of matches) {
-      const num = m[1];
-      if (num.length >= 7 && num.length <= 10) {
-        bestDoc = num;
+    let docOffset = -1;
+    // La estructura de la Registraduría Nacional contiene un bloque de 10 dígitos entre las posiciones 35 y 65
+    for (let i = 35; i <= 65; i++) {
+      const slice = str.substring(i, i + 10);
+      if (/^\d{10}$/.test(slice)) {
+        docOffset = i;
         break;
       }
     }
 
-    // Extraer nombres y apellidos en mayúsculas
-    const nameMatches = cleaned.match(/[A-ZÁÉÍÓÚÑ]{3,}(?:\s+[A-ZÁÉÍÓÚÑ]{2,})+/g);
-    let nombreCompleto = '';
-    if (nameMatches && nameMatches.length > 0) {
-      const filtered = nameMatches.filter(n => !n.includes('PubDSK') && !n.includes('COL'));
-      if (filtered.length > 0) {
-        nombreCompleto = filtered[0].trim();
+    let docNum = '';
+    let primerApellido = '';
+    let segundoApellido = '';
+    let primerNombre = '';
+    let segundoNombre = '';
+    let fechaNacimiento = '';
+    let tipoDoc = 'CC';
+
+    if (docOffset >= 0) {
+      // Estructura posicional oficial de la Registraduría Nacional de Colombia:
+      // docOffset .. docOffset + 10: Documento (10 dígitos con relleno 0)
+      // docOffset + 10 .. docOffset + 33: Primer Apellido (23 chars)
+      // docOffset + 33 .. docOffset + 56: Segundo Apellido (23 chars)
+      // docOffset + 56 .. docOffset + 79: Primer Nombre (23 chars)
+      // docOffset + 79 .. docOffset + 102: Segundo Nombre (23 chars)
+      // docOffset + 102 .. docOffset + 103: Sexo (1 char: M/F)
+      // docOffset + 103 .. docOffset + 111: Fecha Nacimiento (8 chars: AAAAMMDD)
+      const rawDoc = str.substring(docOffset, docOffset + 10);
+      docNum = rawDoc.replace(/^[0]+/, ''); // Eliminar ceros a la izquierda
+
+      primerApellido = str.substring(docOffset + 10, docOffset + 33).replace(/[^A-ZÁÉÍÓÚÑ]/gi, '').trim();
+      segundoApellido = str.substring(docOffset + 33, docOffset + 56).replace(/[^A-ZÁÉÍÓÚÑ]/gi, '').trim();
+      primerNombre = str.substring(docOffset + 56, docOffset + 79).replace(/[^A-ZÁÉÍÓÚÑ]/gi, '').trim();
+      segundoNombre = str.substring(docOffset + 79, docOffset + 102).replace(/[^A-ZÁÉÍÓÚÑ]/gi, '').trim();
+
+      const rawBirth = str.substring(docOffset + 103, docOffset + 111);
+      if (/^\d{8}$/.test(rawBirth)) {
+        fechaNacimiento = rawBirth;
+      }
+    } else {
+      // Fallback heurístico por palabras clave si el hardware/driver alteró los offsets fijos
+      const docMatch = cleaned.match(/\b0*(\d{7,10})\b/);
+      if (docMatch) {
+        docNum = docMatch[1];
+      }
+
+      const nameWords = cleaned
+        .split(/\s+/)
+        .map(w => w.replace(/[^A-ZÁÉÍÓÚÑ]/g, '').trim())
+        .filter(w => w.length >= 2 && !['PUBDSK', 'COL', 'OPE', 'CDS'].includes(w));
+
+      if (nameWords.length >= 2) {
+        primerApellido = nameWords[0] || '';
+        segundoApellido = nameWords.length > 2 ? nameWords[1] : '';
+        primerNombre = nameWords.length > 2 ? nameWords[2] : nameWords[1];
+        segundoNombre = nameWords.slice(3).join(' ');
       }
     }
 
-    if (bestDoc) {
+    // Identificar Tarjeta de Identidad (TI: menores de 18 años) vs Cédula de Ciudadanía (CC)
+    if (!fechaNacimiento) {
+      const birthMatch = cleaned.match(/\b(19\d{2}|20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
+      if (birthMatch) fechaNacimiento = birthMatch[0];
+    }
+
+    if (fechaNacimiento && fechaNacimiento.length === 8) {
+      const birthYear = parseInt(fechaNacimiento.substring(0, 4), 10);
+      const currentYear = new Date().getFullYear();
+      if ((currentYear - birthYear) < 18) {
+        tipoDoc = 'TI';
+      }
+    }
+
+    const nombres = [primerNombre, segundoNombre].filter(Boolean).join(' ');
+    const apellidos = [primerApellido, segundoApellido].filter(Boolean).join(' ');
+    const nombreCompleto = `${nombres} ${apellidos}`.replace(/\s+/g, ' ').trim();
+
+    if (docNum) {
       return {
-        documento: bestDoc,
-        nombreCompleto,
-        tipoDocumento: 'CC',
+        documento: docNum,
+        nombreCompleto: nombreCompleto || '',
+        primerNombre,
+        segundoNombre,
+        primerApellido,
+        segundoApellido,
+        tipoDocumento: tipoDoc,
         source: 'CEDULA_PDF417'
+        // PROTECCIÓN ESTRICTA DE DATOS SENSIBLES:
+        // Los campos de salud (factor RH) y huella dactilar (AFIS) NO se retornan ni se almacenan.
       };
     }
   }
 
   return null;
 }
+
+// Alias para compatibilidad con código existente
+export const parseColombianCedulaBarcode = parseColombianDocumentBarcode;
 
 // Búsqueda universal de participante para escaneo con lector de código de barras USB o manual
 // Acepta: Cédula física colombiana (PDF417), Código de barras 1D de escarapela, Comprobante ATT-..., URL completa de QR, o Cédula digitada
@@ -804,6 +954,7 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
       source: 'asistencia',
       isRegisteredAttendance: true,
       record: matchAsistencia,
+      parsedCedula: parsedCedula || null,
       message: 'Asistencia oficial confirmada.'
     };
   }
@@ -816,11 +967,12 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
       found: true,
       source: 'inscrito',
       isRegisteredAttendance: false,
+      parsedCedula: parsedCedula || null,
       record: {
         id: `PRE-${normDoc}`,
         documento: p.documento || normDoc,
-        tipoDocumento: p.tipoDocumento || 'CC',
-        nombreCompleto: p.nombreCompleto || 'Participante Inscrito',
+        tipoDocumento: p.tipoDocumento || parsedCedula?.tipoDocumento || 'CC',
+        nombreCompleto: p.nombreCompleto || parsedCedula?.nombreCompleto || 'Participante Inscrito',
         correo: p.correo || '',
         telefono: p.telefono || '',
         vinculacion: p.vinculacion || 'Inscrito Oficial',

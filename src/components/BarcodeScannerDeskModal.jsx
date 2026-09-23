@@ -139,6 +139,7 @@ export default function BarcodeScannerDeskModal({
 
   // Estados para registro rápido in-situ (cuando no figura en la lista)
   const [quickRegName, setQuickRegName] = useState('');
+  const [quickRegTipoDoc, setQuickRegTipoDoc] = useState('CC');
   const [quickRegVinculacion, setQuickRegVinculacion] = useState('Estudiante Pregrado Medicina UdeA');
   const [isQuickRegistering, setIsQuickRegistering] = useState(false);
 
@@ -176,10 +177,11 @@ export default function BarcodeScannerDeskModal({
 
     try {
       const docClean = normalizeDocumentId(lastScanResult.scannedCode);
+      const chosenTipoDoc = quickRegTipoDoc || lastScanResult?.tipoDocumento || 'CC';
       const newAtt = {
         eventoId: evento?.id,
         nombreCompleto: quickRegName.trim(),
-        tipoDocumento: 'CC',
+        tipoDocumento: chosenTipoDoc,
         documento: docClean,
         correo: '',
         telefono: '',
@@ -209,7 +211,7 @@ export default function BarcodeScannerDeskModal({
             comidaId: activeMealObj.id,
             comidaNombre: activeMealObj.nombre,
             documento: docClean,
-            tipoDocumento: 'CC',
+            tipoDocumento: chosenTipoDoc,
             nombreCompleto: quickRegName.trim(),
             vinculacion: quickRegVinculacion,
             comprobanteId: resAtt.record?.id || 'N/A',
@@ -233,7 +235,7 @@ export default function BarcodeScannerDeskModal({
           deliveryRecord,
           mealNombre: activeMealObj?.nombre,
           title: scanMode === 'meal' ? `¡Asistencia y ${activeMealObj?.nombre} Registrados!` : '¡Asistencia Registrada con Éxito!',
-          message: `Participante ${quickRegName.trim()} (CC ${docClean}) registrado y guardado oficialmente en el sistema.`
+          message: `Participante ${quickRegName.trim()} (${chosenTipoDoc} ${docClean}) registrado y guardado oficialmente en el sistema.`
         };
 
         setLastScanResult(successRes);
@@ -270,14 +272,23 @@ export default function BarcodeScannerDeskModal({
         if (lookup.parsedCedula?.nombreCompleto) {
           setQuickRegName(lookup.parsedCedula.nombreCompleto);
         }
+        if (lookup.parsedCedula?.tipoDocumento) {
+          setQuickRegTipoDoc(lookup.parsedCedula.tipoDocumento);
+        }
+        const docLabel = lookup.parsedCedula?.tipoDocumento === 'TI'
+          ? 'Tarjeta de Identidad'
+          : (lookup.parsedCedula?.tipoDocumento === 'CE' ? 'Cédula de Extranjería' : 'Cédula');
+
         const errResult = {
           success: false,
           type: 'NOT_FOUND',
           scannedCode: extractedDoc,
+          tipoDocumento: lookup.parsedCedula?.tipoDocumento || 'CC',
+          nombreExtraido: lookup.parsedCedula?.nombreCompleto || '',
           timestamp: scannedAtTime,
           title: 'Asistente No Encontrado',
           message: lookup.parsedCedula
-            ? `Cédula ${extractedDoc} leída exitosamente de la cédula física, pero aún no figura en la lista. Puede registrar su asistencia oficial abajo con un clic.`
+            ? `${docLabel} ${extractedDoc} leída exitosamente del documento físico, pero aún no figura en la lista. Puede registrar su asistencia oficial abajo con un solo clic.`
             : `El código o documento "${cleanCode}" no figura en la lista de asistencias ni en los inscritos de este evento.`
         };
         setLastScanResult(errResult);
@@ -302,8 +313,8 @@ export default function BarcodeScannerDeskModal({
         if (lookup.source === 'inscrito') {
           const newAttendanceRecord = {
             eventoId: evento?.id,
-            nombreCompleto: attendee.nombreCompleto || 'Participante Inscrito',
-            tipoDocumento: attendee.tipoDocumento || 'CC',
+            nombreCompleto: attendee.nombreCompleto || lookup.parsedCedula?.nombreCompleto || 'Participante Inscrito',
+            tipoDocumento: attendee.tipoDocumento || lookup.parsedCedula?.tipoDocumento || 'CC',
             documento: attendeeDoc,
             correo: attendee.correo || '',
             telefono: attendee.telefono || '',
@@ -766,11 +777,29 @@ export default function BarcodeScannerDeskModal({
                 {/* Si no se encontró el asistente, permitir registro rápido in-situ */}
                 {lastScanResult.type === 'NOT_FOUND' && (
                   <div style={{ marginTop: '0.85rem', padding: '0.9rem', background: '#FFFFFF', borderRadius: '10px', border: '1px solid #FECACA' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.5rem', color: '#991B1B', fontWeight: 700, fontSize: '0.88rem' }}>
-                      <UserPlus size={16} />
-                      <span>Registrar Asistencia en Sitio con Documento {lastScanResult.scannedCode}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#991B1B', fontWeight: 700, fontSize: '0.88rem' }}>
+                        <UserPlus size={16} />
+                        <span>Registrar Asistencia en Sitio con Documento {lastScanResult.scannedCode}</span>
+                      </div>
+                      {lastScanResult.nombreExtraido && (
+                        <span style={{ fontSize: '0.75rem', background: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                          ✓ Nombre extraído del documento físico
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <select
+                        value={quickRegTipoDoc}
+                        onChange={(e) => setQuickRegTipoDoc(e.target.value)}
+                        style={{ padding: '7px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 600, background: '#F8FAFC' }}
+                        title="Tipo de Documento"
+                      >
+                        <option value="CC">CC - Cédula Ciudadanía</option>
+                        <option value="TI">TI - Tarjeta Identidad</option>
+                        <option value="CE">CE - Cédula Extranjería</option>
+                        <option value="PAS">PAS - Pasaporte</option>
+                      </select>
                       <input
                         type="text"
                         name="quickRegInput"
