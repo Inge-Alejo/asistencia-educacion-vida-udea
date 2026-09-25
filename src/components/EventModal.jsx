@@ -28,6 +28,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       : DEFAULT_MEALS
   ));
   const [microsoftFormsUrl, setMicrosoftFormsUrl] = useState(initialEvent?.microsoftFormsUrl || '');
+  const [habilitarMicrosoftForms, setHabilitarMicrosoftForms] = useState(Boolean(initialEvent?.habilitarMicrosoftForms ?? (initialEvent?.microsoftFormsUrl ? true : false)));
 
   const [ponentes, setPonentes] = useState(() => (
     initialEvent?.ponentes?.length
@@ -56,6 +57,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
         : DEFAULT_MEALS
     );
     setMicrosoftFormsUrl(initialEvent?.microsoftFormsUrl || '');
+    setHabilitarMicrosoftForms(Boolean(initialEvent?.habilitarMicrosoftForms ?? (initialEvent?.microsoftFormsUrl ? true : false)));
     setPonentes(initialEvent?.ponentes?.length
       ? initialEvent.ponentes
       : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '' }]
@@ -154,7 +156,8 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               : null
           }))
         : [],
-      microsoftFormsUrl: microsoftFormsUrl.trim(),
+      microsoftFormsUrl: habilitarMicrosoftForms ? microsoftFormsUrl.trim() : '',
+      habilitarMicrosoftForms,
       ponentes: ponentes.filter(p => p.nombre.trim() !== ''),
       inscritosResumen: initialEvent?.inscritosResumen || null,
       inscritosData: initialEvent?.inscritosData || null
@@ -626,20 +629,37 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
           )}
 
           {/* Conexión con Microsoft Forms */}
-          <div className="form-group">
-            <label className="form-label">
-              <Link size={15} /> Enlace de Microsoft Forms Institucional (Opcional)
+          <div className="form-group" style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '12px' }}>
+            <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={habilitarMicrosoftForms}
+                onChange={(e) => setHabilitarMicrosoftForms(e.target.checked)}
+              />
+              <span>Habilitar Evaluación Institucional con Microsoft Forms (Paso 5)</span>
             </label>
-            <input
-              type="url"
-              className="form-input"
-              value={microsoftFormsUrl}
-              onChange={(e) => setMicrosoftFormsUrl(e.target.value)}
-              placeholder="https://forms.office.com/r/..."
-            />
-            <span className="form-help-text">
-              Puedes vincular un formulario de Microsoft 365 para respaldo o validación cruzada.
+            <span className="form-help-text" style={{ marginTop: '4px', display: 'block', color: '#64748b' }}>
+              Permite a los asistentes acceder a una encuesta institucional externa de Microsoft 365. Si se desactiva, los asistentes solo responderán la evaluación y satisfacción nativa.
             </span>
+
+            {habilitarMicrosoftForms && (
+              <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', marginBottom: '6px', color: '#1e293b' }}>
+                  <Link size={15} /> Enlace de Microsoft Forms Institucional
+                </label>
+                <input
+                  type="url"
+                  className="form-input"
+                  value={microsoftFormsUrl}
+                  onChange={(e) => setMicrosoftFormsUrl(e.target.value)}
+                  placeholder="https://forms.office.com/r/..."
+                  required={habilitarMicrosoftForms}
+                />
+                <span className="form-help-text">
+                  Recomendación: Debido a las políticas de seguridad de Microsoft (bloqueo de iframes), los asistentes podrán abrir el formulario de forma segura en una pestaña independiente y marcarlo como completado.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Sección de Ponentes */}

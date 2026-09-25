@@ -704,9 +704,35 @@ export async function verifyAttendanceRecord(comprobanteId, providedToken = null
 // El escáner puede emitir en el PDF417 datos de salud/biométricos como RH (factor sanguíneo)
 // y el código dactilar AFIS. Estos datos sensibles son DESCARTADOS INMEDIATAMENTE en RAM,
 // nunca se retornan, nunca se persisten en LocalStorage ni se sincronizan a Cloud Firestore.
+// Decodificador universal inteligente de documentos de identidad colombianos
+// Soporta:
+// 1. Cédula Tradicional Amarilla con hologramas (Código PDF417 de la Registraduría Nacional)
+// 2. Tarjeta de Identidad Biométrica para menores de edad (TI con código PDF417)
+// 3. Cédula Digital de policarbonato (Zona MRZ TD1 ICAO 9303 de 3 líneas)
+// 4. Detección segura de QR cifrado de la nueva Cédula Digital (evita desbordamientos y corrupción de datos)
+// 5. Cédula de Extranjería (CE) y Pasaporte
+// 6. Código de barras 1D de escarapela o documento numérico directo
+//
+// GARANTÍA DE PRIVACIDAD Y HABEAS DATA (Ley 1581 de 2012 / SIC):
+// Principio de Minimización de Datos en Memoria Volátil:
+// El escáner puede emitir en el PDF417 datos de salud/biométricos como RH (factor sanguíneo)
+// y el código dactilar AFIS. Estos datos sensibles son DESCARTADOS INMEDIATAMENTE en RAM,
+// nunca se retornan, nunca se persisten en LocalStorage ni se sincronizan a Cloud Firestore.
 export function parseColombianDocumentBarcode(raw) {
   if (!raw || typeof raw !== 'string') return null;
   const str = raw.trim();
+
+  // Si es una URL o QR de escarapela digital, NO es un documento de identidad nacional
+  if (
+    str.startsWith('http://') ||
+    str.startsWith('https://') ||
+    str.includes('verificar=') ||
+    str.includes('verify=') ||
+    str.includes('credencial=') ||
+    str.includes('?evento=')
+  ) {
+    return null;
+  }
 
   // 1. Número directo limpio (ej: digitado manualmente o código de barras 1D de escarapela)
   const cleanSimple = str.replace(/[.\s-]/g, '');
@@ -724,8 +750,35 @@ export function parseColombianDocumentBarcode(raw) {
     };
   }
 
-  // 2. Cédula Digital / Documentos con zona mecánica MRZ (3 líneas ICAO Doc 9303 TD1)
-  if (str.includes('<') && (str.includes('COL') || str.includes('I<') || str.includes('ID'))) {
+  // 2. Detección segura del QR cifrado de la nueva Cédula Digital (Policarbonato)
+  // El código QR impreso en la nueva cédula contiene una firma biométrica encriptada
+  // de la Registraduría Nacional / IDEMIA con alta densidad binaria/base64.
+  // No contiene texto plano; decodificarlo como texto arrojaría basura y dañaría la interfaz.
+  const hasMrzMarkers = str.includes('<') && (str.includes('COL') || str.includes('I<') || str.includes('ID'));
+  if (!hasMrzMarkers && (str.length > 130 || str.includes('eyJ') || /[\x00-\x08\x0E-\x1F]/.test(raw))) {
+    let hasTraditionalPdf417Offset = false;
+    for (let i = 35; i <= 65; i++) {
+      if (/^\d{10}$/.test(str.substring(i, i + 10))) {
+        hasTraditionalPdf417Offset = true;
+        break;
+      }
+    }
+
+    if (!hasTraditionalPdf417Offset) {
+      return {
+        isEncryptedDigitalCedulaQR: true,
+        documento: '',
+        nombreCompleto: '',
+        tipoDocumento: 'CC',
+        source: 'CEDULA_DIGITAL_QR_ENCRIPTADO',
+        error: 'QR_CIFRADO_REGISTRADURIA',
+        message: 'El código QR de la nueva Cédula Digital contiene la firma biométrica cifrada exclusiva de la Registraduría Nacional. Por favor apunte el escáner a las 3 líneas de texto (MRZ) en el reverso del documento o digite el número de documento.'
+      };
+    }
+  }
+
+  // 3. Cédula Digital / Documentos con zona mecánica MRZ (3 líneas ICAO Doc 9303 TD1)
+  if (hasMrzMarkers) {
     const mrzLines = str.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
     let line1 = '', line2 = '', line3 = '';
     if (mrzLines.length >= 3) {
@@ -746,16 +799,16 @@ export function parseColombianDocumentBarcode(raw) {
       const apellidosList = apellidosRaw.split('<').filter(Boolean);
       const nombresList = nombresRaw.split('<').filter(Boolean);
 
-      const primerApellido = apellidosList[0] || '';
-      const segundoApellido = apellidosList.slice(1).join(' ') || '';
-      const primerNombre = nombresList[0] || '';
-      const segundoNombre = nombresList.slice(1).join(' ') || '';
+      const primerApellido = (apellidosList[0] || '').replace(/[^A-ZÁÉÍÓÚÑ]/gi, '').trim();
+      const segundoApellido = (apellidosList.slice(1).join(' ') || '').replace(/[^A-ZÁÉÍÓÚÑ\s]/gi, '').trim();
+      const primerNombre = (nombresList[0] || '').replace(/[^A-ZÁÉÍÓÚÑ]/gi, '').trim();
+      const segundoNombre = (nombresList.slice(1).join(' ') || '').replace(/[^A-ZÁÉÍÓÚÑ\s]/gi, '').trim();
 
       const nombres = [primerNombre, segundoNombre].filter(Boolean).join(' ');
       const apellidos = [primerApellido, segundoApellido].filter(Boolean).join(' ');
       const nombreCompleto = `${nombres} ${apellidos}`.replace(/\s+/g, ' ').trim();
 
-      // Extraer número de documento
+      // Extraer número de documento estrictamente numérico
       let docNum = '';
       const docMatch = line1.match(/COL([A-Z0-9]+)/) || line2.match(/^([0-9]{7,11})/);
       if (docMatch) {
@@ -764,6 +817,9 @@ export function parseColombianDocumentBarcode(raw) {
         const anyNumber = line2.match(/(\d{7,11})/);
         if (anyNumber) docNum = anyNumber[1];
       }
+
+      // Asegurar que docNum solo tenga dígitos limpios
+      docNum = (docNum || '').replace(/\D/g, '');
 
       let tipoDoc = 'CC';
       if (line1.startsWith('IR') || line1.startsWith('IE') || str.includes('EXTRANJER')) tipoDoc = 'CE';
@@ -778,7 +834,7 @@ export function parseColombianDocumentBarcode(raw) {
         if ((currentYear - fullYear) < 18) tipoDoc = 'TI';
       }
 
-      if (docNum) {
+      if (docNum && docNum.length >= 6) {
         return {
           documento: docNum,
           nombreCompleto,
@@ -793,7 +849,7 @@ export function parseColombianDocumentBarcode(raw) {
     }
   }
 
-  // 3. Código PDF417 de la Registraduría Nacional (Cédula Tradicional Amarilla o Tarjeta de Identidad TI)
+  // 4. Código PDF417 de la Registraduría Nacional (Cédula Tradicional Amarilla o Tarjeta de Identidad TI)
   if (str.length > 50 || str.includes('PubDSK')) {
     const cleaned = str.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
 
@@ -825,7 +881,7 @@ export function parseColombianDocumentBarcode(raw) {
       // docOffset + 102 .. docOffset + 103: Sexo (1 char: M/F)
       // docOffset + 103 .. docOffset + 111: Fecha Nacimiento (8 chars: AAAAMMDD)
       const rawDoc = str.substring(docOffset, docOffset + 10);
-      docNum = rawDoc.replace(/^[0]+/, ''); // Eliminar ceros a la izquierda
+      docNum = rawDoc.replace(/\D/g, '').replace(/^[0]+/, ''); // Eliminar ceros a la izquierda y garantizar solo dígitos
 
       primerApellido = str.substring(docOffset + 10, docOffset + 33).replace(/[^A-ZÁÉÍÓÚÑ]/gi, '').trim();
       segundoApellido = str.substring(docOffset + 33, docOffset + 56).replace(/[^A-ZÁÉÍÓÚÑ]/gi, '').trim();
@@ -840,7 +896,7 @@ export function parseColombianDocumentBarcode(raw) {
       // Fallback heurístico por palabras clave si el hardware/driver alteró los offsets fijos
       const docMatch = cleaned.match(/\b0*(\d{7,10})\b/);
       if (docMatch) {
-        docNum = docMatch[1];
+        docNum = docMatch[1].replace(/\D/g, '');
       }
 
       const nameWords = cleaned
@@ -874,7 +930,10 @@ export function parseColombianDocumentBarcode(raw) {
     const apellidos = [primerApellido, segundoApellido].filter(Boolean).join(' ');
     const nombreCompleto = `${nombres} ${apellidos}`.replace(/\s+/g, ' ').trim();
 
-    if (docNum) {
+    // Asegurar que docNum contenga únicamente dígitos numéricos y tenga longitud válida (6 a 11 dígitos)
+    docNum = (docNum || '').replace(/\D/g, '');
+
+    if (docNum && docNum.length >= 6) {
       return {
         documento: docNum,
         nombreCompleto: nombreCompleto || '',
@@ -905,30 +964,117 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
 
   let code = rawInput.trim();
   let token = null;
+  let docFromUrl = null;
 
-  // Si es un escaneo directo de la Cédula Física de Ciudadanía Colombiana (reverso con PDF417)
-  const parsedCedula = parseColombianCedulaBarcode(code);
-  if (parsedCedula?.documento) {
-    code = parsedCedula.documento;
-  }
+  // 1. PRIMERO: Si el escáner leyó la URL completa del QR de la escarapela digital
+  // Ej: https://.../?verificar=ATT-123&doc=1037625123&token=xyz
+  const isUrlScan =
+    code.includes('verificar=') ||
+    code.includes('verify=') ||
+    code.includes('credencial=') ||
+    code.startsWith('http://') ||
+    code.startsWith('https://');
 
-  // Si el escáner leyó la URL completa del QR (ej: https://.../?verificar=ATT-123&token=xyz)
-  if (code.includes('verificar=') || code.includes('verify=') || code.includes('credencial=')) {
+  if (isUrlScan) {
     const urlMatch = code.match(/[?&](?:verificar|verify|credencial)=([^&]+)/i);
-    if (urlMatch && urlMatch[1]) {
-      code = decodeURIComponent(urlMatch[1]).trim();
-    }
+    let comprobanteId = urlMatch && urlMatch[1] ? decodeURIComponent(urlMatch[1]).trim() : '';
+
     const tokenMatch = code.match(/[?&]token=([^&]+)/i);
     if (tokenMatch && tokenMatch[1]) {
       token = decodeURIComponent(tokenMatch[1]).trim();
     }
+
+    const docMatch = code.match(/[?&]doc=([^&]+)/i);
+    if (docMatch && docMatch[1]) {
+      docFromUrl = decodeURIComponent(docMatch[1]).trim().replace(/\D/g, '');
+    }
+
+    // Buscar en la lista de asistencias del evento por ID de comprobante o documento
+    const asistencias = getAttendance(eventoId);
+    const matchAsistencia = asistencias.find(a =>
+      (comprobanteId && a.id === comprobanteId) ||
+      (docFromUrl && normalizeDocumentId(a.documento) === normalizeDocumentId(docFromUrl))
+    );
+
+    if (matchAsistencia) {
+      return {
+        found: true,
+        source: 'asistencia',
+        isRegisteredAttendance: true,
+        record: matchAsistencia,
+        message: 'Escarapela digital verificada: Asistencia oficial confirmada.'
+      };
+    }
+
+    // Si no está en local pero es comprobante ATT-..., intentar verificarlo por token / Firestore
+    if (comprobanteId && (comprobanteId.toUpperCase().startsWith('ATT-') || comprobanteId.length > 15)) {
+      const res = await verifyAttendanceRecord(comprobanteId, token);
+      if (res.success && res.record) {
+        return {
+          found: true,
+          source: 'asistencia',
+          isRegisteredAttendance: true,
+          record: res.record,
+          message: 'Escarapela digital verificada: Asistencia oficial confirmada.'
+        };
+      }
+    }
+
+    // Si vino con docFromUrl y no tiene asistencia previa registrada hoy, buscar en inscritos
+    if (docFromUrl) {
+      const inscritosData = getEventInscritosData(eventoId);
+      const normDocUrl = normalizeDocumentId(docFromUrl);
+      if (inscritosData?.participants?.[normDocUrl]) {
+        const p = inscritosData.participants[normDocUrl];
+        return {
+          found: true,
+          source: 'inscrito',
+          isRegisteredAttendance: false,
+          record: {
+            id: `PRE-${normDocUrl}`,
+            documento: p.documento || normDocUrl,
+            tipoDocumento: p.tipoDocumento || 'CC',
+            nombreCompleto: p.nombreCompleto || 'Participante Inscrito',
+            correo: p.correo || '',
+            telefono: p.telefono || '',
+            vinculacion: p.vinculacion || 'Inscrito Oficial',
+            placaVehiculo: p.placaVehiculo || ''
+          },
+          message: 'Participante identificado en la lista oficial de inscritos.'
+        };
+      }
+    }
+
+    return {
+      found: false,
+      isBadgeUrl: true,
+      scannedDoc: docFromUrl || comprobanteId || '',
+      message: `Código QR de escarapela leído (${comprobanteId || 'Comprobante'}), pero no se encontró registro de asistencia en este evento.`
+    };
+  }
+
+  // 2. SEGUNDO: Decodificar si es documento de identidad físico colombiano (PDF417, MRZ o directo)
+  const parsedCedula = parseColombianDocumentBarcode(code);
+
+  if (parsedCedula?.isEncryptedDigitalCedulaQR) {
+    return {
+      found: false,
+      isEncryptedDigitalCedulaQR: true,
+      parsedCedula,
+      message: parsedCedula.message
+    };
+  }
+
+  if (parsedCedula?.documento) {
+    // Asegurar que code contenga estrictamente el número de documento limpio sin nombres
+    code = String(parsedCedula.documento).replace(/\D/g, '') || parsedCedula.documento;
   }
 
   // Normalizar documento si es cédula
   const normDoc = normalizeDocumentId(code);
 
   // 1. Si empieza por ATT- o parece ID de comprobante, intentar verificarlo
-  if (code.toUpperCase().startsWith('ATT-') || code.length > 15) {
+  if (code.toUpperCase().startsWith('ATT-') || (code.length > 15 && !/^\d+$/.test(code))) {
     const res = await verifyAttendanceRecord(code, token);
     if (res.success && res.record) {
       return {

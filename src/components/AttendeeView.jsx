@@ -239,37 +239,11 @@ export default function AttendeeView({
     const targetRecord = registroExistente || registroPrevioEvento || inscritoData;
     if (!targetRecord) return false;
 
-    // Si coincide con la lista oficial de inscritos mediante el número de documento, está validado directamente
-    if (!registroExistente && !registroPrevioEvento && inscritoData) {
-      return true;
-    }
-
     const isDocMatch = normalizeDocumentId(verifiedDoc) === normalizedCurrentDoc || 
       (sessionInfo && normalizeDocumentId(sessionInfo.documento) === normalizedCurrentDoc);
     const isNameMatch = !targetRecord.nombreCompleto || Boolean(formData.nombreCompleto && areNamesMatching(formData.nombreCompleto, targetRecord.nombreCompleto));
     return Boolean(isDocMatch && isNameMatch);
   }, [normalizedCurrentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroExistente, registroPrevioEvento, inscritoData]);
-
-  // Autocompletar automáticamente si el documento coincide con un participante de la lista oficial
-  useEffect(() => {
-    if (inscritoData && !registroExistente && !registroPrevioEvento && normalizedCurrentDoc) {
-      if (lastAutoFilledDocRef.current !== normalizedCurrentDoc) {
-        lastAutoFilledDocRef.current = normalizedCurrentDoc;
-        setFormData(prev => ({
-          ...prev,
-          tipoDocumento: inscritoData.tipoDocumento || prev.tipoDocumento || 'CC',
-          documento: inscritoData.documento || prev.documento || currentDoc,
-          nombreCompleto: inscritoData.nombreCompleto || prev.nombreCompleto || '',
-          correo: inscritoData.correo || prev.correo || '',
-          telefono: inscritoData.telefono || prev.telefono || '',
-          vinculacion: inscritoData.vinculacion || prev.vinculacion || 'Estudiante Pregrado Medicina UdeA',
-          placaVehiculo: inscritoData.placaVehiculo || prev.placaVehiculo || '',
-          habeasDataAceptado: true
-        }));
-        setVerifiedDoc(normalizedCurrentDoc);
-      }
-    }
-  }, [inscritoData, registroExistente, registroPrevioEvento, normalizedCurrentDoc, currentDoc]);
 
   // Función para procesar lecturas desde el escáner de código de barras USB
   const handleProcessBarcodeScan = useCallback((rawCode) => {
@@ -341,29 +315,38 @@ export default function AttendeeView({
     const matchedInscrito = inscritosParticipants?.[normDoc];
 
     if (matchedInscrito) {
-      // ¡Encontrado en la lista oficial! Autocompletar todo inmediatamente
       lastAutoFilledDocRef.current = normDoc;
-      setFormData({
-        tipoDocumento: matchedInscrito.tipoDocumento || extractedTipo || 'CC',
-        documento: matchedInscrito.documento || extractedDoc,
-        nombreCompleto: matchedInscrito.nombreCompleto || extractedName,
-        correo: matchedInscrito.correo || '',
-        telefono: matchedInscrito.telefono || '',
-        vinculacion: matchedInscrito.vinculacion || 'Estudiante Pregrado Medicina UdeA',
-        placaVehiculo: matchedInscrito.placaVehiculo || '',
-        habeasDataAceptado: true
-      });
-      setVerifiedDoc(normDoc);
-      setMaxUnlockedStep(prev => Math.max(prev, 2));
-      setActiveStep(2);
-
-      // Lanzar confeti y notificación de éxito
-      confetti({ particleCount: 65, spread: 70, origin: { y: 0.6 } });
-      setScannerNotification({
-        type: 'success_inscrito',
-        title: '¡Participante Identificado en Lista Oficial!',
-        message: `Documento ${extractedDoc} reconocido. Datos de ${matchedInscrito.nombreCompleto} autocompletados desde el listado oficial. Revisa y pulsa Confirmar Asistencia.`
-      });
+      if (isCurrentDocVerified) {
+        setFormData({
+          tipoDocumento: matchedInscrito.tipoDocumento || extractedTipo || 'CC',
+          documento: matchedInscrito.documento || extractedDoc,
+          nombreCompleto: matchedInscrito.nombreCompleto || extractedName,
+          correo: matchedInscrito.correo || '',
+          telefono: matchedInscrito.telefono || '',
+          vinculacion: matchedInscrito.vinculacion || 'Estudiante Pregrado Medicina UdeA',
+          placaVehiculo: matchedInscrito.placaVehiculo || '',
+          habeasDataAceptado: true
+        });
+        setMaxUnlockedStep(prev => Math.max(prev, 2));
+        setActiveStep(2);
+        confetti({ particleCount: 65, spread: 70, origin: { y: 0.6 } });
+        setScannerNotification({
+          type: 'success_inscrito',
+          title: '¡Participante Identificado en Lista Oficial!',
+          message: `Documento ${extractedDoc} reconocido. Datos de ${matchedInscrito.nombreCompleto} autocompletados desde el listado oficial.`
+        });
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          tipoDocumento: matchedInscrito.tipoDocumento || extractedTipo || 'CC',
+          documento: matchedInscrito.documento || extractedDoc
+        }));
+        setScannerNotification({
+          type: 'info_inscrito',
+          title: '¡Inscripción Oficial Identificada!',
+          message: `Documento ${extractedDoc} reconocido (${maskFullName(matchedInscrito.nombreCompleto)}). Por seguridad, confirma tu correo abajo para autocompletar tus datos.`
+        });
+      }
     } else {
       // No figura en la lista oficial de inscritos
       if (extractedName) {
@@ -453,7 +436,8 @@ export default function AttendeeView({
     if (inputEmail === targetEmail) {
       setFormData(prev => ({
         ...prev,
-        tipoDocumento: targetRecord.tipoDocumento || prev.tipoDocumento,
+        tipoDocumento: targetRecord.tipoDocumento || prev.tipoDocumento || 'CC',
+        documento: targetRecord.documento || currentDoc,
         nombreCompleto: targetRecord.nombreCompleto || prev.nombreCompleto,
         correo: targetRecord.correo || prev.correo,
         telefono: targetRecord.telefono || prev.telefono,
@@ -461,7 +445,7 @@ export default function AttendeeView({
         placaVehiculo: targetRecord.placaVehiculo || prev.placaVehiculo,
         habeasDataAceptado: true
       }));
-      setVerifiedDoc(currentDoc);
+      setVerifiedDoc(normalizedCurrentDoc);
       setChallengeError('');
 
       // Si ya tiene registro hoy, restauramos comprobante y sesión para permitir acceso completo
@@ -470,6 +454,10 @@ export default function AttendeeView({
         setAsistenciaRegistrada(true);
         setMaxUnlockedStep(5);
         setErrorAsistencia('');
+      } else {
+        setMaxUnlockedStep(prev => Math.max(prev, 2));
+        setActiveStep(2);
+        confetti({ particleCount: 65, spread: 70, origin: { y: 0.6 } });
       }
 
       try {
@@ -881,9 +869,15 @@ export default function AttendeeView({
     const cleanPregunta = sanitizeText(preguntaForm.textoPregunta.trim(), 400);
     if (!cleanPregunta) return;
 
+    const ponenteElegido = evento.ponentes?.find(p => p.id === preguntaForm.ponenteId);
+    const ponenteNombre = ponenteElegido?.nombre || (preguntaForm.ponenteId === 'todos' ? 'Todos los Ponentes / Panel' : 'Docente / Ponente UdeA');
+    const ponenteTema = ponenteElegido?.temaPonencia || '';
+
     await addQuestion({
       eventoId: evento.id,
       ponenteId: preguntaForm.ponenteId,
+      ponenteNombre,
+      ponenteTema,
       autor: preguntaForm.esAnonimo ? 'Asistente Anónimo' : sanitizeText(formData.nombreCompleto || preguntaForm.autor || 'Asistente', 80),
       pregunta: cleanPregunta
     });
@@ -997,7 +991,7 @@ export default function AttendeeView({
               onClick={() => setActiveStep(5)}
             >
               <FileText size={15} />
-              <span>{evento.microsoftFormsUrl ? 'Microsoft Forms' : 'Satisfacción'}</span>
+              <span>{evento.habilitarMicrosoftForms && evento.microsoftFormsUrl ? 'Microsoft Forms' : 'Satisfacción'}</span>
             </button>
             <button
               type="button"
@@ -1050,7 +1044,7 @@ export default function AttendeeView({
             { step: 2, label: 'Datos Asistencia', icon: User },
             { step: 3, label: 'Preguntas en Vivo', icon: HelpCircle },
             { step: 4, label: 'Calificar Ponentes', icon: Star },
-            { step: 5, label: evento.microsoftFormsUrl ? 'Microsoft Forms' : 'Satisfacción', icon: FileText }
+            { step: 5, label: (evento.habilitarMicrosoftForms && evento.microsoftFormsUrl) ? 'Microsoft Forms' : 'Satisfacción', icon: FileText }
           ].map((item) => {
             const isCompleted = item.step < activeStep || (item.step === 2 && isRegisteredForEvent);
             const isCurrent = item.step === activeStep;
@@ -1634,26 +1628,74 @@ export default function AttendeeView({
                       </div>
                     )
                   ) : inscritoData ? (
-                    <div className="doc-autofilled-banner animated-step">
-                      <div className="doc-autofilled-header">
-                        <CheckCircle2 size={18} className="doc-autofilled-icon" />
-                        <div className="doc-autofilled-text">
-                          <strong>¡Participante identificado en la lista oficial de inscritos!</strong>
-                          <span>
-                            Datos de asistencia autocompletados para <strong>{inscritoData.nombreCompleto}</strong> ({inscritoData.tipoDocumento || 'CC'} {formData.documento}). Puedes verificar la información y pulsar "Confirmar Asistencia".
-                          </span>
+                    isCurrentDocVerified ? (
+                      <div className="doc-autofilled-banner animated-step">
+                        <div className="doc-autofilled-header">
+                          <CheckCircle2 size={18} className="doc-autofilled-icon" />
+                          <div className="doc-autofilled-text">
+                            <strong>¡Participante verificado en la lista oficial de inscritos!</strong>
+                            <span>
+                              Datos de asistencia vinculados para <strong>{formData.nombreCompleto || inscritoData.nombreCompleto}</strong> ({formData.tipoDocumento || 'CC'} {formData.documento}). Puedes verificar tu información y continuar.
+                            </span>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          className="btn-change-participant-mini"
+                          onClick={handleResetParticipant}
+                          title="Limpiar campos para ingresar con otro documento"
+                          style={{ alignSelf: 'center' }}
+                        >
+                          Cambiar documento
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        className="btn-change-participant-mini"
-                        onClick={handleResetParticipant}
-                        title="Limpiar campos para ingresar con otro documento"
-                        style={{ alignSelf: 'center' }}
-                      >
-                        Cambiar documento
-                      </button>
-                    </div>
+                    ) : (
+                      <div className="security-challenge-card animated-step">
+                        <div className="security-challenge-header">
+                          <ShieldCheck size={16} color="#006633" />
+                          <span>Inscripción previa detectada: <strong>{maskFullName(inscritoData.nombreCompleto)}</strong> ({maskEmail(inscritoData.correo)})</span>
+                        </div>
+                        <p className="security-challenge-desc">
+                          Por seguridad y validación de tu inscripción (Habeas Data - Ley 1581), ingresa tu correo electrónico registrado para autocompletar automáticamente tus datos:
+                        </p>
+                        <div className="security-challenge-form-row">
+                          <input
+                            type="email"
+                            className="form-input challenge-input"
+                            placeholder="Confirma tu correo registrado..."
+                            value={challengeEmail}
+                            onChange={(e) => {
+                              setChallengeEmail(e.target.value);
+                              setChallengeError('');
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleVerifyChallengeEmail(e);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn-challenge-action"
+                            onClick={handleVerifyChallengeEmail}
+                          >
+                            <KeyRound size={14} />
+                            <span>Validar y Autocompletar</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-change-participant-mini"
+                            onClick={handleResetParticipant}
+                            title="Limpiar campos para ingresar con otro documento"
+                            style={{ alignSelf: 'center' }}
+                          >
+                            Ingresar con otro documento
+                          </button>
+                        </div>
+                        {challengeError && <p className="challenge-err-text">{challengeError}</p>}
+                      </div>
+                    )
                   ) : (enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled && normalizedCurrentDoc.length >= 4) ? (
                     <div className="doc-not-enrolled-alert animated-step">
                       <div className="doc-not-enrolled-header">
@@ -1732,6 +1774,7 @@ export default function AttendeeView({
                     <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado Medicina UdeA</option>
                     <option value="Residente / Posgrado UdeA">Residente / Especialidades Médicas UdeA</option>
                     <option value="Docente / Investigador UdeA">Docente / Investigador UdeA</option>
+                    <option value="Auxiliar / Administrativo UdeA">Auxiliar / Administrativo UdeA</option>
                     <option value="Egresado UdeA">Egresado UdeA</option>
                     <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
                     <option value="Profesional de la Salud (Enfermería, Terapia, etc.)">Otro Profesional de la Salud</option>
@@ -1976,10 +2019,11 @@ export default function AttendeeView({
               ) : (
                 preguntas.slice(0, 5).map((q) => {
                   const ponente = evento.ponentes?.find(p => p.id === q.ponenteId);
+                  const docenteNombre = q.ponenteNombre || ponente?.nombre || (q.ponenteId === 'todos' ? 'Todos los Ponentes / Panel' : 'Docente UdeA');
                   return (
                     <div key={q.id} className={`qa-card-item ${q.destacada ? 'featured' : ''}`}>
                       <div className="qa-card-meta">
-                        <span className="qa-target">Para: {ponente?.nombre || 'Ponente'}</span>
+                        <span className="qa-target">Para: {docenteNombre}</span>
                         <span className="qa-time">{q.hora}</span>
                       </div>
                       <p className="qa-text">"{q.pregunta}"</p>
@@ -2201,7 +2245,7 @@ export default function AttendeeView({
             <div>
               <span className="step-indicator-pill">Paso 5 de 5</span>
               <h2 className="module-title">
-                {evento.microsoftFormsUrl ? 'Encuesta Institucional (Microsoft Forms) y Satisfacción' : 'Encuesta de Satisfacción General'}
+                {evento.habilitarMicrosoftForms && evento.microsoftFormsUrl ? 'Encuesta Institucional (Microsoft Forms) y Satisfacción' : 'Encuesta de Satisfacción General'}
               </h2>
               <p className="module-desc">
                 Su retroalimentación permite mejorar continuamente la calidad de nuestros programas académicos.
@@ -2209,41 +2253,48 @@ export default function AttendeeView({
             </div>
           </div>
 
-          {/* INTEGRACIÓN VISIBLE DE MICROSOFT FORMS (Si el evento tiene URL configurada) */}
-          {evento.microsoftFormsUrl && (
-            <div className="ms-forms-user-card">
+          {/* INTEGRACIÓN VISIBLE DE MICROSOFT FORMS (Si el evento tiene habilitado y URL configurada) */}
+          {Boolean(evento.habilitarMicrosoftForms && evento.microsoftFormsUrl) && (
+            <div className="ms-forms-user-card animated-step">
               <div className="ms-forms-header">
-                <div className="ms-icon-wrap">
-                  <FileText size={24} className="ms-icon" />
+                <div className="ms-icon-wrap" style={{ background: '#0F5938', color: '#fff', borderRadius: '10px', padding: '10px' }}>
+                  <FileText size={24} />
                 </div>
                 <div>
-                  <h3>Formulario Oficial de la Facultad (Microsoft Forms)</h3>
-                  <p>Por favor responda el formulario institucional a continuación o ábralo en pantalla completa.</p>
+                  <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', color: '#0F5938' }}>Encuesta Oficial de la Facultad (Microsoft Forms)</h3>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#475569' }}>
+                    Por favor responda el formulario institucional de Microsoft 365 para la retroalimentación oficial del evento.
+                  </p>
                 </div>
               </div>
 
-              <div className="ms-forms-action-bar">
+              <div className="ms-forms-action-bar" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '16px', alignItems: 'center' }}>
                 <a
                   href={evento.microsoftFormsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-open-external-forms"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 18px', background: '#0F5938', color: '#ffffff', textDecoration: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '0.92rem' }}
                 >
                   <ExternalLink size={16} />
-                  <span>Abrir en Pantalla Completa (Microsoft 365)</span>
+                  <span>Abrir Encuesta en Microsoft Forms (Nueva Pestaña)</span>
                 </a>
 
                 <button
                   type="button"
                   className="btn-toggle-embed"
                   onClick={() => setShowEmbeddedForms(!showEmbeddedForms)}
+                  style={{ fontSize: '0.85rem', color: '#64748b', background: 'transparent', border: '1px solid #cbd5e1', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer' }}
                 >
-                  {showEmbeddedForms ? 'Ocultar Formulario Embebido' : 'Mostrar Formulario Embebido'}
+                  {showEmbeddedForms ? 'Ocultar Previsualización Embebida' : 'Intentar Previsualizar Aquí'}
                 </button>
               </div>
 
               {showEmbeddedForms && (
-                <div className="ms-forms-iframe-container">
+                <div className="ms-forms-iframe-container" style={{ marginTop: '14px' }}>
+                  <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '8px' }}>
+                    * Nota: Si su navegador bloquea la visualización por directivas de seguridad de Microsoft (X-Frame-Options), utilice el botón verde arriba para abrirlo directamente.
+                  </p>
                   <iframe
                     src={evento.microsoftFormsUrl}
                     title="Formulario Oficial Microsoft Forms UdeA"

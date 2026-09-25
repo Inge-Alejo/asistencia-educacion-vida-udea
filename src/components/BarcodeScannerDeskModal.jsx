@@ -98,17 +98,25 @@ export default function BarcodeScannerDeskModal({
   entregasComidas = [],
   onDataUpdated
 }) {
+  // Comprobar si el evento tiene activada la gestión de alimentación
+  const hasMealsEnabled = Boolean(evento?.habilitarAlimentacion && Array.isArray(evento?.comidasConfig) && evento.comidasConfig.length > 0);
+
   // Modo de operación: 'checkin' (Acreditación / Puerta) o 'meal' (Alimentación)
   const [scanMode, setScanMode] = useState('checkin');
 
-  // Comida seleccionada para entrega (si el modo es 'meal')
-  const comidasConfig = useMemo(() => {
-    return Array.isArray(evento?.comidasConfig) && evento.comidasConfig.length > 0
-      ? evento.comidasConfig
-      : [{ id: 'almuerzo_default', nombre: 'Almuerzo / Refrigerio Institucional', cantidadTotal: '' }];
-  }, [evento?.comidasConfig]);
+  // Si las comidas están desactivadas para el evento, forzar siempre modo checkin
+  useEffect(() => {
+    if (!hasMealsEnabled && scanMode !== 'checkin') {
+      setScanMode('checkin');
+    }
+  }, [hasMealsEnabled, scanMode]);
 
-  const [selectedMealId, setSelectedMealId] = useState(() => comidasConfig[0]?.id || 'almuerzo_default');
+  // Comidas configuradas activas
+  const comidasConfig = useMemo(() => {
+    return hasMealsEnabled ? (evento.comidasConfig || []) : [];
+  }, [hasMealsEnabled, evento?.comidasConfig]);
+
+  const [selectedMealId, setSelectedMealId] = useState(() => comidasConfig[0]?.id || '');
 
   // Mantener seleccionada la primera comida si cambia la configuración del evento
   useEffect(() => {
@@ -118,7 +126,7 @@ export default function BarcodeScannerDeskModal({
   }, [comidasConfig, selectedMealId]);
 
   const activeMealObj = useMemo(() => {
-    return comidasConfig.find(c => c.id === selectedMealId) || comidasConfig[0];
+    return comidasConfig.find(c => c.id === selectedMealId) || comidasConfig[0] || null;
   }, [comidasConfig, selectedMealId]);
 
   // Sonido habilitado/deshabilitado
@@ -159,9 +167,10 @@ export default function BarcodeScannerDeskModal({
 
   // Contadores de comidas en tiempo real para el evento
   const activeMealDeliveries = useMemo(() => {
+    if (!hasMealsEnabled || !activeMealObj) return [];
     const list = Array.isArray(entregasComidas) ? entregasComidas : getMealDeliveries(evento?.id);
     return list.filter(m => m.eventoId === evento?.id && (m.comidaId === selectedMealId || m.comidaNombre === activeMealObj?.nombre));
-  }, [entregasComidas, evento?.id, selectedMealId, activeMealObj?.nombre]);
+  }, [hasMealsEnabled, entregasComidas, evento?.id, selectedMealId, activeMealObj]);
 
   // Total de asistencias del evento
   const eventAttendanceCount = useMemo(() => {
@@ -266,9 +275,37 @@ export default function BarcodeScannerDeskModal({
       // 1. Buscar al asistente en la base de datos oficial
       const lookup = await lookupAttendeeUniversal(evento?.id, cleanCode);
 
+      // Si es un QR cifrado de la nueva Cédula Digital de policarbonato
+      if (lookup.isEncryptedDigitalCedulaQR) {
+        if (soundEnabled) playScannerTone('error');
+        const qrAlert = {
+          success: false,
+          type: 'ENCRYPTED_QR_ERROR',
+          scannedCode: '',
+          timestamp: scannedAtTime,
+          title: 'QR de Cédula Digital Cifrado (Registraduría)',
+          message: lookup.message || 'El código QR de la nueva cédula contiene firma biométrica protegida. Apunte el lector a las 3 líneas mecánicas (MRZ) en el reverso del documento o digite el número de cédula.'
+        };
+        setLastScanResult(qrAlert);
+        setScanHistory(prev => [qrAlert, ...prev.slice(0, 24)]);
+        setManualInput('');
+        return;
+      }
+
       if (!lookup.found) {
         if (soundEnabled) playScannerTone('error');
-        const extractedDoc = lookup.parsedCedula?.documento || cleanCode;
+
+        // Extraer estrictamente el número de documento limpio (solo dígitos numéricos, sin nombres)
+        let extractedDoc = '';
+        if (lookup.parsedCedula?.documento) {
+          extractedDoc = String(lookup.parsedCedula.documento).replace(/\D/g, '');
+        } else if (lookup.scannedDoc) {
+          extractedDoc = String(lookup.scannedDoc).replace(/\D/g, '');
+        } else {
+          const matchDigits = cleanCode.match(/\b\d{6,11}\b/);
+          extractedDoc = matchDigits ? matchDigits[0] : cleanCode.replace(/\D/g, '');
+        }
+
         if (lookup.parsedCedula?.nombreCompleto) {
           setQuickRegName(lookup.parsedCedula.nombreCompleto);
         }
@@ -286,10 +323,10 @@ export default function BarcodeScannerDeskModal({
           tipoDocumento: lookup.parsedCedula?.tipoDocumento || 'CC',
           nombreExtraido: lookup.parsedCedula?.nombreCompleto || '',
           timestamp: scannedAtTime,
-          title: 'Asistente No Encontrado',
+          title: 'Asistente No Encontrado en Lista Oficial',
           message: lookup.parsedCedula
-            ? `${docLabel} ${extractedDoc} leída exitosamente del documento físico, pero aún no figura en la lista. Puede registrar su asistencia oficial abajo con un solo clic.`
-            : `El código o documento "${cleanCode}" no figura en la lista de asistencias ni en los inscritos de este evento.`
+            ? `${docLabel} ${extractedDoc} (${lookup.parsedCedula.nombreCompleto}) leída exitosamente. No figura en la lista previa de inscritos, pero puede registrar su asistencia oficial abajo con un solo clic.`
+            : `El documento "${extractedDoc || cleanCode}" no figura en la lista de inscritos ni en las asistencias confirmadas de este evento.`
         };
         setLastScanResult(errResult);
         setScanHistory(prev => [errResult, ...prev.slice(0, 24)]);
@@ -543,6 +580,7 @@ export default function BarcodeScannerDeskModal({
 
         if (buffered.length >= 3) {
           e.preventDefault();
+          setManualInput('');
           processScanCode(buffered);
         }
         return;
@@ -620,65 +658,88 @@ export default function BarcodeScannerDeskModal({
         </div>
 
         {/* Barra de Modalidad: Acreditación vs Entrega de Alimentos */}
-        <div className="desk-scanner-modality-bar">
-          <div className="modality-switch-buttons">
-            <button
-              type="button"
-              className={`btn-modality ${scanMode === 'checkin' ? 'active checkin' : ''}`}
-              onClick={() => {
-                setScanMode('checkin');
-                manualInputRef.current?.focus();
-              }}
-            >
-              <UserCheck size={17} />
-              <span>Acreditación / Puerta (Asistencia)</span>
-            </button>
+        {hasMealsEnabled ? (
+          <div className="desk-scanner-modality-bar">
+            <div className="modality-switch-buttons">
+              <button
+                type="button"
+                className={`btn-modality ${scanMode === 'checkin' ? 'active checkin' : ''}`}
+                onClick={() => {
+                  setScanMode('checkin');
+                  manualInputRef.current?.focus();
+                }}
+              >
+                <UserCheck size={17} />
+                <span>Acreditación / Puerta (Asistencia)</span>
+              </button>
 
-            <button
-              type="button"
-              className={`btn-modality ${scanMode === 'meal' ? 'active meal' : ''}`}
-              onClick={() => {
-                setScanMode('meal');
-                manualInputRef.current?.focus();
-              }}
-            >
-              <UtensilsCrossed size={17} />
-              <span>Entrega de Alimentación / Refrigerios</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                className={`btn-modality ${scanMode === 'meal' ? 'active meal' : ''}`}
+                onClick={() => {
+                  setScanMode('meal');
+                  manualInputRef.current?.focus();
+                }}
+              >
+                <UtensilsCrossed size={17} />
+                <span>Entrega de Alimentación / Refrigerios</span>
+              </button>
+            </div>
 
-          <div className="scanner-meta-inputs">
-            {scanMode === 'meal' && (
-              <div className="meal-selector-inline">
-                <label className="meta-label">Comida a entregar:</label>
-                <select
-                  value={selectedMealId}
-                  onChange={(e) => setSelectedMealId(e.target.value)}
-                  className="meal-select-desk"
-                >
-                  {comidasConfig.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre} {c.cantidadTotal ? `(${c.cantidadTotal} cupos)` : ''}
-                    </option>
-                  ))}
-                </select>
+            <div className="scanner-meta-inputs">
+              {scanMode === 'meal' && (
+                <div className="meal-selector-inline">
+                  <label className="meta-label">Comida a entregar:</label>
+                  <select
+                    value={selectedMealId}
+                    onChange={(e) => setSelectedMealId(e.target.value)}
+                    className="meal-select-desk"
+                  >
+                    {comidasConfig.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre} {c.cantidadTotal ? `(${c.cantidadTotal} cupos)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="operator-input-inline">
+                <label className="meta-label">Operador:</label>
+                <input
+                  type="text"
+                  name="operadorInput"
+                  value={operador}
+                  onChange={(e) => setOperador(e.target.value)}
+                  placeholder="Nombre del operador"
+                  className="operator-input-field"
+                  maxLength={35}
+                />
               </div>
-            )}
-
-            <div className="operator-input-inline">
-              <label className="meta-label">Operador:</label>
-              <input
-                type="text"
-                name="operadorInput"
-                value={operador}
-                onChange={(e) => setOperador(e.target.value)}
-                placeholder="Nombre del operador"
-                className="operator-input-field"
-                maxLength={35}
-              />
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="desk-scanner-modality-bar checkin-only">
+            <div className="modality-single-badge" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0F5938', fontWeight: 600 }}>
+              <UserCheck size={18} />
+              <span>Estación de Acreditación y Puerta (Registro Oficial)</span>
+            </div>
+            <div className="scanner-meta-inputs">
+              <div className="operator-input-inline">
+                <label className="meta-label">Operador:</label>
+                <input
+                  type="text"
+                  name="operadorInput"
+                  value={operador}
+                  onChange={(e) => setOperador(e.target.value)}
+                  placeholder="Nombre del operador"
+                  className="operator-input-field"
+                  maxLength={35}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Métricas en Vivo de la Estación */}
         <div className="desk-scanner-kpis">
@@ -687,7 +748,7 @@ export default function BarcodeScannerDeskModal({
             <strong className="kpi-value">{eventAttendanceCount}</strong>
           </div>
 
-          {scanMode === 'meal' && (
+          {hasMealsEnabled && scanMode === 'meal' && activeMealObj && (
             <>
               <div className="kpi-block gold">
                 <span className="kpi-label">{activeMealObj.nombre} Entregados</span>
@@ -816,6 +877,7 @@ export default function BarcodeScannerDeskModal({
                         <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
                         <option value="Residente / Posgrado UdeA">Residente / Posgrado</option>
                         <option value="Docente / Investigador UdeA">Docente / Investigador</option>
+                        <option value="Auxiliar / Administrativo UdeA">Auxiliar / Administrativo</option>
                         <option value="Egresado UdeA">Egresado</option>
                         <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
                         <option value="Asistente Académico">Otro / Asistente Académico</option>

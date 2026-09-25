@@ -62,7 +62,9 @@ export default function DigitalBadge({
 
   // Enlace que se codifica en el código QR de la credencial
   const tokenParam = asistente.tokenSeguridad ? `&token=${encodeURIComponent(asistente.tokenSeguridad)}` : '';
-  const verificationUrl = `${detectedOrigin}/?verificar=${encodeURIComponent(asistente.id)}${tokenParam}`;
+  const docParam = asistente.documento ? `&doc=${encodeURIComponent(asistente.documento)}` : '';
+  const eventParam = (asistente.eventoId || evento?.id) ? `&evento=${encodeURIComponent(asistente.eventoId || evento?.id)}` : '';
+  const verificationUrl = `${detectedOrigin}/?verificar=${encodeURIComponent(asistente.id)}${docParam}${eventParam}${tokenParam}`;
 
   // Función compartida para renderizar el pase digital en un Canvas de alta definición (2x)
   const generateBadgeCanvas = async () => {

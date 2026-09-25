@@ -236,7 +236,8 @@ export default function AdminPanel({
     const matchSearch =
       !termQ ||
       String(q?.pregunta || '').toLowerCase().includes(termQ) ||
-      String(q?.autor || '').toLowerCase().includes(termQ);
+      String(q?.autor || '').toLowerCase().includes(termQ) ||
+      String(q?.ponenteNombre || '').toLowerCase().includes(termQ);
 
     let matchEstado = true;
     if (filterEstadoPregunta === 'pendientes') matchEstado = !q?.respondida;
@@ -603,6 +604,7 @@ export default function AdminPanel({
                  <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
                  <option value="Residente / Posgrado UdeA">Residente / Posgrado UdeA</option>
                  <option value="Docente / Investigador UdeA">Docente / Investigador UdeA</option>
+                 <option value="Auxiliar / Administrativo UdeA">Auxiliar / Administrativo</option>
                  <option value="Egresado UdeA">Egresado UdeA</option>
                  <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
                </select>
@@ -819,11 +821,12 @@ export default function AdminPanel({
             ) : (
               preguntasFiltradas.map((q) => {
                 const ponente = evento.ponentes?.find(p => p.id === q.ponenteId);
+                const docenteNombre = q.ponenteNombre || ponente?.nombre || (q.ponenteId === 'todos' ? 'Todos los Ponentes / Panel' : 'Docente UdeA');
                 return (
                   <div key={q.id} className={`admin-qa-card ${q.destacada ? 'featured' : ''} ${q.respondida ? 'answered' : ''}`}>
                     <div className="admin-qa-header">
                       <span className="qa-target-pill">
-                        Dirigida a: <strong>{ponente?.nombre || 'Ponente'}</strong>
+                        Dirigida a: <strong>{docenteNombre}</strong>
                       </span>
                       <span className="qa-time-stamp">{q.hora}</span>
                     </div>
