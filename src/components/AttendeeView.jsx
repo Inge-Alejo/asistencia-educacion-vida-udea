@@ -5,7 +5,7 @@ import {
   Phone, CreditCard, MessageSquare, ThumbsUp, HelpCircle,
   Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check,
   Navigation, Radio, Award, Calendar, KeyRound, RotateCcw, UserPlus,
-  Barcode, Sparkles, X
+  Barcode, X
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import {
@@ -380,7 +380,7 @@ export default function AttendeeView({
         });
       }
     }
-  }, [asistencias, currentEventId, inscritosParticipants]);
+  }, [asistencias, currentEventId, inscritosParticipants, isCurrentDocVerified]);
 
   // Interceptor global de pulsaciones para Escáner de Código de Barras USB (HID Wedge)
   useEffect(() => {

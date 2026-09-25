@@ -98,6 +98,7 @@ export default function BarcodeScannerDeskModal({
   entregasComidas = [],
   onDataUpdated
 }) {
+  const eventId = evento?.id;
   // Comprobar si el evento tiene activada la gestión de alimentación
   const hasMealsEnabled = Boolean(evento?.habilitarAlimentacion && Array.isArray(evento?.comidasConfig) && evento.comidasConfig.length > 0);
 
@@ -111,10 +112,10 @@ export default function BarcodeScannerDeskModal({
     }
   }, [hasMealsEnabled, scanMode]);
 
-  // Comidas configuradas activas
+  const eventComidasConfig = evento?.comidasConfig;
   const comidasConfig = useMemo(() => {
-    return hasMealsEnabled ? (evento.comidasConfig || []) : [];
-  }, [hasMealsEnabled, evento?.comidasConfig]);
+    return hasMealsEnabled ? (eventComidasConfig || []) : [];
+  }, [hasMealsEnabled, eventComidasConfig]);
 
   const [selectedMealId, setSelectedMealId] = useState(() => comidasConfig[0]?.id || '');
 
@@ -273,7 +274,7 @@ export default function BarcodeScannerDeskModal({
 
     try {
       // 1. Buscar al asistente en la base de datos oficial
-      const lookup = await lookupAttendeeUniversal(evento?.id, cleanCode);
+      const lookup = await lookupAttendeeUniversal(eventId, cleanCode);
 
       // Si es un QR cifrado de la nueva Cédula Digital de policarbonato
       if (lookup.isEncryptedDigitalCedulaQR) {
@@ -334,7 +335,7 @@ export default function BarcodeScannerDeskModal({
       }
 
       const attendee = lookup.record;
-      const attendeeDoc = attendee.documento || cleanCode;
+      const attendeeDoc = String(attendee.documento || lookup.parsedCedula?.documento || cleanCode).replace(/\D/g, '') || String(attendee.documento || cleanCode).trim();
       const attendeeName = attendee.nombreCompleto || 'Participante';
 
       // =========================================================================
@@ -342,14 +343,14 @@ export default function BarcodeScannerDeskModal({
       // =========================================================================
       if (scanMode === 'checkin') {
         // Consultar cuántas comidas lleva reclamadas este asistente en este evento
-        const allDeliveries = getMealDeliveries(evento?.id).filter(
+        const allDeliveries = getMealDeliveries(eventId).filter(
           m => normalizeDocumentId(m.documento) === normalizeDocumentId(attendeeDoc)
         );
 
         // Subcaso A.1: El participante proviene de la lista oficial de inscritos (aún no en asistencias)
         if (lookup.source === 'inscrito') {
           const newAttendanceRecord = {
-            eventoId: evento?.id,
+            eventoId: eventId,
             nombreCompleto: attendee.nombreCompleto || lookup.parsedCedula?.nombreCompleto || 'Participante Inscrito',
             tipoDocumento: attendee.tipoDocumento || lookup.parsedCedula?.tipoDocumento || 'CC',
             documento: attendeeDoc,
@@ -440,7 +441,7 @@ export default function BarcodeScannerDeskModal({
         const mealNombre = activeMealObj.nombre;
 
         // 1. Verificar si ya reclamó esta comida específica
-        const already = await checkMealAlreadyClaimed(evento?.id, mealId, attendeeDoc);
+        const already = await checkMealAlreadyClaimed(eventId, mealId, attendeeDoc);
 
         if (already.claimed) {
           if (soundEnabled) playScannerTone('duplicate');
@@ -468,7 +469,7 @@ export default function BarcodeScannerDeskModal({
         if (lookup.source === 'inscrito' && !lookup.isRegisteredAttendance) {
           try {
             await recordAttendance({
-              eventoId: evento?.id,
+              eventoId: eventId,
               nombreCompleto: attendee.nombreCompleto || 'Participante Inscrito',
               tipoDocumento: attendee.tipoDocumento || 'CC',
               documento: attendeeDoc,
@@ -494,7 +495,7 @@ export default function BarcodeScannerDeskModal({
 
         // 3. Registrar la entrega inmediata
         const saveRes = await recordMealDelivery({
-          eventoId: evento?.id,
+          eventoId: eventId,
           comidaId: mealId,
           comidaNombre: mealNombre,
           documento: attendeeDoc,
@@ -552,7 +553,7 @@ export default function BarcodeScannerDeskModal({
       manualInputRef.current?.focus();
     }
   }, [
-    evento?.id,
+    eventId,
     scanMode,
     activeMealObj,
     soundEnabled,

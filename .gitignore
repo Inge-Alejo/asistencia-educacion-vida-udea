@@ -28,6 +28,7 @@ dist-ssr
 
 # Presentaciones y scripts internos
 *.pptx
+scratch/
 scripts/
 *CONVERSACION*.md
 HISTORIAL_CONVERSACION.md

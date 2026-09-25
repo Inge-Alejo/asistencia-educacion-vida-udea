@@ -248,8 +248,9 @@ export default function AdminPanel({
   });
 
   // Filtrado de Entregas de Alimentación
+  const currentEventId = evento?.id;
   const filteredMealDeliveries = useMemo(() => {
-    const list = (entregasComidas || []).filter(e => e.eventoId === evento?.id);
+    const list = (entregasComidas || []).filter(e => e.eventoId === currentEventId);
     return list.filter(d => {
       const matchMeal = mealFilterId === 'ALL' || d.comidaId === mealFilterId;
       const term = (mealSearchTerm || '').trim().toLowerCase();
@@ -259,7 +260,7 @@ export default function AdminPanel({
         (d.comidaNombre && d.comidaNombre.toLowerCase().includes(term));
       return matchMeal && matchSearch;
     });
-  }, [entregasComidas, evento?.id, mealFilterId, mealSearchTerm]);
+  }, [entregasComidas, currentEventId, mealFilterId, mealSearchTerm]);
 
   const handleDescargarExcel = () => {
     try {

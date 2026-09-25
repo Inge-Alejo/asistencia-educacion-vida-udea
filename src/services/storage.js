@@ -1107,25 +1107,74 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
 
   // 3. Si no está en asistencias, buscar en la lista de inscritos precargada (Excel/CSV)
   const inscritosData = getEventInscritosData(eventoId);
-  if (inscritosData?.participants && normDoc && inscritosData.participants[normDoc]) {
-    const p = inscritosData.participants[normDoc];
-    return {
-      found: true,
-      source: 'inscrito',
-      isRegisteredAttendance: false,
-      parsedCedula: parsedCedula || null,
-      record: {
-        id: `PRE-${normDoc}`,
-        documento: p.documento || normDoc,
-        tipoDocumento: p.tipoDocumento || parsedCedula?.tipoDocumento || 'CC',
-        nombreCompleto: p.nombreCompleto || parsedCedula?.nombreCompleto || 'Participante Inscrito',
-        correo: p.correo || '',
-        telefono: p.telefono || '',
-        vinculacion: p.vinculacion || 'Inscrito Oficial',
-        placaVehiculo: p.placaVehiculo || ''
-      },
-      message: 'Figura en la lista oficial de inscritos, pero aún no ha completado el formulario de asistencia presencial de hoy.'
-    };
+  if (inscritosData && normDoc) {
+    const rawDigits = normDoc.replace(/\D/g, '');
+    const withoutLeadingZeros = rawDigits.replace(/^0+/, '');
+
+    let p = null;
+    if (inscritosData.participants) {
+      p = inscritosData.participants[normDoc] ||
+          (withoutLeadingZeros ? inscritosData.participants[withoutLeadingZeros] : null);
+
+      if (!p && typeof inscritosData.participants === 'object') {
+        const allEntries = Object.values(inscritosData.participants);
+        p = allEntries.find(item => {
+          if (!item || !item.documento) return false;
+          const itemNorm = normalizeDocumentId(item.documento);
+          const itemDigits = itemNorm.replace(/\D/g, '');
+          return itemNorm === normDoc ||
+                 (rawDigits && itemDigits === rawDigits) ||
+                 (withoutLeadingZeros && itemDigits.replace(/^0+/, '') === withoutLeadingZeros);
+        });
+      }
+    }
+
+    if (p) {
+      return {
+        found: true,
+        source: 'inscrito',
+        isRegisteredAttendance: false,
+        parsedCedula: parsedCedula || null,
+        record: {
+          id: `PRE-${normDoc}`,
+          documento: p.documento || normDoc,
+          tipoDocumento: p.tipoDocumento || parsedCedula?.tipoDocumento || 'CC',
+          nombreCompleto: p.nombreCompleto || parsedCedula?.nombreCompleto || 'Participante Inscrito',
+          correo: p.correo || '',
+          telefono: p.telefono || '',
+          vinculacion: p.vinculacion || 'Inscrito Oficial',
+          placaVehiculo: p.placaVehiculo || ''
+        },
+        message: 'Figura en la lista oficial de inscritos.'
+      };
+    }
+
+    // Fallback si la lista sólo tenía la lista de documentos
+    if (Array.isArray(inscritosData.documents)) {
+      const foundDoc = inscritosData.documents.find(d => {
+        const dNorm = normalizeDocumentId(d);
+        return dNorm === normDoc || (rawDigits && dNorm.replace(/\D/g, '') === rawDigits);
+      });
+      if (foundDoc) {
+        return {
+          found: true,
+          source: 'inscrito',
+          isRegisteredAttendance: false,
+          parsedCedula: parsedCedula || null,
+          record: {
+            id: `PRE-${normDoc}`,
+            documento: foundDoc,
+            tipoDocumento: parsedCedula?.tipoDocumento || 'CC',
+            nombreCompleto: parsedCedula?.nombreCompleto || 'Participante Inscrito',
+            correo: '',
+            telefono: '',
+            vinculacion: 'Inscrito Oficial',
+            placaVehiculo: ''
+          },
+          message: 'Figura en la lista oficial de inscritos.'
+        };
+      }
+    }
   }
 
   // 4. Si es comprobante ATT- que no estaba en local pero puede estar en Firestore asistencias
