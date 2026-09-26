@@ -66,10 +66,11 @@ export default function AttendeeView({
 
   // Recuperar sesión activa persistente del asistente en este evento
   const sessionInfo = getSavedAttendeeSession(evento?.id);
+  const hasPonentes = Boolean(evento?.habilitarPonentes !== false && (evento?.ponentes?.length > 0 || !evento?.id));
 
-  // Control del Flujo Secuencial (Pasos 1 a 5)
+  // Control del Flujo Secuencial (Pasos 1 a 5 si tiene ponentes, o Pasos 1 a 3 si no tiene ponentes)
   // 1: Ubicación GPS, 2: Datos de Asistencia, 3: Preguntas en Vivo, 4: Calificación Ponentes, 5: Microsoft Forms / Satisfacción
-  const [activeStep, setActiveStep] = useState(() => (sessionInfo?.registrado ? 3 : 1));
+  const [activeStep, setActiveStep] = useState(() => (sessionInfo?.registrado ? (hasPonentes ? 3 : 5) : 1));
   const [maxUnlockedStep, setMaxUnlockedStep] = useState(() => (sessionInfo?.registrado ? 5 : 1));
 
   // Estado de Geolocalización
@@ -849,9 +850,9 @@ export default function AttendeeView({
         console.warn('Error al guardar sesión del asistente:', err);
       }
 
-      // Desbloquear todos los pasos siguientes y avanzar de inmediato a Preguntas en Vivo (Paso 3)
+      // Desbloquear todos los pasos siguientes y avanzar de inmediato a Preguntas (Paso 3) o Satisfacción (Paso 5)
       setMaxUnlockedStep(5);
-      setActiveStep(3);
+      setActiveStep(hasPonentes ? 3 : 5);
 
       confetti({
         particleCount: 90,
@@ -967,28 +968,34 @@ export default function AttendeeView({
               </div>
               <h3 className="session-user-name">¡Hola, {formData.nombreCompleto || 'Asistente'}!</h3>
               <p className="session-desc-text">
-                Tu asistencia a este evento ya está confirmada. Puedes interactuar en tiempo real con preguntas a los ponentes o calificar sus ponencias.
+                {hasPonentes
+                  ? 'Tu asistencia a este evento ya está confirmada. Puedes interactuar en tiempo real con preguntas a los ponentes o calificar sus ponencias.'
+                  : 'Tu asistencia a este evento ya está confirmada. Puedes responder la encuesta de satisfacción académica o consultar tu escarapela digital.'}
               </p>
             </div>
           </div>
 
           <div className="session-banner-actions">
-            <button
-              type="button"
-              className={`btn-session-nav ${activeStep === 3 ? 'active' : ''}`}
-              onClick={() => setActiveStep(3)}
-            >
-              <MessageSquare size={15} />
-              <span>Preguntas en Vivo</span>
-            </button>
-            <button
-              type="button"
-              className={`btn-session-nav ${activeStep === 4 ? 'active' : ''}`}
-              onClick={() => setActiveStep(4)}
-            >
-              <Star size={15} />
-              <span>Calificar Ponentes</span>
-            </button>
+            {hasPonentes && (
+              <button
+                type="button"
+                className={`btn-session-nav ${activeStep === 3 ? 'active' : ''}`}
+                onClick={() => setActiveStep(3)}
+              >
+                <MessageSquare size={15} />
+                <span>Preguntas en Vivo</span>
+              </button>
+            )}
+            {hasPonentes && (
+              <button
+                type="button"
+                className={`btn-session-nav ${activeStep === 4 ? 'active' : ''}`}
+                onClick={() => setActiveStep(4)}
+              >
+                <Star size={15} />
+                <span>Calificar Ponentes</span>
+              </button>
+            )}
             <button
               type="button"
               className={`btn-session-nav ${activeStep === 5 ? 'active' : ''}`}
@@ -1046,17 +1053,17 @@ export default function AttendeeView({
           {[
             { step: 1, label: 'Ubicación GPS', icon: MapPin },
             { step: 2, label: 'Datos Asistencia', icon: User },
-            { step: 3, label: 'Preguntas en Vivo', icon: HelpCircle },
-            { step: 4, label: 'Calificar Ponentes', icon: Star },
+            ...(hasPonentes ? [
+              { step: 3, label: 'Preguntas en Vivo', icon: HelpCircle },
+              { step: 4, label: 'Calificar Ponentes', icon: Star }
+            ] : []),
             { step: 5, label: (evento.habilitarMicrosoftForms && evento.microsoftFormsUrl) ? 'Microsoft Forms' : 'Satisfacción', icon: FileText }
-          ].map((item) => {
+          ].map((item, idx) => {
             const isCompleted = item.step < activeStep || (item.step === 2 && isRegisteredForEvent);
             const isCurrent = item.step === activeStep;
-            // Restricción solicitada:
-            // Una vez que el usuario ya está registrado o en etapas 3+, no se puede devolver a 1 ni 2.
-            // Pero sí puede navegar entre los pasos 3, 4 y 5 hacia adelante y atrás.
-            const isAccessible = (isRegisteredForEvent || activeStep >= 3)
-              ? (item.step >= 3 && item.step <= maxUnlockedStep)
+            const minPostStep = hasPonentes ? 3 : 5;
+            const isAccessible = (isRegisteredForEvent || activeStep >= minPostStep)
+              ? (item.step >= minPostStep && item.step <= maxUnlockedStep)
               : (item.step <= maxUnlockedStep);
 
             return (
@@ -1070,7 +1077,7 @@ export default function AttendeeView({
                 disabled={!isAccessible}
               >
                 <div className="step-circle">
-                  {isCompleted ? <Check size={14} /> : <span>{item.step}</span>}
+                  {isCompleted ? <Check size={14} /> : <span>{idx + 1}</span>}
                 </div>
                 <span className="step-label">{item.label}</span>
               </button>
@@ -1089,7 +1096,7 @@ export default function AttendeeView({
               <MapPin size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso 1 de 5</span>
+              <span className="step-indicator-pill">Paso 1 de {hasPonentes ? 5 : 3}</span>
               <h2 className="module-title">Verificación de Ubicación Presencial</h2>
               <p className="module-desc">
                 Compruebe su presencia en la sede o auditorio de la Facultad de Medicina para certificar su asistencia presencial.
@@ -1273,7 +1280,7 @@ export default function AttendeeView({
               <ShieldCheck size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso 2 de 5</span>
+              <span className="step-indicator-pill">Paso 2 de {hasPonentes ? 5 : 3}</span>
               <h2 className="module-title">Registro Oficial de Asistencia</h2>
               <p className="module-desc">
                 Ingrese sus datos personales para la emisión oficial del certificado de Educación a lo Largo de la Vida.
@@ -1383,25 +1390,43 @@ export default function AttendeeView({
               </div>
 
               <div className="post-register-nav-box">
-                <p>Ahora puedes participar con preguntas al ponente o responder las encuestas:</p>
-                <div className="next-steps-buttons">
-                  <button
-                    type="button"
-                    className="btn-primary-action"
-                    onClick={() => setActiveStep(3)}
-                  >
-                    <MessageSquare size={16} />
-                    <span>Ir a Preguntas al Ponente</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => setActiveStep(4)}
-                  >
-                    <Star size={16} />
-                    <span>Calificar Ponentes</span>
-                  </button>
-                </div>
+                {hasPonentes ? (
+                  <>
+                    <p>Ahora puedes participar con preguntas al ponente o responder las encuestas:</p>
+                    <div className="next-steps-buttons">
+                      <button
+                        type="button"
+                        className="btn-primary-action"
+                        onClick={() => setActiveStep(3)}
+                      >
+                        <MessageSquare size={16} />
+                        <span>Ir a Preguntas al Ponente</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => setActiveStep(4)}
+                      >
+                        <Star size={16} />
+                        <span>Calificar Ponentes</span>
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p>Ahora puedes responder la encuesta de satisfacción académica:</p>
+                    <div className="next-steps-buttons">
+                      <button
+                        type="button"
+                        className="btn-primary-action"
+                        onClick={() => setActiveStep(5)}
+                      >
+                        <FileText size={16} />
+                        <span>Ir a Encuesta de Satisfacción</span>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ) : (
@@ -1904,7 +1929,7 @@ export default function AttendeeView({
       {/* =========================================================================
           PASO 3: PREGUNTAS A PONENTES EN VIVO (LIVE Q&A)
           ========================================================================= */}
-      {activeStep === 3 && (
+      {activeStep === 3 && hasPonentes && (
         <>
           {/* ACCESO DESTACADO A LA ESCARAPELA DIGITAL (Debajo de las 5 etapas y arriba de las preguntas) */}
           <div className="step-badge-banner-cta animated-step">
@@ -2088,7 +2113,7 @@ export default function AttendeeView({
       {/* =========================================================================
           PASO 4: CALIFICACIÓN DINÁMICA DE PONENTES
           ========================================================================= */}
-      {activeStep === 4 && (
+      {activeStep === 4 && hasPonentes && (
         <section className="attendee-card-module animated-step">
           <div className="module-header">
             <div className="module-icon-wrap stars-icon">
@@ -2277,7 +2302,7 @@ export default function AttendeeView({
               <ThumbsUp size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso 5 de 5</span>
+              <span className="step-indicator-pill">Paso {hasPonentes ? '5 de 5' : '3 de 3'}</span>
               <h2 className="module-title">
                 {evento.habilitarMicrosoftForms && evento.microsoftFormsUrl ? 'Encuesta Institucional (Microsoft Forms) y Satisfacción' : 'Encuesta de Satisfacción General'}
               </h2>
@@ -2437,10 +2462,10 @@ export default function AttendeeView({
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => setActiveStep(4)}
+              onClick={() => setActiveStep(hasPonentes ? 4 : 2)}
             >
               <ChevronLeft size={16} />
-              <span>Volver a Ponentes</span>
+              <span>{hasPonentes ? 'Volver a Ponentes' : 'Volver a Mi Asistencia'}</span>
             </button>
             <div></div>
           </div>

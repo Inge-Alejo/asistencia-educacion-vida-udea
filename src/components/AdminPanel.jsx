@@ -148,7 +148,17 @@ export default function AdminPanel({
   const [newPwd, setNewPwd] = useState('');
   const [pwdMsg, setPwdMsg] = useState({ text: '', isError: false });
 
-  // Estado para alternar activación de ponentes en tiempo real
+  // Validar si el evento tiene ponentes habilitados
+  const hasPonentes = Boolean(evento?.habilitarPonentes !== false && (evento?.ponentes?.length > 0 || !evento?.id));
+
+  // Si los ponentes están desactivados y la pestaña activa era de ponentes, cambiar a asistencias
+  useEffect(() => {
+    if (evento?.habilitarPonentes === false && (activeTab === 'preguntas' || activeTab === 'evaluaciones')) {
+      setActiveTab('asistencias');
+    }
+  }, [evento?.habilitarPonentes, activeTab]);
+
+  // Estado para alternar activación individual de ponentes en tiempo real
   const [togglingPonenteId, setTogglingPonenteId] = useState(null);
 
   const handleTogglePonente = async (ponenteId) => {
@@ -506,28 +516,34 @@ export default function AdminPanel({
           </span>
         </div>
 
-        <div className="kpi-card">
+        <div className="kpi-card" style={{ opacity: hasPonentes ? 1 : 0.75 }}>
           <div className="kpi-header">
             <span className="kpi-label">Preguntas a Ponentes</span>
             <div className="kpi-icon-wrap gold">
               <HelpCircle size={18} />
             </div>
           </div>
-          <div className="kpi-value">{totalPreguntas}</div>
+          <div className="kpi-value">{hasPonentes ? totalPreguntas : '—'}</div>
           <span className="kpi-meta">
-            {preguntasRespondidas} de {totalPreguntas} respondidas en vivo
+            {hasPonentes
+              ? `${preguntasRespondidas} de ${totalPreguntas} respondidas en vivo`
+              : 'Módulo de ponentes DESACTIVADO en este evento'}
           </span>
         </div>
 
-        <div className="kpi-card">
+        <div className="kpi-card" style={{ opacity: hasPonentes ? 1 : 0.75 }}>
           <div className="kpi-header">
             <span className="kpi-label">Calificación Ponentes</span>
             <div className="kpi-icon-wrap amber">
               <Star size={18} />
             </div>
           </div>
-          <div className="kpi-value">{promedioPonentes}</div>
-          <span className="kpi-meta">Basado en {totalEvals} evaluaciones</span>
+          <div className="kpi-value">{hasPonentes ? promedioPonentes : '—'}</div>
+          <span className="kpi-meta">
+            {hasPonentes
+              ? `Basado en ${totalEvals} evaluaciones`
+              : 'Módulo de ponentes DESACTIVADO en este evento'}
+          </span>
         </div>
 
         <div className="kpi-card">
@@ -551,20 +567,24 @@ export default function AdminPanel({
           <Users size={16} />
           <span>Listado de Asistencia ({totalAsistentes})</span>
         </button>
-        <button
-          className={`tab-link ${activeTab === 'preguntas' ? 'active' : ''}`}
-          onClick={() => setActiveTab('preguntas')}
-        >
-          <HelpCircle size={16} />
-          <span>Preguntas a Ponentes ({totalPreguntas})</span>
-        </button>
-        <button
-          className={`tab-link ${activeTab === 'evaluaciones' ? 'active' : ''}`}
-          onClick={() => setActiveTab('evaluaciones')}
-        >
-          <Star size={16} />
-          <span>Calificaciones de Ponentes</span>
-        </button>
+        {hasPonentes && (
+          <button
+            className={`tab-link ${activeTab === 'preguntas' ? 'active' : ''}`}
+            onClick={() => setActiveTab('preguntas')}
+          >
+            <HelpCircle size={16} />
+            <span>Preguntas a Ponentes ({totalPreguntas})</span>
+          </button>
+        )}
+        {hasPonentes && (
+          <button
+            className={`tab-link ${activeTab === 'evaluaciones' ? 'active' : ''}`}
+            onClick={() => setActiveTab('evaluaciones')}
+          >
+            <Star size={16} />
+            <span>Calificaciones de Ponentes</span>
+          </button>
+        )}
         <button
           className={`tab-link ${activeTab === 'satisfaccion' ? 'active' : ''}`}
           onClick={() => setActiveTab('satisfaccion')}

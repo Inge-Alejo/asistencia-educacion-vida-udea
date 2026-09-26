@@ -29,6 +29,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
   ));
   const [microsoftFormsUrl, setMicrosoftFormsUrl] = useState(initialEvent?.microsoftFormsUrl || '');
   const [habilitarMicrosoftForms, setHabilitarMicrosoftForms] = useState(Boolean(initialEvent?.habilitarMicrosoftForms ?? (initialEvent?.microsoftFormsUrl ? true : false)));
+  const [habilitarPonentes, setHabilitarPonentes] = useState(initialEvent?.habilitarPonentes ?? (initialEvent ? Boolean(initialEvent.ponentes && initialEvent.ponentes.length > 0) : true));
 
   const [ponentes, setPonentes] = useState(() => (
     initialEvent?.ponentes?.length
@@ -58,6 +59,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
     );
     setMicrosoftFormsUrl(initialEvent?.microsoftFormsUrl || '');
     setHabilitarMicrosoftForms(Boolean(initialEvent?.habilitarMicrosoftForms ?? (initialEvent?.microsoftFormsUrl ? true : false)));
+    setHabilitarPonentes(initialEvent?.habilitarPonentes ?? (initialEvent ? Boolean(initialEvent.ponentes && initialEvent.ponentes.length > 0) : true));
     setPonentes(initialEvent?.ponentes?.length
       ? initialEvent.ponentes.map(p => ({ ...p, activo: p.activo ?? true }))
       : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '', activo: true }]
@@ -158,9 +160,12 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
         : [],
       microsoftFormsUrl: habilitarMicrosoftForms ? microsoftFormsUrl.trim() : '',
       habilitarMicrosoftForms,
-      ponentes: ponentes
-        .filter(p => p.nombre.trim() !== '')
-        .map(p => ({ ...p, activo: p.activo ?? true })),
+      habilitarPonentes,
+      ponentes: habilitarPonentes
+        ? ponentes
+            .filter(p => p.nombre.trim() !== '')
+            .map(p => ({ ...p, activo: p.activo ?? true }))
+        : [],
       inscritosResumen: initialEvent?.inscritosResumen || null,
       inscritosData: initialEvent?.inscritosData || null
     };
@@ -664,19 +669,46 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             )}
           </div>
 
-          {/* Sección de Ponentes */}
-          <div className="speakers-builder-section">
-            <div className="section-header-row">
+          {/* CONTROL EXCLUSIVO: Habilitar Ponentes y Evaluaciones del Evento */}
+          <div className="form-toggle-card">
+            <div className="toggle-info">
+              <div className="toggle-icon-wrap speakers" style={{ background: '#EFF6FF', color: '#1D4ED8' }}>
+                <User size={22} />
+              </div>
               <div>
-                <h3 className="section-title">Ponentes y Evaluaciones del Evento</h3>
-                <p className="section-subtitle">
-                  Cada ponente registrado generará automáticamente una tarjeta de evaluación individual para los asistentes.
+                <label className="toggle-title" htmlFor="switch-ponentes">
+                  Habilitar Ponentes y Evaluaciones del Evento
+                </label>
+                <p className="toggle-description">
+                  Active esta opción si el evento cuenta con conferencistas, docentes o expositores invitados. Si se desactiva, los asistentes no tendrán los pasos de preguntas ni calificación docente.
                 </p>
               </div>
-              <button type="button" className="btn-add-speaker" onClick={handleAddPonente}>
-                <Plus size={16} /> Agregar Ponente
-              </button>
             </div>
+            <label className="switch">
+              <input
+                id="switch-ponentes"
+                type="checkbox"
+                checked={habilitarPonentes}
+                onChange={(e) => setHabilitarPonentes(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
+          </div>
+
+          {/* Sección de Ponentes */}
+          {habilitarPonentes && (
+            <div className="speakers-builder-section">
+              <div className="section-header-row">
+                <div>
+                  <h3 className="section-title">Ponentes y Evaluaciones del Evento</h3>
+                  <p className="section-subtitle">
+                    Cada ponente registrado generará automáticamente una tarjeta de evaluación individual para los asistentes.
+                  </p>
+                </div>
+                <button type="button" className="btn-add-speaker" onClick={handleAddPonente}>
+                  <Plus size={16} /> Agregar Ponente
+                </button>
+              </div>
 
             <div className="speakers-list-container">
               {ponentes.map((ponente, idx) => (
@@ -766,6 +798,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               ))}
             </div>
           </div>
+          )}
 
           <div className="modal-actions-footer">
             <button type="button" className="btn-secondary" onClick={onClose}>

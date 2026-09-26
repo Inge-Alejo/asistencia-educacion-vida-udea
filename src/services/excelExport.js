@@ -101,7 +101,7 @@ export function exportEventDataToExcel({
   });
 
   const wsPreguntas = XLSX.utils.json_to_sheet(preguntasData.length > 0 ? preguntasData : [
-    { 'Mensaje': 'No se registran preguntas formuladas a los ponentes.' }
+    { 'Mensaje': safeEvento.habilitarPonentes === false ? 'Módulo de ponentes desactivado para este evento académico.' : 'No se registran preguntas formuladas a los ponentes.' }
   ]);
   XLSX.utils.book_append_sheet(wb, wsPreguntas, '2_Preguntas_Ponentes');
 
@@ -123,7 +123,7 @@ export function exportEventDataToExcel({
   });
 
   const wsEvaluaciones = XLSX.utils.json_to_sheet(evaluacionesData.length > 0 ? evaluacionesData : [
-    { 'Mensaje': 'No se registran evaluaciones a los ponentes todavía.' }
+    { 'Mensaje': safeEvento.habilitarPonentes === false ? 'Módulo de ponentes desactivado para este evento académico.' : 'No se registran evaluaciones a los ponentes todavía.' }
   ]);
   XLSX.utils.book_append_sheet(wb, wsEvaluaciones, '3_Evaluacion_Ponentes');
 
@@ -175,6 +175,7 @@ export function exportEventDataToExcel({
     { 'Parámetro': 'Lugar / Auditorio', 'Detalle': sanitizeExcelFormula(safeEvento.lugar || 'Facultad de Medicina') },
     { 'Parámetro': 'Registro Vehicular Habilitado', 'Detalle': safeEvento.habilitarPlacaVehiculo ? 'SÍ (Parqueadero Activo)' : 'NO' },
     { 'Parámetro': 'Control de Alimentación / Refrigerios', 'Detalle': safeEvento.habilitarAlimentacion ? `SÍ (${(safeEvento.comidasConfig || []).map(c => `${c.nombre}${c.cantidadTotal ? ` [${c.cantidadTotal} raciones]` : ''}`).join(', ') || 'Activo'})` : 'NO' },
+    { 'Parámetro': 'Módulo de Ponentes Habilitado', 'Detalle': safeEvento.habilitarPonentes !== false ? `SÍ (${(safeEvento.ponentes || []).length} ponentes)` : 'NO' },
     { 'Parámetro': 'Total Asistentes Registrados', 'Detalle': safeAsistencias.length },
     { 'Parámetro': 'Asistencias Validadas Presenciales GPS', 'Detalle': safeAsistencias.filter(a => a.geolocalizacion?.esPresencial).length },
     { 'Parámetro': 'Total Entregas de Alimentación', 'Detalle': safeEntregas.length },
