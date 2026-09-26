@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2, UtensilsCrossed, Coffee } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2, UtensilsCrossed, Coffee, ClipboardList } from 'lucide-react';
 import { getEventDaysList } from '../services/networkTime';
 
 const DEFAULT_MEALS = [
@@ -635,40 +635,6 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             </div>
           )}
 
-          {/* Conexión con Microsoft Forms */}
-          <div className="form-group" style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '12px' }}>
-            <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 600 }}>
-              <input
-                type="checkbox"
-                checked={habilitarMicrosoftForms}
-                onChange={(e) => setHabilitarMicrosoftForms(e.target.checked)}
-              />
-              <span>Habilitar Evaluación Institucional con Microsoft Forms (Paso 5)</span>
-            </label>
-            <span className="form-help-text" style={{ marginTop: '4px', display: 'block', color: '#64748b' }}>
-              Permite a los asistentes acceder a una encuesta institucional externa de Microsoft 365. Si se desactiva, los asistentes solo responderán la evaluación y satisfacción nativa.
-            </span>
-
-            {habilitarMicrosoftForms && (
-              <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
-                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', marginBottom: '6px', color: '#1e293b' }}>
-                  <Link size={15} /> Enlace de Microsoft Forms Institucional
-                </label>
-                <input
-                  type="url"
-                  className="form-input"
-                  value={microsoftFormsUrl}
-                  onChange={(e) => setMicrosoftFormsUrl(e.target.value)}
-                  placeholder="https://forms.office.com/r/..."
-                  required={habilitarMicrosoftForms}
-                />
-                <span className="form-help-text">
-                  Recomendación: Debido a las políticas de seguridad de Microsoft (bloqueo de iframes), los asistentes podrán abrir el formulario de forma segura en una pestaña independiente y marcarlo como completado.
-                </span>
-              </div>
-            )}
-          </div>
-
           {/* CONTROL EXCLUSIVO: Habilitar Ponentes y Evaluaciones del Evento */}
           <div className="form-toggle-card">
             <div className="toggle-info">
@@ -710,94 +676,141 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                 </button>
               </div>
 
-            <div className="speakers-list-container">
-              {ponentes.map((ponente, idx) => (
-                <div key={ponente.id || idx} className="speaker-form-card" style={{ opacity: (ponente.activo ?? true) ? 1 : 0.75 }}>
-                  <div className="speaker-number-badge">{idx + 1}</div>
+              <div className="speakers-list-container">
+                {ponentes.map((ponente, idx) => (
+                  <div key={ponente.id || idx} className="speaker-form-card" style={{ opacity: (ponente.activo ?? true) ? 1 : 0.75 }}>
+                    <div className="speaker-number-badge">{idx + 1}</div>
 
-                  {/* Interruptor de activación / desactivación del ponente */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #E5E7EB' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <label style={{ position: 'relative', display: 'inline-block', width: '38px', height: '22px', margin: 0 }}>
-                        <input
-                          type="checkbox"
-                          checked={ponente.activo ?? true}
-                          onChange={(e) => handlePonenteChange(idx, 'activo', e.target.checked)}
-                          style={{ opacity: 0, width: 0, height: 0 }}
-                        />
-                        <span style={{
-                          position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                          backgroundColor: (ponente.activo ?? true) ? '#006633' : '#9CA3AF',
-                          transition: '.25s', borderRadius: '22px'
-                        }}>
-                          <span style={{
-                            position: 'absolute', content: '""', height: '16px', width: '16px', left: (ponente.activo ?? true) ? '19px' : '3px', bottom: '3px',
-                            backgroundColor: 'white', transition: '.25s', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                          }}></span>
+                    <div className="speaker-card-content" style={{ flex: 1, minWidth: 0 }}>
+                      {/* Interruptor de activación / desactivación del ponente */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #E5E7EB', flexWrap: 'wrap', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <label style={{ position: 'relative', display: 'inline-block', width: '38px', height: '22px', margin: 0, flexShrink: 0 }}>
+                            <input
+                              type="checkbox"
+                              checked={ponente.activo ?? true}
+                              onChange={(e) => handlePonenteChange(idx, 'activo', e.target.checked)}
+                              style={{ opacity: 0, width: 0, height: 0 }}
+                            />
+                            <span style={{
+                              position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                              backgroundColor: (ponente.activo ?? true) ? '#006633' : '#9CA3AF',
+                              transition: '.25s', borderRadius: '22px'
+                            }}>
+                              <span style={{
+                                position: 'absolute', content: '""', height: '16px', width: '16px', left: (ponente.activo ?? true) ? '19px' : '3px', bottom: '3px',
+                                backgroundColor: 'white', transition: '.25s', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                              }}></span>
+                            </span>
+                          </label>
+                          <span style={{ fontSize: '0.84rem', fontWeight: 700, color: (ponente.activo ?? true) ? '#006633' : '#4B5563' }}>
+                            {(ponente.activo ?? true) ? 'Ponente Activo' : 'Ponente Inactivo / En Pausa'}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                          {(ponente.activo ?? true) ? 'Habilitado en Q&A y Evaluación' : 'Oculto para preguntas y evaluación'}
                         </span>
-                      </label>
-                      <span style={{ fontSize: '0.84rem', fontWeight: 700, color: (ponente.activo ?? true) ? '#006633' : '#4B5563' }}>
-                        {(ponente.activo ?? true) ? 'Ponente Activo' : 'Ponente Inactivo / En Pausa'}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                      {(ponente.activo ?? true) ? 'Habilitado en Q&A y Evaluación' : 'Oculto para preguntas y evaluación'}
-                    </span>
-                  </div>
+                      </div>
 
-                  <div className="speaker-inputs-grid">
-                    <div className="form-group">
-                      <label className="form-sublabel">
-                        <User size={13} /> Nombre Completo del Ponente
-                      </label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Ej: Dra. Camila Restrepo"
-                        value={ponente.nombre}
-                        onChange={(e) => handlePonenteChange(idx, 'nombre', e.target.value)}
-                        required
-                      />
+                      <div className="speaker-inputs-grid">
+                        <div className="form-group">
+                          <label className="form-sublabel">
+                            <User size={13} /> Nombre Completo del Ponente
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ej: Dra. Camila Restrepo"
+                            value={ponente.nombre}
+                            onChange={(e) => handlePonenteChange(idx, 'nombre', e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-sublabel">Título / Especialidad</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ej: Médica Neumóloga UdeA"
+                            value={ponente.titulo}
+                            onChange={(e) => handlePonenteChange(idx, 'titulo', e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group col-span-2">
+                          <label className="form-sublabel">
+                            <BookOpen size={13} /> Tema / Título de la Ponencia
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ej: Diagnóstico Temprano de la Hipertensión Pulmonar"
+                            value={ponente.temaPonencia}
+                            onChange={(e) => handlePonenteChange(idx, 'temaPonencia', e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="form-group">
-                      <label className="form-sublabel">Título / Especialidad</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Ej: Médica Neumóloga UdeA"
-                        value={ponente.titulo}
-                        onChange={(e) => handlePonenteChange(idx, 'titulo', e.target.value)}
-                      />
-                    </div>
-                    <div className="form-group col-span-2">
-                      <label className="form-sublabel">
-                        <BookOpen size={13} /> Tema / Título de la Ponencia
-                      </label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Ej: Diagnóstico Temprano de la Hipertensión Pulmonar"
-                        value={ponente.temaPonencia}
-                        onChange={(e) => handlePonenteChange(idx, 'temaPonencia', e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
 
-                  {ponentes.length > 1 && (
-                    <button
-                      type="button"
-                      className="btn-remove-speaker"
-                      onClick={() => handleRemovePonente(idx)}
-                      title="Eliminar ponente"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              ))}
+                    {ponentes.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn-remove-speaker"
+                        onClick={() => handleRemovePonente(idx)}
+                        title="Eliminar ponente"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
+          )}
+
+          {/* CONTROL EXCLUSIVO: Habilitar Evaluación Institucional con Microsoft Forms (Paso 5) */}
+          <div className="form-toggle-card">
+            <div className="toggle-info">
+              <div className="toggle-icon-wrap forms" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
+                <ClipboardList size={22} />
+              </div>
+              <div>
+                <label className="toggle-title" htmlFor="switch-forms">
+                  Habilitar Evaluación Institucional con Microsoft Forms (Paso 5)
+                </label>
+                <p className="toggle-description">
+                  Permite a los asistentes acceder a una encuesta institucional externa de Microsoft 365. Si se desactiva, los asistentes solo responderán la evaluación y satisfacción nativa.
+                </p>
+              </div>
+            </div>
+            <label className="switch">
+              <input
+                id="switch-forms"
+                type="checkbox"
+                checked={habilitarMicrosoftForms}
+                onChange={(e) => setHabilitarMicrosoftForms(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
           </div>
+
+          {habilitarMicrosoftForms && (
+            <div className="forms-builder-section" style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0', marginTop: '-6px', marginBottom: '8px' }}>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', marginBottom: '6px', color: '#1E293B' }}>
+                <Link size={15} /> Enlace de Microsoft Forms Institucional
+              </label>
+              <input
+                type="url"
+                className="form-input"
+                value={microsoftFormsUrl}
+                onChange={(e) => setMicrosoftFormsUrl(e.target.value)}
+                placeholder="https://forms.office.com/r/..."
+                required={habilitarMicrosoftForms}
+              />
+              <span className="form-help-text" style={{ marginTop: '6px', display: 'block', color: '#64748B' }}>
+                Recomendación: Debido a las políticas de seguridad de Microsoft (bloqueo de iframes), los asistentes podrán abrir el formulario de forma segura en una pestaña independiente y marcarlo como completado.
+              </span>
+            </div>
           )}
 
           <div className="modal-actions-footer">

@@ -1395,8 +1395,11 @@ body {
   cursor: pointer;
 }
 
-.table-responsive-container {
+.table-responsive-container,
+.table-responsive {
+  width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: 12px;
   border: 1px solid #E2E8F0;
   background: #FFFFFF;
@@ -2466,8 +2469,15 @@ body {
   gap: 1rem;
 }
 
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
 @media (max-width: 600px) {
-  .form-row-3 {
+  .form-row-3,
+  .form-row-2 {
     grid-template-columns: 1fr;
   }
 }
@@ -3961,6 +3971,182 @@ input:checked+.slider::before {
     flex-wrap: wrap;
     gap: 0.45rem;
   }
+
+  /* Prevenir zoom forzado en iOS Safari */
+  .form-input,
+  .form-textarea,
+  select.form-input,
+  .event-dropdown {
+    font-size: 16px !important;
+  }
+
+  /* Modales en móvil: ancho completo y aprovechamiento de pantalla */
+  .modal-overlay {
+    padding: 0.5rem !important;
+  }
+
+  .modal-container {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 94vh !important;
+    border-radius: 14px !important;
+  }
+
+  .modal-header {
+    padding: 0.9rem 1.15rem !important;
+  }
+
+  .modal-form-body {
+    padding: 1.15rem 1rem !important;
+    gap: 1rem !important;
+  }
+
+  .modal-actions-footer {
+    padding-top: 1rem !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Tarjetas de switches y módulos */
+  .form-toggle-card {
+    padding: 0.85rem 1rem !important;
+    gap: 0.75rem !important;
+  }
+
+  .toggle-info {
+    gap: 0.75rem !important;
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
+
+  .toggle-icon-wrap {
+    width: 38px !important;
+    height: 38px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .toggle-title {
+    font-size: 0.88rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .toggle-description {
+    font-size: 0.76rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .switch {
+    flex-shrink: 0 !important;
+  }
+
+  /* Ponentes en móvil */
+  .speaker-inputs-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.65rem !important;
+  }
+
+  .speaker-form-card {
+    padding: 0.85rem !important;
+    gap: 0.65rem !important;
+  }
+
+  .speakers-builder-section {
+    padding-top: 1rem !important;
+  }
+
+  /* Duración y multidía en móvil */
+  .duration-pill-group {
+    flex-direction: column !important;
+    gap: 0.45rem !important;
+  }
+
+  .duration-pill-btn {
+    width: 100% !important;
+    padding: 0.6rem 0.85rem !important;
+  }
+
+  .multiday-config-box {
+    padding: 0.85rem !important;
+  }
+
+  .day-schedule-item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+    padding: 0.65rem !important;
+  }
+
+  .day-schedule-inputs-row {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  /* Vista de Asistente en móvil */
+  .attendee-card-module {
+    padding: 1.25rem 1rem !important;
+    border-radius: 12px !important;
+  }
+
+  .module-header {
+    gap: 0.75rem !important;
+    margin-bottom: 1.15rem !important;
+  }
+
+  .module-icon-wrap {
+    width: 38px !important;
+    height: 38px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .module-title {
+    font-size: 1.12rem !important;
+  }
+
+  .event-hero-banner {
+    padding: 1.25rem 1rem !important;
+    border-radius: 12px !important;
+  }
+
+  .banner-title {
+    font-size: 1.25rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .banner-meta {
+    gap: 0.5rem !important;
+    flex-wrap: wrap !important;
+  }
+
+  .meta-point {
+    font-size: 0.78rem !important;
+  }
+
+  .stepper-progress-nav {
+    padding: 0.65rem 0.75rem !important;
+    border-radius: 12px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .stepper-track {
+    min-width: 460px !important;
+    gap: 0.35rem !important;
+  }
+
+  .stepper-step-btn {
+    padding: 0.35rem 0.45rem !important;
+    font-size: 0.75rem !important;
+    gap: 0.35rem !important;
+  }
+
+  .step-circle {
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 0.75rem !important;
+    flex-shrink: 0 !important;
+  }
+
+  .step-label {
+    font-size: 0.74rem !important;
+  }
 }
 
 @media (max-width: 480px) {
@@ -3997,6 +4183,72 @@ input:checked+.slider::before {
 
   .kpi-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Botones del pie de modal apilados a ancho completo para fácil pulsación */
+  .modal-actions-footer {
+    flex-direction: column-reverse !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+  }
+
+  .modal-actions-footer button,
+  .btn-secondary,
+  .btn-primary-action {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+    font-size: 0.88rem !important;
+  }
+
+  .section-header-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+
+  .btn-add-speaker {
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  .admin-toolbar-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.65rem !important;
+  }
+
+  .admin-search-wrap {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .admin-buttons-group {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.4rem !important;
+  }
+
+  .admin-buttons-group button {
+    justify-content: center !important;
+    width: 100% !important;
+    font-size: 0.75rem !important;
+    padding: 0.45rem 0.5rem !important;
+  }
+
+  .admin-buttons-group button:last-child {
+    grid-column: span 2 !important;
+  }
+
+  .desk-scanner-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+
+  .desk-scanner-controls-top {
+    justify-content: space-between !important;
   }
 }
 
