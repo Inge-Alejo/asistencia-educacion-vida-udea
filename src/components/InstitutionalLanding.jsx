@@ -13,9 +13,14 @@ import {
   GraduationCap,
   Award,
   CheckCircle2,
-  Lock
+  Lock,
+  Camera,
+  UserCheck,
+  Users
 } from 'lucide-react';
 import { getColombiaLocalDateStr, checkEventDayStatus } from '../services/networkTime';
+import { getEventInscritos } from '../services/storage';
+import AuditoriumQRScannerModal from './AuditoriumQRScannerModal';
 
 export default function InstitutionalLanding({
   events = [],
@@ -25,6 +30,8 @@ export default function InstitutionalLanding({
 }) {
   const [eventCodeInput, setEventCodeInput] = useState('');
   const [searchError, setSearchError] = useState('');
+  const [isQRScannerModalOpen, setIsQRScannerModalOpen] = useState(false);
+  const [selectedEventForScanner, setSelectedEventForScanner] = useState(null);
 
   // Fecha actual en hora de Colombia (America/Bogota)
   const todayStr = getColombiaLocalDateStr();
@@ -124,12 +131,28 @@ export default function InstitutionalLanding({
           <div className="live-events-grid">
             {activeTodayEvents.map(({ evt, status }) => {
               const activePonentes = (evt.ponentes || []).filter(p => p.activo !== false);
+              const inscritosDocs = getEventInscritos(evt.id);
+              const hasInscritos = Boolean(
+                (evt.inscritosResumen?.habilitado && evt.inscritosResumen?.total > 0) ||
+                (evt.inscritosData?.count > 0) ||
+                (Array.isArray(inscritosDocs) && inscritosDocs.length > 0)
+              );
+
               return (
                 <article key={evt.id} className="live-event-card">
                   <div className="live-event-badge-row">
                     <span className="live-badge-glow">
                       <span className="pulse-small"></span> En Curso Hoy
                     </span>
+                    {hasInscritos ? (
+                      <span className="event-access-pill enrolled" title="Evento con lista oficial de asistentes precargada">
+                        <Users size={12} /> Con Lista de Asistentes
+                      </span>
+                    ) : (
+                      <span className="event-access-pill open-qr" title="Evento de asistencia abierta presencial">
+                        <QrCode size={12} /> Registro Presencial QR
+                      </span>
+                    )}
                     <span className="event-code-tag">{evt.id}</span>
                   </div>
 
@@ -163,14 +186,40 @@ export default function InstitutionalLanding({
                   </div>
 
                   <div className="live-event-cta-box">
-                    <button
-                      type="button"
-                      className="btn-enter-event-primary"
-                      onClick={() => onSelectEvent(evt)}
-                    >
-                      <span>Registrar Mi Asistencia Ahora</span>
-                      <ArrowRight size={17} />
-                    </button>
+                    {hasInscritos ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn-enter-event-primary"
+                          onClick={() => onSelectEvent(evt)}
+                        >
+                          <UserCheck size={17} />
+                          <span>Registrar Mi Asistencia</span>
+                          <ArrowRight size={17} />
+                        </button>
+                        <span className="event-cta-security-note">
+                          Habilitado para personas previamente inscritas a este evento.
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="btn-enter-event-qr"
+                          onClick={() => {
+                            setSelectedEventForScanner(evt);
+                            setIsQRScannerModalOpen(true);
+                          }}
+                        >
+                          <QrCode size={18} />
+                          <span>Escanear Código QR</span>
+                          <Camera size={16} />
+                        </button>
+                        <span className="event-cta-security-note open-note">
+                          Por seguridad, escanea el código QR proyectado en el auditorio.
+                        </span>
+                      </>
+                    )}
                   </div>
                 </article>
               );
@@ -279,6 +328,18 @@ export default function InstitutionalLanding({
           </button>
         </div>
       </section>
+
+      {/* Modal de Escaneo de Código QR en Auditorio para eventos abiertos */}
+      <AuditoriumQRScannerModal
+        isOpen={isQRScannerModalOpen}
+        onClose={() => {
+          setIsQRScannerModalOpen(false);
+          setSelectedEventForScanner(null);
+        }}
+        targetEvent={selectedEventForScanner}
+        events={events}
+        onSelectEvent={onSelectEvent}
+      />
     </div>
   );
 }

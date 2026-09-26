@@ -11393,4 +11393,200 @@ input:checked+.slider::before {
     justify-content: center;
   }
 }
+
+/* =========================================================================
+   ESTILOS PARA BOTÓN CONDICIONAL (ESCANEAR QR / REGISTRAR ASISTENCIA)
+   ========================================================================= */
+
+.event-access-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.event-access-pill.enrolled {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
+.event-access-pill.open-qr {
+  background: #F0FDF4;
+  color: #15803D;
+  border: 1px solid #86EFAC;
+}
+
+.btn-enter-event-qr {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 13px 20px;
+  background: linear-gradient(135deg, #0F5938 0%, #166534 100%);
+  color: #FFFFFF;
+  border: 1.5px solid #22C55E;
+  border-radius: 12px;
+  font-size: 0.96rem;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.22s ease-in-out;
+  box-shadow: 0 4px 14px rgba(15, 89, 56, 0.28);
+}
+
+.btn-enter-event-qr:hover {
+  background: linear-gradient(135deg, #166534 0%, #0F5938 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(15, 89, 56, 0.38);
+  border-color: #4ADE80;
+}
+
+.btn-enter-event-qr:active {
+  transform: translateY(0);
+}
+
+.event-cta-security-note {
+  display: block;
+  text-align: center;
+  font-size: 0.76rem;
+  color: #64748B;
+  margin-top: 8px;
+  line-height: 1.35;
+}
+
+.event-cta-security-note.open-note {
+  color: #15803D;
+  font-weight: 600;
+}
+
+/* =========================================================================
+   MODAL DE ESCANEO DE CÓDIGO QR EN AUDITORIO
+   ========================================================================= */
+
+.qr-scanner-auditorio-modal {
+  max-width: 480px !important;
+  width: 95% !important;
+  border-radius: 18px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25) !important;
+}
+
+.auditorium-camera-box {
+  position: relative;
+  width: 100%;
+  height: 270px;
+  background: #0B1912;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #166534;
+}
+
+.auditorium-video-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-target-reticle {
+  position: absolute;
+  width: 190px;
+  height: 190px;
+  pointer-events: none;
+}
+
+.reticle-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: #22C55E;
+  border-style: solid;
+}
+
+.reticle-corner.top-left {
+  top: 0;
+  left: 0;
+  border-width: 3.5px 0 0 3.5px;
+  border-top-left-radius: 8px;
+}
+
+.reticle-corner.top-right {
+  top: 0;
+  right: 0;
+  border-width: 3.5px 3.5px 0 0;
+  border-top-right-radius: 8px;
+}
+
+.reticle-corner.bottom-left {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 3.5px 3.5px;
+  border-bottom-left-radius: 8px;
+}
+
+.reticle-corner.bottom-right {
+  bottom: 0;
+  right: 0;
+  border-width: 0 3.5px 3.5px 0;
+  border-bottom-right-radius: 8px;
+}
+
+.scanner-laser-line {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  height: 2.5px;
+  background: linear-gradient(90deg, transparent, #22C55E 20%, #86EFAC 50%, #22C55E 80%, transparent);
+  box-shadow: 0 0 12px #22C55E, 0 0 3px #FFFFFF;
+  border-radius: 3px;
+  animation: laserScanSweep 2.2s ease-in-out infinite alternate;
+}
+
+@keyframes laserScanSweep {
+  0% {
+    top: 8%;
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    top: 92%;
+    opacity: 0.7;
+  }
+}
+
+.camera-loading-overlay,
+.camera-error-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 25, 18, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #F8FAFC;
+  padding: 1.5rem;
+  text-align: center;
+  z-index: 10;
+}
+
+.camera-error-overlay p {
+  font-size: 0.84rem;
+  color: #E2E8F0;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 320px;
+}
+
 
