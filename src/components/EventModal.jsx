@@ -768,7 +768,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             </div>
           )}
 
-          {/* CONTROL EXCLUSIVO: Habilitar Evaluación Institucional con Microsoft Forms (Paso 5) */}
+          {/* CONTROL EXCLUSIVO: Habilitar Evaluación Institucional con Microsoft Forms o Google Forms (Paso 5) */}
           <div className="form-toggle-card">
             <div className="toggle-info">
               <div className="toggle-icon-wrap forms" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
@@ -776,10 +776,10 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               </div>
               <div>
                 <label className="toggle-title" htmlFor="switch-forms">
-                  Habilitar Evaluación Institucional con Microsoft Forms (Paso 5)
+                  Habilitar Encuesta Institucional Externa (Microsoft Forms o Google Forms)
                 </label>
                 <p className="toggle-description">
-                  Permite a los asistentes acceder a una encuesta institucional externa de Microsoft 365. Si se desactiva, los asistentes solo responderán la evaluación y satisfacción nativa.
+                  Permite a los asistentes acceder a una encuesta oficial externa (Office 365 / Google Forms). Al finalizar, quedará al final del flujo del asistente con acceso directo garantizado.
                 </p>
               </div>
             </div>
@@ -797,18 +797,18 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
           {habilitarMicrosoftForms && (
             <div className="forms-builder-section" style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0', marginTop: '-6px', marginBottom: '8px' }}>
               <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', marginBottom: '6px', color: '#1E293B' }}>
-                <Link size={15} /> Enlace de Microsoft Forms Institucional
+                <Link size={15} /> Enlace de la Encuesta (Microsoft Forms / Google Forms)
               </label>
               <input
                 type="url"
                 className="form-input"
                 value={microsoftFormsUrl}
                 onChange={(e) => setMicrosoftFormsUrl(e.target.value)}
-                placeholder="https://forms.office.com/r/..."
+                placeholder="https://forms.office.com/r/... o https://forms.gle/..."
                 required={habilitarMicrosoftForms}
               />
               <span className="form-help-text" style={{ marginTop: '6px', display: 'block', color: '#64748B' }}>
-                Recomendación: Debido a las políticas de seguridad de Microsoft (bloqueo de iframes), los asistentes podrán abrir el formulario de forma segura en una pestaña independiente y marcarlo como completado.
+                Garantía técnica: Se abrirá en una pestaña limpia y segura para el asistente, evitando cualquier bloqueo o error por directivas de seguridad (X-Frame-Options).
               </span>
             </div>
           )}

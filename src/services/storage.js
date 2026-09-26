@@ -247,10 +247,16 @@ const SEED_SATISFACTION = [
   }
 ];
 
-// Inicializador de LocalStorage con migración automática de coordenadas
+// Inicializador de LocalStorage con prevención de falsos positivos en escaneo de QR
 export function initStorage() {
   if (!localStorage.getItem(STORAGE_KEY_EVENTS)) {
-    localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(SEED_EVENTS));
+    // Si la URL trae un parámetro de evento específico, NO inyectamos eventos demo para evitar confusiones
+    const hasUrlEvent = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('evento');
+    if (!hasUrlEvent) {
+      localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(SEED_EVENTS));
+    } else {
+      localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify([]));
+    }
   } else {
     // Migración automática en dispositivos que visitaron la app previamente:
     // Asegura que los eventos semilla tengan las coordenadas exactas de la Facultad de Medicina
@@ -293,8 +299,39 @@ export function getEvents() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY_EVENTS) || '[]');
   } catch {
-    return SEED_EVENTS;
+    return [];
   }
+}
+
+// Consulta directa e inmediata por ID para asistentes que escanean código QR
+export async function fetchEventByIdDirect(eventId) {
+  if (!eventId) return null;
+
+  // 1. Revisar si ya está en localStorage
+  const localList = getEvents();
+  const localMatch = localList.find(e => e.id === eventId);
+
+  // 2. Si Firebase está activo, consultar documento directo en Firestore en tiempo récord
+  if (isFirebaseConfigured() && db) {
+    try {
+      const docSnap = await getDoc(doc(db, 'eventos', eventId));
+      if (docSnap && docSnap.exists()) {
+        const cloudData = docSnap.data();
+        const index = localList.findIndex(e => e.id === eventId);
+        if (index >= 0) {
+          localList[index] = cloudData;
+        } else {
+          localList.unshift(cloudData);
+        }
+        localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(localList));
+        return cloudData;
+      }
+    } catch (err) {
+      console.warn('Consulta directa en Firestore con aviso:', err?.message);
+    }
+  }
+
+  return localMatch || null;
 }
 
 export async function saveEvent(eventData) {
@@ -396,15 +433,22 @@ export function subscribeToEvents(onUpdate) {
         snapshot.forEach(docSnap => cloudEvents.push(docSnap.data()));
 
         if (cloudEvents.length > 0) {
-          const localEvents = getEvents();
           const map = new Map();
-          localEvents.forEach(ev => map.set(ev.id, ev));
+          // Prioridad a eventos reales de la nube
           cloudEvents.forEach(ev => {
             map.set(ev.id, ev);
             if (ev?.inscritosData) {
               try {
                 localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + ev.id, JSON.stringify(ev.inscritosData));
               } catch {}
+            }
+          });
+
+          // Solo mantener eventos locales si no son los demo de prueba
+          const localEvents = getEvents();
+          localEvents.forEach(ev => {
+            if (!map.has(ev.id) && ev.id !== 'EVT-MED-01' && ev.id !== 'EVT-MED-02') {
+              map.set(ev.id, ev);
             }
           });
 

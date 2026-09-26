@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserCheck, Settings, QrCode, Lock, LogOut, Calendar } from 'lucide-react';
+import { UserCheck, Settings, QrCode, Lock, LogOut, Calendar, GraduationCap } from 'lucide-react';
 
 export default function Header({
   currentView,
@@ -16,7 +16,7 @@ export default function Header({
       <div className="header-top-bar">
         <div className="container header-content">
           {/* Identidad Institucional UdeA */}
-          <div className="brand-wrapper">
+          <div className="brand-wrapper" onClick={() => onNavigateView('attendee')} style={{ cursor: 'pointer' }} title="Ir al Portal Institucional">
             <img
               src="/logo-udea-horizontal.png"
               alt="Universidad de Antioquia - Facultad de Medicina"
@@ -49,7 +49,7 @@ export default function Header({
                 ))}
               </select>
             </div>
-          ) : (
+          ) : currentEvent ? (
             <div className="header-event-locked-badge" title={`Evento oficial: ${currentEvent?.titulo || 'Evento Académico UdeA'}`}>
               <div className="locked-badge-header">
                 <span className="locked-pill-tag">
@@ -67,6 +67,18 @@ export default function Header({
                 <strong className="locked-title">
                   {currentEvent?.titulo || 'Evento Académico UdeA'}
                 </strong>
+              </div>
+            </div>
+          ) : (
+            <div className="header-event-locked-badge portal-badge" title="Portal Institucional de Asistencia UdeA">
+              <div className="locked-badge-header">
+                <span className="locked-pill-tag" style={{ background: '#DCFCE7', color: '#166534' }}>
+                  <GraduationCap size={12} />
+                  <span>Portal Institucional</span>
+                </span>
+              </div>
+              <div className="locked-text-wrap">
+                <strong className="locked-title">Educación Médica Continua</strong>
               </div>
             </div>
           )}

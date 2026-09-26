@@ -1160,12 +1160,12 @@ export default function AdminPanel({
               </div>
 
               <div className="form-group">
-                <label className="form-label">URL del Formulario de Microsoft Forms Vinculado:</label>
+                <label className="form-label">URL del Formulario Institucional (Microsoft Forms o Google Forms):</label>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <input
                     type="url"
                     className="form-input"
-                    placeholder="https://forms.office.com/r/..."
+                    placeholder="https://forms.office.com/r/... o https://forms.gle/..."
                     value={msFormsUrl}
                     onChange={(e) => setMsFormsUrl(e.target.value)}
                     style={{ flex: 1 }}
@@ -1182,11 +1182,16 @@ export default function AdminPanel({
                       }
                       setIsSavingFormsUrl(true);
                       try {
-                        const updated = { ...evento, microsoftFormsUrl: msFormsUrl.trim() };
-                        saveEvent(updated);
+                        const trimmedUrl = msFormsUrl.trim();
+                        const updated = {
+                          ...evento,
+                          microsoftFormsUrl: trimmedUrl,
+                          habilitarMicrosoftForms: Boolean(trimmedUrl)
+                        };
+                        await saveEvent(updated);
                         if (onDataUpdated) onDataUpdated();
-                        setFormsUrlFeedback('¡Enlace guardado en el evento con éxito!');
-                        setTimeout(() => setFormsUrlFeedback(''), 3500);
+                        setFormsUrlFeedback('¡Enlace institucional vinculado y activado para los asistentes con éxito!');
+                        setTimeout(() => setFormsUrlFeedback(''), 4000);
                       } catch (err) {
                         console.error('Error guardando enlace Forms:', err);
                         alert('Error al guardar el enlace: ' + (err?.message || 'Error'));
@@ -1195,7 +1200,7 @@ export default function AdminPanel({
                       }
                     }}
                   >
-                    {isSavingFormsUrl ? 'Guardando...' : 'Guardar Enlace'}
+                    {isSavingFormsUrl ? 'Guardando...' : 'Guardar y Habilitar Enlace'}
                   </button>
                 </div>
                 {formsUrlFeedback && (
@@ -1214,10 +1219,10 @@ export default function AdminPanel({
                     className="btn-secondary full-width"
                   >
                     <ExternalLink size={16} />
-                    <span>Abrir Formulario de Microsoft Forms</span>
+                    <span>Abrir Formulario Institucional Vinculado</span>
                   </a>
                 ) : (
-                  <p className="no-url-notice">Puede pegar el enlace de su formulario de Microsoft Forms institucional arriba y hacer clic en &quot;Guardar Enlace&quot; para vincularlo al evento.</p>
+                  <p className="no-url-notice">Puede pegar el enlace de su encuesta institucional (Microsoft Forms o Google Forms) arriba y hacer clic en &quot;Guardar y Habilitar Enlace&quot; para vincularlo al evento.</p>
                 )}
 
                 <button className="btn-secondary full-width" onClick={handleDescargarMsForms}>
