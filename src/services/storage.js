@@ -536,7 +536,8 @@ export async function recordAttendance(record) {
     const diaDesc = record.diaNumero ? `Día ${record.diaNumero} (${fechaDia})` : fechaDia;
     return {
       success: false,
-      message: `Ya se encuentra registrada la asistencia con el documento ${record.documento} para la sesión del ${diaDesc}.`
+      message: `Ya se encuentra registrada la asistencia con el documento ${record.documento} para la sesión del ${diaDesc}.`,
+      record: existe
     };
   }
 

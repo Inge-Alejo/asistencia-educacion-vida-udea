@@ -42,11 +42,14 @@ export default function Header({
                 className="event-dropdown"
                 aria-label="Seleccionar evento administrativo"
               >
-                {events.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    [{ev.id}] {ev.titulo.length > 40 ? ev.titulo.substring(0, 40) + '...' : ev.titulo} ({ev.fecha})
-                  </option>
-                ))}
+                {events.map((ev) => {
+                  const displayTitle = ev.titulo?.length > 45 ? ev.titulo.substring(0, 45) + '...' : (ev.titulo || 'Evento');
+                  return (
+                    <option key={ev.id} value={ev.id}>
+                      {displayTitle} — [{ev.id}] ({ev.fecha})
+                    </option>
+                  );
+                })}
               </select>
             </div>
           ) : currentEvent ? (

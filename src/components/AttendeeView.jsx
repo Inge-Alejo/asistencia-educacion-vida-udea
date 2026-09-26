@@ -246,6 +246,53 @@ export default function AttendeeView({
     return Boolean(isDocMatch && isNameMatch);
   }, [normalizedCurrentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroExistente, registroPrevioEvento, inscritoData]);
 
+  // Siguiente módulo habilitado tras confirmar asistencia (Satisfacción si no hay ponentes, o Preguntas en Vivo si hay ponentes)
+  const nextModuleStep = hasPonentes ? 3 : 5;
+
+  // Si la asistencia ya está confirmada en este evento, redirigir automáticamente al siguiente módulo activo (Satisfacción / Preguntas)
+  useEffect(() => {
+    if (asistenciaRegistrada || isRegisteredForEvent) {
+      if (activeStep < nextModuleStep || (!hasPonentes && (activeStep === 3 || activeStep === 4))) {
+        setActiveStep(nextModuleStep);
+      }
+    }
+  }, [asistenciaRegistrada, isRegisteredForEvent, hasPonentes, activeStep, nextModuleStep]);
+
+  // Si el participante ingresa nuevamente con su documento y ya tiene asistencia registrada para este evento, redirigir de inmediato
+  useEffect(() => {
+    if (registroExistente && isCurrentDocVerified && !asistenciaRegistrada) {
+      setFormData(prev => ({
+        ...prev,
+        tipoDocumento: registroExistente.tipoDocumento || prev.tipoDocumento || 'CC',
+        documento: registroExistente.documento || currentDoc,
+        nombreCompleto: registroExistente.nombreCompleto || prev.nombreCompleto,
+        correo: registroExistente.correo || prev.correo,
+        telefono: registroExistente.telefono || prev.telefono,
+        vinculacion: registroExistente.vinculacion || prev.vinculacion,
+        placaVehiculo: registroExistente.placaVehiculo || prev.placaVehiculo,
+        habeasDataAceptado: true
+      }));
+      setCodigoComprobante(registroExistente.id);
+      setAsistenciaRegistrada(true);
+      setMaxUnlockedStep(5);
+      setErrorAsistencia('');
+      try {
+        localStorage.setItem(`udea_session_attendee_${evento?.id}`, JSON.stringify({
+          tipoDocumento: registroExistente.tipoDocumento || 'CC',
+          documento: registroExistente.documento || currentDoc,
+          nombreCompleto: registroExistente.nombreCompleto,
+          correo: registroExistente.correo,
+          telefono: registroExistente.telefono,
+          vinculacion: registroExistente.vinculacion,
+          placaVehiculo: registroExistente.placaVehiculo,
+          comprobanteId: registroExistente.id,
+          registrado: true
+        }));
+      } catch {}
+      setActiveStep(nextModuleStep);
+    }
+  }, [registroExistente, isCurrentDocVerified, asistenciaRegistrada, nextModuleStep, currentDoc, evento?.id]);
+
   // Función para procesar lecturas desde el escáner de código de barras USB
   const handleProcessBarcodeScan = useCallback((rawCode) => {
     if (!rawCode || typeof rawCode !== 'string') return;
@@ -303,7 +350,7 @@ export default function AttendeeView({
       setCodigoComprobante(yaRegistrado.id);
       setAsistenciaRegistrada(true);
       setMaxUnlockedStep(5);
-      setActiveStep(3);
+      setActiveStep(hasPonentes ? 3 : 5);
       setScannerNotification({
         type: 'already_registered',
         title: '¡Asistencia de Hoy Ya Registrada!',
@@ -476,7 +523,7 @@ export default function AttendeeView({
       } catch {}
 
       if (registroExistente) {
-        setActiveStep(3);
+        setActiveStep(hasPonentes ? 3 : 5);
       }
     } else {
       setChallengeError(
@@ -870,6 +917,25 @@ export default function AttendeeView({
 
       if (onDataUpdated) onDataUpdated();
     } else {
+      if (res.message && res.message.includes('Ya se encuentra registrada')) {
+        const found = res.record || registroExistente || (asistencias || []).find(a => a.eventoId === evento.id && normalizeDocumentId(a.documento) === cleanDoc);
+        if (found) {
+          setAsistenciaRegistrada(true);
+          setCodigoComprobante(found.id);
+          setMaxUnlockedStep(5);
+          try {
+            localStorage.setItem(`udea_session_attendee_${evento.id}`, JSON.stringify({
+              ...payload,
+              nombreCompleto: found.nombreCompleto || payload.nombreCompleto,
+              documento: found.documento || cleanDoc,
+              comprobanteId: found.id,
+              registrado: true
+            }));
+          } catch {}
+          setActiveStep(hasPonentes ? 3 : 5);
+          return;
+        }
+      }
       setErrorAsistencia(res.message);
     }
   };
@@ -1537,11 +1603,11 @@ export default function AttendeeView({
                                   registrado: true
                                 }));
                               } catch {}
-                              setActiveStep(3);
+                              setActiveStep(hasPonentes ? 3 : 5);
                             }}
                           >
                             <CheckCircle2 size={15} />
-                            <span>Ver mi comprobante e ir a Preguntas en Vivo</span>
+                            <span>{hasPonentes ? 'Ver mi comprobante e ir a Preguntas en Vivo' : 'Ver mi comprobante e ir a Satisfacción'}</span>
                             <ChevronRight size={14} />
                           </button>
                           <button
@@ -1883,11 +1949,11 @@ export default function AttendeeView({
                             }));
                           } catch {}
                           setErrorAsistencia('');
-                          setActiveStep(3);
+                          setActiveStep(hasPonentes ? 3 : 5);
                         }}
                       >
                         <CheckCircle2 size={15} />
-                        <span>Ver mi comprobante e ir a Preguntas en Vivo</span>
+                        <span>{hasPonentes ? 'Ver mi comprobante e ir a Preguntas en Vivo' : 'Ver mi comprobante e ir a Satisfacción'}</span>
                         <ChevronRight size={14} />
                       </button>
                   )}
