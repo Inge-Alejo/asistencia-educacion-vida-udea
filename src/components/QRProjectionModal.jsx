@@ -138,6 +138,18 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
 
             <p className="qr-caption">Código QR Oficial de Asistencia</p>
 
+            <div className="qr-written-code-box" style={{ background: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: '12px', padding: '10px 16px', textAlign: 'center', margin: '8px 0 12px' }}>
+              <span style={{ fontSize: '0.78rem', color: '#166534', fontWeight: 700, display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Código Corto del Evento
+              </span>
+              <strong style={{ fontSize: '1.65rem', color: '#0F5938', letterSpacing: '2.5px', fontWeight: 900, fontFamily: 'monospace', display: 'block', margin: '2px 0' }}>
+                {evento.id}
+              </strong>
+              <span style={{ fontSize: '0.78rem', color: '#15803D', display: 'block' }}>
+                Si no puede escanear, ingrese al portal y digite este código
+              </span>
+            </div>
+
             <div className="qr-link-box no-print">
               <span className="qr-url-preview" title={qrTargetUrl}>{qrTargetUrl}</span>
               <button

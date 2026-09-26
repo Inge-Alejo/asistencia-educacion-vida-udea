@@ -46,13 +46,22 @@ export default function InstitutionalLanding({
     e.preventDefault();
     const clean = eventCodeInput.trim().toUpperCase();
     if (!clean) {
-      setSearchError('Por favor ingrese el código del evento (ej: EVT-MED-01)');
+      setSearchError('Por favor ingrese el código del evento (ej: MED-4821 o 4821)');
       return;
     }
 
-    const match = events.find(
-      ev => ev.id.toUpperCase() === clean || ev.id.toUpperCase().includes(clean)
-    );
+    const cleanNoDash = clean.replace(/[^A-Z0-9]/g, '');
+
+    const match = events.find(ev => {
+      const evId = (ev.id || '').toUpperCase();
+      const evIdNoDash = evId.replace(/[^A-Z0-9]/g, '');
+      return (
+        evId === clean ||
+        evIdNoDash === cleanNoDash ||
+        evId.includes(clean) ||
+        evIdNoDash.includes(cleanNoDash)
+      );
+    });
 
     if (match) {
       setSearchError('');
@@ -201,7 +210,7 @@ export default function InstitutionalLanding({
               <input
                 type="text"
                 className="search-code-input"
-                placeholder="Ejemplo: EVT-MED-01"
+                placeholder="Ejemplo: MED-4821 o 4821"
                 value={eventCodeInput}
                 onChange={(e) => {
                   setEventCodeInput(e.target.value);

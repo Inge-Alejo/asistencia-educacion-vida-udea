@@ -17,12 +17,17 @@ export default function EventSelectorModal({
   const filteredEvents = events.filter((ev) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
+    const termNoDash = term.replace(/[^a-z0-9]/g, '');
+    const evId = String(ev.id || '').toLowerCase();
+    const evIdNoDash = evId.replace(/[^a-z0-9]/g, '');
+
+    const matchId = evId.includes(term) || (termNoDash && evIdNoDash.includes(termNoDash));
     const matchTitulo = String(ev.titulo || '').toLowerCase().includes(term);
     const matchFecha = String(ev.fecha || '').toLowerCase().includes(term) ||
       String(ev.fechaInicio || '').toLowerCase().includes(term) ||
       String(ev.fechaFin || '').toLowerCase().includes(term);
     const matchLugar = String(ev.lugar || '').toLowerCase().includes(term);
-    return matchTitulo || matchFecha || matchLugar;
+    return matchId || matchTitulo || matchFecha || matchLugar;
   });
 
   return (
@@ -111,6 +116,9 @@ export default function EventSelectorModal({
                   >
                     <div className="event-card-main-info">
                       <div className="event-card-top-tags">
+                        <span className="event-code-pill" style={{ fontFamily: 'monospace', fontWeight: 800, background: '#F0FDF4', color: '#166534', border: '1px solid #86EFAC', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', letterSpacing: '0.5px' }}>
+                          {ev.id}
+                        </span>
                         {isCurrent && (
                           <span className="current-event-pill">
                             <CheckCircle2 size={13} /> Activo en Pantalla

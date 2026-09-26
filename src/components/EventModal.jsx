@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2, UtensilsCrossed, Coffee, ClipboardList } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2, UtensilsCrossed, Coffee, ClipboardList, Hash, RefreshCw } from 'lucide-react';
 import { getEventDaysList } from '../services/networkTime';
 
 const DEFAULT_MEALS = [
@@ -8,9 +8,16 @@ const DEFAULT_MEALS = [
   { id: 'comida-3', nombre: 'Refrigerio Tarde', horario: '16:00 - 17:00', cantidadTotal: 100 }
 ];
 
+// Generador de código corto, simple y fácil de dictar (ej: MED-4821)
+function generateSimpleEventCode() {
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return `MED-${num}`;
+}
+
 export default function EventModal({ isOpen, onClose, onSave, initialEvent = null }) {
   const [prevEventId, setPrevEventId] = useState(initialEvent?.id || null);
 
+  const [codigoEvento, setCodigoEvento] = useState(() => initialEvent?.id || generateSimpleEventCode());
   const [titulo, setTitulo] = useState(initialEvent?.titulo || '');
   const [descripcion, setDescripcion] = useState(initialEvent?.descripcion || '');
   const [esMultidia, setEsMultidia] = useState(Boolean(initialEvent?.esMultidia));
@@ -40,6 +47,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
   // Sincronizar estado si cambia el evento a editar o se abre en modo creación
   if ((initialEvent?.id || null) !== prevEventId) {
     setPrevEventId(initialEvent?.id || null);
+    setCodigoEvento(initialEvent?.id || generateSimpleEventCode());
     setTitulo(initialEvent?.titulo || '');
     setDescripcion(initialEvent?.descripcion || '');
     setEsMultidia(Boolean(initialEvent?.esMultidia));
@@ -132,8 +140,12 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
         }, {})
       : null;
 
+    const cleanEventId = (codigoEvento.trim() || initialEvent?.id || generateSimpleEventCode())
+      .toUpperCase()
+      .replace(/[^A-Z0-9-]/g, '');
+
     const eventPayload = {
-      id: initialEvent?.id || `EVT-MED-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: cleanEventId,
       titulo: titulo.trim(),
       descripcion: descripcion.trim(),
       esMultidia: Boolean(esMultidia),
@@ -190,6 +202,51 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form-body">
+          {/* Código Corto del Evento */}
+          <div className="form-group" style={{ background: '#F0FDF4', padding: '14px 16px', borderRadius: '12px', border: '1.5px solid #86EFAC', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+              <label className="form-label" style={{ margin: 0, color: '#166534', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Hash size={16} /> Código Corto del Evento (Fácil de dictar y escribir)
+              </label>
+              <span style={{ fontSize: '0.74rem', background: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                {initialEvent ? 'Código actual' : 'Generado automáticamente'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type="text"
+                className="form-input"
+                value={codigoEvento}
+                onChange={(e) => setCodigoEvento(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                placeholder="Ej: MED-101 o MED-4821"
+                required
+                maxLength={16}
+                style={{
+                  fontWeight: 800,
+                  letterSpacing: '1.5px',
+                  fontSize: '1.05rem',
+                  textTransform: 'uppercase',
+                  color: '#0F5938',
+                  background: '#FFFFFF',
+                  fontFamily: 'monospace'
+                }}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setCodigoEvento(generateSimpleEventCode())}
+                title="Generar otro código corto aleatorio"
+                style={{ whiteSpace: 'nowrap', padding: '10px 14px', fontSize: '0.84rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <RefreshCw size={14} />
+                <span>Aleatorio</span>
+              </button>
+            </div>
+            <span style={{ fontSize: '0.78rem', color: '#15803D', marginTop: '6px', display: 'block' }}>
+              Los asistentes podrán registrar asistencia escaneando el código QR o digitando este código corto en la pantalla de inicio del portal.
+            </span>
+          </div>
+
           {/* Título del Evento */}
           <div className="form-group">
             <label className="form-label" htmlFor="event-title">

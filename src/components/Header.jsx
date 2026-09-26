@@ -44,17 +44,17 @@ export default function Header({
               >
                 {events.map((ev) => (
                   <option key={ev.id} value={ev.id}>
-                    {ev.titulo.length > 45 ? ev.titulo.substring(0, 45) + '...' : ev.titulo} ({ev.fecha})
+                    [{ev.id}] {ev.titulo.length > 40 ? ev.titulo.substring(0, 40) + '...' : ev.titulo} ({ev.fecha})
                   </option>
                 ))}
               </select>
             </div>
           ) : currentEvent ? (
-            <div className="header-event-locked-badge" title={`Evento oficial: ${currentEvent?.titulo || 'Evento Académico UdeA'}`}>
+            <div className="header-event-locked-badge" title={`Evento oficial: ${currentEvent?.titulo || 'Evento Académico UdeA'} [Código: ${currentEvent?.id}]`}>
               <div className="locked-badge-header">
                 <span className="locked-pill-tag">
                   <Lock size={11} />
-                  <span>Evento Oficial</span>
+                  <span>{currentEvent?.id || 'Evento Oficial'}</span>
                 </span>
                 {currentEvent?.fecha && (
                   <span className="locked-date">
