@@ -32,8 +32,8 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
 
   const [ponentes, setPonentes] = useState(() => (
     initialEvent?.ponentes?.length
-      ? initialEvent.ponentes
-      : [{ id: `PON-INIT-1`, nombre: '', titulo: '', temaPonencia: '' }]
+      ? initialEvent.ponentes.map(p => ({ ...p, activo: p.activo ?? true }))
+      : [{ id: `PON-INIT-1`, nombre: '', titulo: '', temaPonencia: '', activo: true }]
   ));
 
   // Sincronizar estado si cambia el evento a editar o se abre en modo creación
@@ -59,8 +59,8 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
     setMicrosoftFormsUrl(initialEvent?.microsoftFormsUrl || '');
     setHabilitarMicrosoftForms(Boolean(initialEvent?.habilitarMicrosoftForms ?? (initialEvent?.microsoftFormsUrl ? true : false)));
     setPonentes(initialEvent?.ponentes?.length
-      ? initialEvent.ponentes
-      : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '' }]
+      ? initialEvent.ponentes.map(p => ({ ...p, activo: p.activo ?? true }))
+      : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '', activo: true }]
     );
   }
 
@@ -92,7 +92,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
   const handleAddPonente = () => {
     setPonentes([
       ...ponentes,
-      { id: `PON-${Date.now()}-${ponentes.length + 1}`, nombre: '', titulo: '', temaPonencia: '' }
+      { id: `PON-${Date.now()}-${ponentes.length + 1}`, nombre: '', titulo: '', temaPonencia: '', activo: true }
     ]);
   };
 
@@ -158,7 +158,9 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
         : [],
       microsoftFormsUrl: habilitarMicrosoftForms ? microsoftFormsUrl.trim() : '',
       habilitarMicrosoftForms,
-      ponentes: ponentes.filter(p => p.nombre.trim() !== ''),
+      ponentes: ponentes
+        .filter(p => p.nombre.trim() !== '')
+        .map(p => ({ ...p, activo: p.activo ?? true })),
       inscritosResumen: initialEvent?.inscritosResumen || null,
       inscritosData: initialEvent?.inscritosData || null
     };
@@ -678,8 +680,39 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
 
             <div className="speakers-list-container">
               {ponentes.map((ponente, idx) => (
-                <div key={ponente.id || idx} className="speaker-form-card">
+                <div key={ponente.id || idx} className="speaker-form-card" style={{ opacity: (ponente.activo ?? true) ? 1 : 0.75 }}>
                   <div className="speaker-number-badge">{idx + 1}</div>
+
+                  {/* Interruptor de activación / desactivación del ponente */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #E5E7EB' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label style={{ position: 'relative', display: 'inline-block', width: '38px', height: '22px', margin: 0 }}>
+                        <input
+                          type="checkbox"
+                          checked={ponente.activo ?? true}
+                          onChange={(e) => handlePonenteChange(idx, 'activo', e.target.checked)}
+                          style={{ opacity: 0, width: 0, height: 0 }}
+                        />
+                        <span style={{
+                          position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                          backgroundColor: (ponente.activo ?? true) ? '#006633' : '#9CA3AF',
+                          transition: '.25s', borderRadius: '22px'
+                        }}>
+                          <span style={{
+                            position: 'absolute', content: '""', height: '16px', width: '16px', left: (ponente.activo ?? true) ? '19px' : '3px', bottom: '3px',
+                            backgroundColor: 'white', transition: '.25s', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                          }}></span>
+                        </span>
+                      </label>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 700, color: (ponente.activo ?? true) ? '#006633' : '#4B5563' }}>
+                        {(ponente.activo ?? true) ? 'Ponente Activo' : 'Ponente Inactivo / En Pausa'}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                      {(ponente.activo ?? true) ? 'Habilitado en Q&A y Evaluación' : 'Oculto para preguntas y evaluación'}
+                    </span>
+                  </div>
+
                   <div className="speaker-inputs-grid">
                     <div className="form-group">
                       <label className="form-sublabel">

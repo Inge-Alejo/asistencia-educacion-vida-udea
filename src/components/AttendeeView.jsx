@@ -581,8 +581,12 @@ export default function AttendeeView({
     );
   }, [formData.nombreCompleto, activeAttendeeRecord, sessionInfo]);
 
-  // Estado de Preguntas a Ponentes
-  const defaultPonenteId = evento?.ponentes?.[0]?.id || '';
+  // Estado de Preguntas a Ponentes (filtrando ponentes activos)
+  const ponentesActivos = useMemo(() => {
+    return (evento?.ponentes || []).filter(p => p.activo !== false);
+  }, [evento?.ponentes]);
+
+  const defaultPonenteId = ponentesActivos[0]?.id || evento?.ponentes?.[0]?.id || '';
   const [preguntaForm, setPreguntaForm] = useState(() => ({
     ponenteId: defaultPonenteId,
     autor: '',
@@ -1966,11 +1970,15 @@ export default function AttendeeView({
                 onChange={(e) => setPreguntaForm({ ...preguntaForm, ponenteId: e.target.value })}
                 required
               >
-                {evento.ponentes?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre} — {p.temaPonencia}
-                  </option>
-                ))}
+                {ponentesActivos.length === 0 ? (
+                  <option value="">No hay ponentes activos en este momento</option>
+                ) : (
+                  ponentesActivos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre} — {p.temaPonencia || p.titulo}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -2097,6 +2105,32 @@ export default function AttendeeView({
 
           <div className="speakers-evaluation-grid">
             {evento.ponentes?.map((ponente) => {
+              const isInactive = ponente.activo === false;
+              if (isInactive) {
+                return (
+                  <div key={ponente.id} className="speaker-eval-card" style={{ opacity: 0.7, borderStyle: 'dashed' }}>
+                    <div className="speaker-header">
+                      <div className="speaker-avatar" style={{ backgroundColor: '#F3F4F6', color: '#9CA3AF' }}>
+                        <User size={20} />
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <h3 className="speaker-name" style={{ color: '#4B5563', margin: 0 }}>{ponente.nombre}</h3>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', backgroundColor: '#FEF3C7', color: '#92400E' }}>
+                            En Pausa / No Activo
+                          </span>
+                        </div>
+                        <span className="speaker-title">{ponente.titulo}</span>
+                        <p className="speaker-topic">Ponencia: "{ponente.temaPonencia}"</p>
+                      </div>
+                    </div>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '0.82rem', color: '#6B7280', fontStyle: 'italic' }}>
+                      La evaluación para este ponente se encuentra temporalmente en pausa por la coordinación del evento.
+                    </p>
+                  </div>
+                );
+              }
+
               const yaEvaluado = ponentesEvaluados[ponente.id];
               const currentEval = evaluacionesPonentes[ponente.id] || {
                 dominio: 5,

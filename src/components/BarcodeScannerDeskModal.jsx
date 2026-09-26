@@ -152,10 +152,12 @@ export default function BarcodeScannerDeskModal({
   const [quickRegVinculacion, setQuickRegVinculacion] = useState('Estudiante Pregrado Medicina UdeA');
   const [isQuickRegistering, setIsQuickRegistering] = useState(false);
 
-  // Referencias para auto-enfoque e interceptor de ráfagas USB
+  // Referencias para auto-enfoque e interceptor de ráfagas USB con cerrojo síncrono (anti-rebote)
   const manualInputRef = useRef(null);
   const keystrokeBufferRef = useRef('');
   const lastKeyTimeRef = useRef(0);
+  const isProcessingRef = useRef(false);
+  const lastScanRef = useRef({ code: '', time: 0 });
 
   // Auto-enfocar el campo de búsqueda manual al abrir o cambiar de modo
   useEffect(() => {
@@ -265,16 +267,26 @@ export default function BarcodeScannerDeskModal({
 
   // Procesar código escaneado (ya sea por ráfaga rápida de la pistola USB o digitado)
   const processScanCode = useCallback(async (rawCode) => {
-    if (!rawCode || isProcessing) return;
-    const cleanCode = rawCode.trim();
+    const cleanCode = (rawCode || '').trim();
     if (!cleanCode) return;
 
+    const now = Date.now();
+    // Filtro anti-rebote: Descartar inmediatamente si es una duplicación rápida por hardware (<800ms)
+    if (lastScanRef.current.code === cleanCode && (now - lastScanRef.current.time) < 800) {
+      return;
+    }
+
+    // Cerrojo síncrono para prevenir que Enter global + Form submit disparen concurrencia
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+    lastScanRef.current = { code: cleanCode, time: now };
     setIsProcessing(true);
+
     const scannedAtTime = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     try {
-      // 1. Buscar al asistente en la base de datos oficial
-      const lookup = await lookupAttendeeUniversal(eventId, cleanCode);
+      // 1. Buscar al asistente en la base de datos oficial (aprovechando estado activo en memoria + Firestore)
+      const lookup = await lookupAttendeeUniversal(eventId, cleanCode, evento?.inscritosData, asistencias);
 
       // Si es un QR cifrado de la nueva Cédula Digital de policarbonato
       if (lookup.isEncryptedDigitalCedulaQR) {
@@ -548,17 +560,19 @@ export default function BarcodeScannerDeskModal({
       console.error('Error al procesar escaneo USB:', err);
       if (soundEnabled) playScannerTone('error');
     } finally {
+      isProcessingRef.current = false;
       setIsProcessing(false);
       setManualInput('');
       manualInputRef.current?.focus();
     }
   }, [
     eventId,
+    evento?.inscritosData,
+    asistencias,
     scanMode,
     activeMealObj,
     soundEnabled,
     operador,
-    isProcessing,
     onDataUpdated
   ]);
 
@@ -581,6 +595,7 @@ export default function BarcodeScannerDeskModal({
 
         if (buffered.length >= 3) {
           e.preventDefault();
+          e.stopPropagation();
           setManualInput('');
           processScanCode(buffered);
         }
@@ -605,8 +620,11 @@ export default function BarcodeScannerDeskModal({
   // Manejar envío manual con el botón o Enter en el input visible
   const handleManualSubmit = (e) => {
     e?.preventDefault();
-    if (!manualInput.trim()) return;
-    processScanCode(manualInput.trim());
+    e?.stopPropagation();
+    const val = manualInput.trim();
+    if (!val) return;
+    setManualInput('');
+    processScanCode(val);
   };
 
   if (!isOpen) return null;

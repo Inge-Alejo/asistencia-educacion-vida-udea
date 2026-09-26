@@ -25,7 +25,8 @@ import {
   isFirebaseConfigured,
   exportDatabaseBackupJSON,
   importDatabaseBackupJSON,
-  saveEvent
+  saveEvent,
+  togglePonenteActivo
 } from '../services/storage';
 import { changeAdminPassword } from '../services/auth';
 
@@ -146,6 +147,22 @@ export default function AdminPanel({
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
   const [pwdMsg, setPwdMsg] = useState({ text: '', isError: false });
+
+  // Estado para alternar activación de ponentes en tiempo real
+  const [togglingPonenteId, setTogglingPonenteId] = useState(null);
+
+  const handleTogglePonente = async (ponenteId) => {
+    if (!evento?.id || togglingPonenteId) return;
+    setTogglingPonenteId(ponenteId);
+    try {
+      await togglePonenteActivo(evento.id, ponenteId);
+      if (onDataUpdated) onDataUpdated();
+    } catch (err) {
+      console.error('Error al alternar estado de ponente:', err);
+    } finally {
+      setTogglingPonenteId(null);
+    }
+  };
 
   // -------------------------------------------------------------
   // MONITOR DE CAPACIDAD Y ALMACENAMIENTO EN TIEMPO REAL (FIRESTORE)
@@ -828,6 +845,11 @@ export default function AdminPanel({
                     <div className="admin-qa-header">
                       <span className="qa-target-pill">
                         Dirigida a: <strong>{docenteNombre}</strong>
+                        {ponente && ponente.activo === false && (
+                          <span style={{ marginLeft: '6px', fontSize: '0.72rem', color: '#B45309', background: '#FEF3C7', padding: '2px 6px', borderRadius: '4px' }}>
+                            En Pausa
+                          </span>
+                        )}
                       </span>
                       <span className="qa-time-stamp">{q.hora}</span>
                     </div>
@@ -903,10 +925,43 @@ export default function AdminPanel({
                 : '5.0';
 
               return (
-                <div key={ponente.id} className="speaker-report-card">
+                <div key={ponente.id} className="speaker-report-card" style={{ opacity: ponente.activo === false ? 0.78 : 1 }}>
                   <div className="report-card-top">
                     <div>
-                      <h3 className="speaker-card-name">{ponente.nombre}</h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <h3 className="speaker-card-name" style={{ margin: 0 }}>{ponente.nombre}</h3>
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePonente(ponente.id)}
+                          disabled={togglingPonenteId === ponente.id}
+                          title={ponente.activo === false ? 'Haga clic para activar a este ponente' : 'Haga clic para pausar/desactivar a este ponente'}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 8px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            borderRadius: '12px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: ponente.activo === false ? '#FEF3C7' : '#DCFCE7',
+                            color: ponente.activo === false ? '#92400E' : '#166534',
+                            transition: 'all .2s ease'
+                          }}
+                        >
+                          <span style={{
+                            display: 'inline-block',
+                            width: '7px',
+                            height: '7px',
+                            borderRadius: '50%',
+                            backgroundColor: ponente.activo === false ? '#D97706' : '#16A34A'
+                          }}></span>
+                          {togglingPonenteId === ponente.id
+                            ? 'Actualizando...'
+                            : (ponente.activo === false ? 'Inactivo (Pausado)' : 'Activo en Vivo')}
+                        </button>
+                      </div>
                       <span className="speaker-card-role">{ponente.titulo}</span>
                       <p className="speaker-card-topic">Ponencia: "{ponente.temaPonencia}"</p>
                     </div>

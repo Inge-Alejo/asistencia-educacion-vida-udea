@@ -9,6 +9,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocs,
   query,
   where,
   onSnapshot,
@@ -319,6 +320,21 @@ export async function saveEvent(eventData) {
   // Notificar cambios para reactividad en todas las pestañas y componentes
   window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_EVENTS }));
   return eventData;
+}
+
+// Activar o desactivar ponente de un evento de manera individual y en tiempo real
+export async function togglePonenteActivo(eventoId, ponenteId) {
+  const events = getEvents();
+  const ev = events.find(e => e.id === eventoId);
+  if (!ev || !Array.isArray(ev.ponentes)) return { success: false, message: 'Evento o ponentes no encontrados.' };
+
+  const ponente = ev.ponentes.find(p => p.id === ponenteId);
+  if (!ponente) return { success: false, message: 'Ponente no encontrado.' };
+
+  // Por defecto si no tenía campo activo, asumimos true, por lo que pasaría a false
+  ponente.activo = (ponente.activo === false) ? true : false;
+  await saveEvent(ev);
+  return { success: true, activo: ponente.activo, ponente };
 }
 
 export async function deleteEvent(eventId) {
@@ -957,7 +973,8 @@ export const parseColombianCedulaBarcode = parseColombianDocumentBarcode;
 
 // Búsqueda universal de participante para escaneo con lector de código de barras USB o manual
 // Acepta: Cédula física colombiana (PDF417), Código de barras 1D de escarapela, Comprobante ATT-..., URL completa de QR, o Cédula digitada
-export async function lookupAttendeeUniversal(eventoId, rawInput) {
+// Incluye respaldo directo en memoria de asistencias e inscritos y consulta activa a Cloud Firestore
+export async function lookupAttendeeUniversal(eventoId, rawInput, fallbackInscritos = null, fallbackAsistencias = null) {
   if (!rawInput || typeof rawInput !== 'string') {
     return { found: false, message: 'Código o número de documento no proporcionado.' };
   }
@@ -989,8 +1006,11 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
       docFromUrl = decodeURIComponent(docMatch[1]).trim().replace(/\D/g, '');
     }
 
-    // Buscar en la lista de asistencias del evento por ID de comprobante o documento
-    const asistencias = getAttendance(eventoId);
+    // Buscar en la lista de asistencias del evento (memoria activa + local)
+    const asistencias = Array.isArray(fallbackAsistencias) && fallbackAsistencias.length > 0
+      ? fallbackAsistencias
+      : getAttendance(eventoId);
+
     const matchAsistencia = asistencias.find(a =>
       (comprobanteId && a.id === comprobanteId) ||
       (docFromUrl && normalizeDocumentId(a.documento) === normalizeDocumentId(docFromUrl))
@@ -1022,7 +1042,7 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
 
     // Si vino con docFromUrl y no tiene asistencia previa registrada hoy, buscar en inscritos
     if (docFromUrl) {
-      const inscritosData = getEventInscritosData(eventoId);
+      const inscritosData = fallbackInscritos || getEventInscritosData(eventoId);
       const normDocUrl = normalizeDocumentId(docFromUrl);
       if (inscritosData?.participants?.[normDocUrl]) {
         const p = inscritosData.participants[normDocUrl];
@@ -1072,6 +1092,8 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
 
   // Normalizar documento si es cédula
   const normDoc = normalizeDocumentId(code);
+  const rawDigits = normDoc ? normDoc.replace(/\D/g, '') : '';
+  const withoutLeadingZeros = rawDigits ? rawDigits.replace(/^0+/, '') : '';
 
   // 1. Si empieza por ATT- o parece ID de comprobante, intentar verificarlo
   if (code.toUpperCase().startsWith('ATT-') || (code.length > 15 && !/^\d+$/.test(code))) {
@@ -1087,12 +1109,28 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
     }
   }
 
-  // 2. Buscar en la lista de asistencias del evento por documento o comprobante
-  const asistencias = getAttendance(eventoId);
-  const matchAsistencia = asistencias.find(a =>
+  // 2. Buscar en la lista de asistencias del evento por documento o comprobante (en memoria + local)
+  const asistenciasList = Array.isArray(fallbackAsistencias) && fallbackAsistencias.length > 0
+    ? fallbackAsistencias
+    : getAttendance(eventoId);
+
+  let matchAsistencia = asistenciasList.find(a =>
     a.id === code ||
-    (normDoc && normalizeDocumentId(a.documento) === normDoc)
+    (normDoc && normalizeDocumentId(a.documento) === normDoc) ||
+    (rawDigits && String(a.documento).replace(/\D/g, '') === rawDigits) ||
+    (withoutLeadingZeros && String(a.documento).replace(/\D/g, '').replace(/^0+/, '') === withoutLeadingZeros)
   );
+
+  // Si no se encontró en la lista del evento, buscar en todo el historial local
+  if (!matchAsistencia) {
+    const allAtt = getAttendance();
+    matchAsistencia = allAtt.find(a =>
+      (a.eventoId === eventoId || !eventoId) &&
+      (a.id === code ||
+       (normDoc && normalizeDocumentId(a.documento) === normDoc) ||
+       (rawDigits && String(a.documento).replace(/\D/g, '') === rawDigits))
+    );
+  }
 
   if (matchAsistencia) {
     return {
@@ -1105,12 +1143,46 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
     };
   }
 
-  // 3. Si no está en asistencias, buscar en la lista de inscritos precargada (Excel/CSV)
-  const inscritosData = getEventInscritosData(eventoId);
-  if (inscritosData && normDoc) {
-    const rawDigits = normDoc.replace(/\D/g, '');
-    const withoutLeadingZeros = rawDigits.replace(/^0+/, '');
+  // 3. Si no está en asistencias locales, consultar en tiempo real a Cloud Firestore
+  if (isFirebaseConfigured() && db && normDoc) {
+    try {
+      const qAtt = query(
+        collection(db, 'asistencias'),
+        where('eventoId', '==', eventoId),
+        where('documento', '==', normDoc)
+      );
+      const snapAtt = await getDocs(qAtt);
+      if (!snapAtt.empty) {
+        const cloudAtt = snapAtt.docs[0].data();
+        // Guardar en caché local para futuros escaneos inmediatos
+        const cur = getAttendance();
+        if (!cur.some(a => a.id === cloudAtt.id)) {
+          cur.unshift(cloudAtt);
+          localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(cur));
+        }
+        return {
+          found: true,
+          source: 'asistencia',
+          isRegisteredAttendance: true,
+          record: cloudAtt,
+          parsedCedula: parsedCedula || null,
+          message: 'Asistencia oficial confirmada (recuperada en vivo desde Cloud Firestore).'
+        };
+      }
+    } catch (err) {
+      console.warn('Consulta en línea de asistencias en Firestore:', err);
+    }
+  }
 
+  // 4. Buscar en la lista de inscritos precargada (Excel/CSV)
+  let inscritosData = fallbackInscritos || getEventInscritosData(eventoId);
+  if (!inscritosData && isFirebaseConfigured() && db) {
+    try {
+      inscritosData = await fetchEventInscritosData(eventoId);
+    } catch {}
+  }
+
+  if (inscritosData && normDoc) {
     let p = null;
     if (inscritosData.participants) {
       p = inscritosData.participants[normDoc] ||
@@ -1177,7 +1249,7 @@ export async function lookupAttendeeUniversal(eventoId, rawInput) {
     }
   }
 
-  // 4. Si es comprobante ATT- que no estaba en local pero puede estar en Firestore asistencias
+  // 5. Si es comprobante ATT- que no estaba en local pero puede estar en Firestore asistencias
   if (isFirebaseConfigured() && db && code.toUpperCase().startsWith('ATT-')) {
     try {
       const snap = await getDoc(doc(db, 'asistencias', code));
@@ -1524,19 +1596,66 @@ export function subscribeToEventData(eventId, onUpdate) {
   window.addEventListener('storage', storageHandler);
   unsubs.push(() => window.removeEventListener('storage', storageHandler));
 
+  // Función auxiliar de reconciliación segura y bidireccional (evita sobreescritura accidental)
+  const reconcileCollection = (storageKey, cloudList, idField = 'id', collectionName = null) => {
+    try {
+      const rawLocal = localStorage.getItem(storageKey);
+      const currentLocal = rawLocal ? JSON.parse(rawLocal) : [];
+      const localOtherEvents = currentLocal.filter(item => item.eventoId !== eventId);
+      const localForEvent = currentLocal.filter(item => item.eventoId === eventId);
+
+      // Mapa indexado por ID para unión segura sin pérdida de datos
+      const mergedMap = new Map();
+
+      // 1. Cargar registros locales existentes de este evento
+      localForEvent.forEach(item => {
+        const key = item[idField] || (item.documento ? `doc_${item.documento}` : null) || JSON.stringify(item);
+        mergedMap.set(key, item);
+      });
+
+      // 2. Fusionar registros de la nube
+      cloudList.forEach(item => {
+        const key = item[idField] || (item.documento ? `doc_${item.documento}` : null) || JSON.stringify(item);
+        if (mergedMap.has(key)) {
+          mergedMap.set(key, { ...mergedMap.get(key), ...item });
+        } else {
+          mergedMap.set(key, item);
+        }
+      });
+
+      const mergedForEvent = Array.from(mergedMap.values());
+      const combined = [...mergedForEvent, ...localOtherEvents];
+      localStorage.setItem(storageKey, JSON.stringify(combined));
+
+      // 3. Si hay registros locales que aún no están en la nube, subirlos proactivamente
+      if (collectionName && isFirebaseConfigured() && db) {
+        const cloudIds = new Set(cloudList.map(c => c[idField]).filter(Boolean));
+        localForEvent.forEach(localItem => {
+          if (localItem[idField] && !cloudIds.has(localItem[idField])) {
+            setDoc(doc(db, collectionName, localItem[idField]), localItem, { merge: true }).catch(err => {
+              console.warn(`Aviso sincronizando ${collectionName} hacia la nube:`, err);
+            });
+          }
+        });
+      }
+
+      return mergedForEvent;
+    } catch (err) {
+      console.warn(`Error conciliando ${storageKey}:`, err);
+      return cloudList;
+    }
+  };
+
   // 2. Escuchar Firestore Cloud en tiempo real multi-dispositivo (móvil, tablet, laptop)
   if (db) {
     try {
-      // Sincronización en vivo de Asistencias
+      // Sincronización en vivo de Asistencias (con reconciliación anti-pérdida)
       const unsubAtt = onSnapshot(
         query(collection(db, 'asistencias'), where('eventoId', '==', eventId)),
         (snapshot) => {
           const cloudList = [];
           snapshot.forEach(docSnap => cloudList.push(docSnap.data()));
-          const localOther = getAttendance().filter(a => a.eventoId !== eventId);
-          // Si cloudList tiene datos, o si la colección en nube se vació, actualizar la caché
-          const combined = [...cloudList, ...localOther];
-          localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(combined));
+          reconcileCollection(STORAGE_KEY_ATTENDANCE, cloudList, 'id', 'asistencias');
           if (onUpdate) onUpdate();
         },
         (err) => console.warn('Firestore asistencias snapshot:', err)
@@ -1549,9 +1668,7 @@ export function subscribeToEventData(eventId, onUpdate) {
         (snapshot) => {
           const cloudQ = [];
           snapshot.forEach(docSnap => cloudQ.push(docSnap.data()));
-          const localOther = getQuestions().filter(q => q.eventoId !== eventId);
-          const combined = [...cloudQ, ...localOther];
-          localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(combined));
+          reconcileCollection(STORAGE_KEY_QUESTIONS, cloudQ, 'id', 'preguntas');
           if (onUpdate) onUpdate();
         },
         (err) => console.warn('Firestore preguntas snapshot:', err)
@@ -1564,9 +1681,7 @@ export function subscribeToEventData(eventId, onUpdate) {
         (snapshot) => {
           const cloudEval = [];
           snapshot.forEach(docSnap => cloudEval.push(docSnap.data()));
-          const localOther = getEvaluations().filter(ev => ev.eventoId !== eventId);
-          const combined = [...cloudEval, ...localOther];
-          localStorage.setItem(STORAGE_KEY_EVALUATIONS, JSON.stringify(combined));
+          reconcileCollection(STORAGE_KEY_EVALUATIONS, cloudEval, 'id', 'evaluaciones');
           if (onUpdate) onUpdate();
         },
         (err) => console.warn('Firestore evaluaciones snapshot:', err)
@@ -1579,9 +1694,7 @@ export function subscribeToEventData(eventId, onUpdate) {
         (snapshot) => {
           const cloudSat = [];
           snapshot.forEach(docSnap => cloudSat.push(docSnap.data()));
-          const localOther = getSatisfaction().filter(s => s.eventoId !== eventId);
-          const combined = [...cloudSat, ...localOther];
-          localStorage.setItem(STORAGE_KEY_SATISFACTION, JSON.stringify(combined));
+          reconcileCollection(STORAGE_KEY_SATISFACTION, cloudSat, 'id', 'satisfaccion');
           if (onUpdate) onUpdate();
         },
         (err) => console.warn('Firestore satisfaccion snapshot:', err)
@@ -1594,9 +1707,7 @@ export function subscribeToEventData(eventId, onUpdate) {
         (snapshot) => {
           const cloudMeals = [];
           snapshot.forEach(docSnap => cloudMeals.push(docSnap.data()));
-          const localOther = getMealDeliveries().filter(m => m.eventoId !== eventId);
-          const combined = [...cloudMeals, ...localOther];
-          localStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(combined));
+          reconcileCollection(STORAGE_KEY_MEALS, cloudMeals, 'id', 'entregas_comidas');
           if (onUpdate) onUpdate();
         },
         (err) => console.warn('Firestore entregas_comidas snapshot:', err)
@@ -1611,10 +1722,6 @@ export function subscribeToEventData(eventId, onUpdate) {
             const cloudData = snapshot.data();
             try {
               localStorage.setItem(STORAGE_KEY_INSCRITOS_PREFIX + eventId, JSON.stringify(cloudData));
-            } catch {}
-          } else {
-            try {
-              localStorage.removeItem(STORAGE_KEY_INSCRITOS_PREFIX + eventId);
             } catch {}
           }
           if (onUpdate) onUpdate();
