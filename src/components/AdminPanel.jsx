@@ -35,6 +35,7 @@ import {
   deletePoll
 } from '../services/storage';
 import { changeAdminPassword } from '../services/auth';
+import { parseMicrosoftFormsUrl } from '../services/sanitizer';
 
 function formatRegistrationDate(fechaRegistro, horaRegistro) {
   if (!fechaRegistro) return { date: '—', time: '' };
@@ -1534,11 +1535,15 @@ export default function AdminPanel({
                 <label className="form-label">URL del Formulario Institucional (Microsoft Forms o Google Forms):</label>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <input
-                    type="url"
+                    type="text"
                     className="form-input"
-                    placeholder="https://forms.office.com/r/... o https://forms.gle/..."
+                    placeholder="https://forms.office.com/r/... o pegue el código <iframe...> de Microsoft Forms"
                     value={msFormsUrl}
-                    onChange={(e) => setMsFormsUrl(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const parsed = parseMicrosoftFormsUrl(val);
+                      setMsFormsUrl(parsed.embedUrl || val);
+                    }}
                     style={{ flex: 1 }}
                   />
                   <button
@@ -1553,11 +1558,12 @@ export default function AdminPanel({
                       }
                       setIsSavingFormsUrl(true);
                       try {
-                        const trimmedUrl = msFormsUrl.trim();
+                        const parsed = parseMicrosoftFormsUrl(msFormsUrl);
+                        const finalUrl = parsed.embedUrl || msFormsUrl.trim();
                         const updated = {
                           ...evento,
-                          microsoftFormsUrl: trimmedUrl,
-                          habilitarMicrosoftForms: Boolean(trimmedUrl)
+                          microsoftFormsUrl: finalUrl,
+                          habilitarMicrosoftForms: Boolean(finalUrl)
                         };
                         await saveEvent(updated);
                         if (onDataUpdated) onDataUpdated();

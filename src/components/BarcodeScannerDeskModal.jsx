@@ -149,6 +149,8 @@ export default function BarcodeScannerDeskModal({
   // Estados para registro rápido in-situ (cuando no figura en la lista)
   const [quickRegName, setQuickRegName] = useState('');
   const [quickRegTipoDoc, setQuickRegTipoDoc] = useState('CC');
+  const [quickRegTelefono, setQuickRegTelefono] = useState('');
+  const [quickRegCorreo, setQuickRegCorreo] = useState('');
   const [quickRegVinculacion, setQuickRegVinculacion] = useState('Estudiante Pregrado Medicina UdeA');
   const [isQuickRegistering, setIsQuickRegistering] = useState(false);
 
@@ -195,8 +197,8 @@ export default function BarcodeScannerDeskModal({
         nombreCompleto: quickRegName.trim(),
         tipoDocumento: chosenTipoDoc,
         documento: docClean,
-        correo: '',
-        telefono: '',
+        correo: quickRegCorreo.trim().toLowerCase(),
+        telefono: quickRegTelefono.trim(),
         vinculacion: quickRegVinculacion,
         placaVehiculo: '',
         habeasDataAceptado: true,
@@ -253,6 +255,8 @@ export default function BarcodeScannerDeskModal({
         setLastScanResult(successRes);
         setScanHistory(prev => [successRes, ...prev.slice(0, 24)]);
         setQuickRegName('');
+        setQuickRegTelefono('');
+        setQuickRegCorreo('');
         if (onDataUpdated) onDataUpdated();
       } else {
         alert(resAtt.message || 'No se pudo guardar la asistencia.');
@@ -868,47 +872,74 @@ export default function BarcodeScannerDeskModal({
                         </span>
                       )}
                     </div>
-                    <div className="desk-quick-reg-form">
-                      <select
-                        value={quickRegTipoDoc}
-                        onChange={(e) => setQuickRegTipoDoc(e.target.value)}
-                        className="desk-quick-reg-select"
-                        title="Tipo de Documento"
-                      >
-                        <option value="CC">CC - Cédula Ciudadanía</option>
-                        <option value="TI">TI - Tarjeta Identidad</option>
-                        <option value="CE">CE - Cédula Extranjería</option>
-                        <option value="PAS">PAS - Pasaporte</option>
-                      </select>
-                      <input
-                        type="text"
-                        name="quickRegInput"
-                        placeholder="Nombre completo del participante..."
-                        value={quickRegName}
-                        onChange={(e) => setQuickRegName(e.target.value)}
-                        className="desk-quick-reg-input"
-                      />
-                      <select
-                        value={quickRegVinculacion}
-                        onChange={(e) => setQuickRegVinculacion(e.target.value)}
-                        className="desk-quick-reg-select"
-                      >
-                        <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
-                        <option value="Residente / Posgrado UdeA">Residente / Posgrado</option>
-                        <option value="Docente / Investigador UdeA">Docente / Investigador</option>
-                        <option value="Auxiliar / Administrativo UdeA">Auxiliar / Administrativo</option>
-                        <option value="Egresado UdeA">Egresado</option>
-                        <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
-                        <option value="Asistente Académico">Otro / Asistente Académico</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={handleQuickRegister}
-                        disabled={!quickRegName.trim() || isQuickRegistering}
-                        className="btn-desk-quick-save"
-                      >
-                        {isQuickRegistering ? 'Guardando...' : 'Guardar Asistencia'}
-                      </button>
+                    <div className="desk-quick-reg-form" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <select
+                          value={quickRegTipoDoc}
+                          onChange={(e) => setQuickRegTipoDoc(e.target.value)}
+                          className="desk-quick-reg-select"
+                          title="Tipo de Documento"
+                          style={{ minWidth: '130px' }}
+                        >
+                          <option value="CC">CC - Cédula Ciudadanía</option>
+                          <option value="TI">TI - Tarjeta Identidad</option>
+                          <option value="CE">CE - Cédula Extranjería</option>
+                          <option value="PAS">PAS - Pasaporte</option>
+                        </select>
+                        <input
+                          type="text"
+                          name="quickRegInput"
+                          placeholder="Nombre completo del participante (requerido)..."
+                          value={quickRegName}
+                          onChange={(e) => setQuickRegName(e.target.value)}
+                          className="desk-quick-reg-input"
+                          style={{ flex: '1 1 200px' }}
+                        />
+                        <select
+                          value={quickRegVinculacion}
+                          onChange={(e) => setQuickRegVinculacion(e.target.value)}
+                          className="desk-quick-reg-select"
+                          style={{ flex: '1 1 180px' }}
+                        >
+                          <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
+                          <option value="Residente / Posgrado UdeA">Residente / Posgrado</option>
+                          <option value="Docente / Investigador UdeA">Docente / Investigador</option>
+                          <option value="Auxiliar / Administrativo UdeA">Auxiliar / Administrativo</option>
+                          <option value="Egresado UdeA">Egresado</option>
+                          <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
+                          <option value="Asistente Académico">Otro / Asistente Académico</option>
+                        </select>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <input
+                          type="tel"
+                          name="quickRegTelefono"
+                          placeholder="Número de celular / teléfono..."
+                          value={quickRegTelefono}
+                          onChange={(e) => setQuickRegTelefono(e.target.value)}
+                          className="desk-quick-reg-input"
+                          style={{ flex: '1 1 180px' }}
+                        />
+                        <input
+                          type="email"
+                          name="quickRegCorreo"
+                          placeholder="Correo electrónico institucional o personal..."
+                          value={quickRegCorreo}
+                          onChange={(e) => setQuickRegCorreo(e.target.value)}
+                          className="desk-quick-reg-input"
+                          style={{ flex: '1 1 240px' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleQuickRegister}
+                          disabled={!quickRegName.trim() || isQuickRegistering}
+                          className="btn-desk-quick-save"
+                          style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}
+                        >
+                          {isQuickRegistering ? 'Guardando...' : 'Guardar Asistencia'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

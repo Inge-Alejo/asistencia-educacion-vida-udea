@@ -3099,23 +3099,25 @@ input:checked+.slider::before {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
-  width: max-content;
-  min-width: 100%;
+  gap: 0.4rem;
+  width: 100%;
   box-sizing: border-box;
 }
 
 .stepper-step-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.45rem;
   background: transparent;
   border: none;
-  padding: 0.4rem 0.6rem;
-  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
   color: var(--text-muted);
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .stepper-step-btn:disabled {
@@ -3124,23 +3126,27 @@ input:checked+.slider::before {
 }
 
 .step-circle {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background-color: #E2E8F0;
   color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 700;
+  flex-shrink: 0;
   transition: all 0.2s ease;
 }
 
 .step-label {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
 }
 
 .stepper-step-btn.current .step-circle {
@@ -4234,9 +4240,32 @@ input:checked+.slider::before {
   }
 
   .stepper-progress-nav {
-    padding: 0.65rem 0.75rem !important;
+    padding: 0.55rem 0.65rem !important;
     border-radius: 12px !important;
     -webkit-overflow-scrolling: touch !important;
+  }
+
+  .stepper-track {
+    width: max-content !important;
+    min-width: 100% !important;
+    gap: 0.35rem !important;
+  }
+
+  .stepper-step-btn {
+    flex: 0 0 auto !important;
+    padding: 0.38rem 0.55rem !important;
+    border-radius: 20px !important;
+    background: #F8FAFC !important;
+    border: 1px solid #E2E8F0 !important;
+  }
+
+  .stepper-step-btn.current {
+    background: #F0FDF4 !important;
+    border-color: #86EFAC !important;
+  }
+
+  .step-label {
+    font-size: 0.76rem !important;
   }
 
   .container {

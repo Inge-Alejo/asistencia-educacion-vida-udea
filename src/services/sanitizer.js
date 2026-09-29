@@ -97,3 +97,35 @@ export function sanitizeExcelFormula(value) {
   }
   return str;
 }
+
+/**
+ * Normaliza y procesa enlaces de Microsoft Forms o Google Forms.
+ * Si el usuario pega un bloque <iframe> completo, extrae automáticamente el valor del atributo src.
+ * Si es de Microsoft Forms, asegura que contenga embed=true para permitir incrustación en el DOM sin bloqueos.
+ */
+export function parseMicrosoftFormsUrl(rawInput) {
+  if (!rawInput || typeof rawInput !== 'string') return { embedUrl: '', directUrl: '' };
+  let url = rawInput.trim();
+
+  // Si contiene etiqueta <iframe ... src="..."> extraer el atributo src
+  const srcMatch = url.match(/src=["']([^"']+)["']/i);
+  if (srcMatch && srcMatch[1]) {
+    url = srcMatch[1].trim();
+  }
+
+  // Limpiar caracteres residuales
+  url = url.replace(/^[<"']+|[>"']+$/g, '').trim();
+
+  let embedUrl = url;
+  let directUrl = url;
+
+  if (url.includes('forms.office.com') || url.includes('forms.cloud.microsoft')) {
+    if (!url.includes('embed=true')) {
+      const sep = url.includes('?') ? '&' : '?';
+      embedUrl = `${url}${sep}embed=true`;
+    }
+    directUrl = url.replace(/([&?])embed=true&?/g, '$1').replace(/[?&]$/, '');
+  }
+
+  return { embedUrl, directUrl };
+}

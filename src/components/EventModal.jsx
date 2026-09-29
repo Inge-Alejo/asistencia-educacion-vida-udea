@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2, UtensilsCrossed, Coffee, ClipboardList, Hash, RefreshCw, BarChart3 } from 'lucide-react';
 import { getEventDaysList } from '../services/networkTime';
+import { parseMicrosoftFormsUrl } from '../services/sanitizer';
 
 const DEFAULT_MEALS = [
   { id: 'comida-1', nombre: 'Refrigerio Mañana', horario: '09:30 - 10:30', cantidadTotal: 100 },
@@ -172,7 +173,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               : null
           }))
         : [],
-      microsoftFormsUrl: habilitarMicrosoftForms ? microsoftFormsUrl.trim() : '',
+      microsoftFormsUrl: habilitarMicrosoftForms ? (parseMicrosoftFormsUrl(microsoftFormsUrl).embedUrl || microsoftFormsUrl.trim()) : '',
       habilitarMicrosoftForms,
       habilitarPonentes,
       habilitarEncuestasEnVivo,
@@ -886,15 +887,19 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                 <Link size={15} /> Enlace de la Encuesta (Microsoft Forms / Google Forms)
               </label>
               <input
-                type="url"
+                type="text"
                 className="form-input"
                 value={microsoftFormsUrl}
-                onChange={(e) => setMicrosoftFormsUrl(e.target.value)}
-                placeholder="https://forms.office.com/r/... o https://forms.gle/..."
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const parsed = parseMicrosoftFormsUrl(val);
+                  setMicrosoftFormsUrl(parsed.embedUrl || val);
+                }}
+                placeholder="https://forms.office.com/... o pegue el código <iframe...> de Microsoft Forms"
                 required={habilitarMicrosoftForms}
               />
               <span className="form-help-text" style={{ marginTop: '6px', display: 'block', color: '#64748B' }}>
-                Garantía técnica: Se abrirá en una pestaña limpia y segura para el asistente, evitando cualquier bloqueo o error por directivas de seguridad (X-Frame-Options).
+                💡 <strong>Soporte Completo:</strong> Puede pegar el enlace directo o el código <code>&lt;iframe&gt;</code> completo de Microsoft Forms o Google Forms. El sistema configurará automáticamente la vista embebida en vivo (<code>forms.cloud.microsoft</code> con <code>&amp;embed=true</code>).
               </span>
             </div>
           )}
