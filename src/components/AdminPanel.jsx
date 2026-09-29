@@ -26,6 +26,7 @@ import {
   isFirebaseConfigured,
   exportDatabaseBackupJSON,
   importDatabaseBackupJSON,
+  getGlobalDatabaseMetrics,
   saveEvent,
   togglePonenteActivo,
   getEventPolls,
@@ -241,46 +242,12 @@ export default function AdminPanel({
   };
 
   // -------------------------------------------------------------
-  // MONITOR DE CAPACIDAD Y ALMACENAMIENTO EN TIEMPO REAL (FIRESTORE)
+  // MONITOR DE CAPACIDAD Y ALMACENAMIENTO GLOBAL EN TIEMPO REAL
+  // Consolidado total de todos los eventos académicos de la Facultad
   // -------------------------------------------------------------
   const dbMetrics = useMemo(() => {
-    const aJson = JSON.stringify(asistencias || []);
-    const pJson = JSON.stringify(preguntas || []);
-    const eJson = JSON.stringify(evaluaciones || []);
-    const sJson = JSON.stringify(satisfaccion || []);
-
-    const aBytes = typeof Blob !== 'undefined' ? new Blob([aJson]).size : aJson.length;
-    const pBytes = typeof Blob !== 'undefined' ? new Blob([pJson]).size : pJson.length;
-    const eBytes = typeof Blob !== 'undefined' ? new Blob([eJson]).size : eJson.length;
-    const sBytes = typeof Blob !== 'undefined' ? new Blob([sJson]).size : sJson.length;
-
-    const totalBytes = aBytes + pBytes + eBytes + sBytes;
-    const totalKB = (totalBytes / 1024).toFixed(2);
-    const totalMB = (totalBytes / (1024 * 1024)).toFixed(4);
-
-    // Límite Spark Firestore: 1 GiB = 1024 MB
-    const MAX_STORAGE_BYTES = 1024 * 1024 * 1024;
-    const porcentajeUso = ((totalBytes / MAX_STORAGE_BYTES) * 100).toFixed(4);
-    const totalDocumentos = (asistencias?.length || 0) + (preguntas?.length || 0) + (evaluaciones?.length || 0) + (satisfaccion?.length || 0);
-
-    return {
-      asistenciasCount: asistencias?.length || 0,
-      asistenciasKB: (aBytes / 1024).toFixed(1),
-      preguntasCount: preguntas?.length || 0,
-      preguntasKB: (pBytes / 1024).toFixed(1),
-      evaluacionesCount: evaluaciones?.length || 0,
-      evaluacionesKB: (eBytes / 1024).toFixed(1),
-      satisfaccionCount: satisfaccion?.length || 0,
-      satisfaccionKB: (sBytes / 1024).toFixed(1),
-      totalDocumentos,
-      totalBytes,
-      totalKB,
-      totalMB,
-      porcentajeUso,
-      isFirebaseLive: isFirebaseConfigured(),
-      lastSync: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    };
-  }, [asistencias, preguntas, evaluaciones, satisfaccion]);
+    return getGlobalDatabaseMetrics();
+  }, [asistencias, preguntas, evaluaciones, satisfaccion, entregasComidas, polls, events, activeTab]);
 
   // Estadísticas Rápidas
   const totalAsistentes = asistencias.length;
@@ -1913,9 +1880,9 @@ export default function AdminPanel({
                 <span className="live-dot" />
                 <span className="live-text">Google Cloud Firestore en Tiempo Real</span>
               </div>
-              <h3 className="db-status-title">Monitor de Capacidad y Almacenamiento</h3>
+              <h3 className="db-status-title">Monitor de Capacidad y Almacenamiento Global</h3>
               <p className="db-status-subtitle">
-                Supervisión continua de cuotas, volumen de almacenamiento y documentos en la nube institucional UdeA (Plan Firebase Spark - 100% Gratuito).
+                Supervisión continua de cuotas, volumen de almacenamiento y documentos en la nube institucional UdeA (Plan Firebase Spark - 100% Gratuito) acumulado de todos los eventos académicos.
               </p>
             </div>
             <div className="db-status-hero-right">
@@ -1928,12 +1895,12 @@ export default function AdminPanel({
 
           {/* Grid de Métricas de Almacenamiento y Capacidad */}
           <div className="db-metrics-grid">
-            {/* Tarjeta 1: Almacenamiento Consumido */}
+            {/* Tarjeta 1: Almacenamiento Consumido Global */}
             <div className="db-metric-card">
               <div className="db-card-header">
                 <div className="db-card-title-wrap">
                   <HardDrive size={20} className="db-icon-primary" />
-                  <h4>Almacenamiento en Base de Datos</h4>
+                  <h4>Almacenamiento Global (Todos los Eventos)</h4>
                 </div>
                 <span className="db-badge-free">1 GiB Gratuito</span>
               </div>
@@ -1953,13 +1920,13 @@ export default function AdminPanel({
                   />
                 </div>
                 <div className="db-progress-labels">
-                  <span>Uso: <strong>{dbMetrics.porcentajeUso}%</strong> del límite</span>
+                  <span>Uso Global: <strong>{dbMetrics.porcentajeUso}%</strong> del límite</span>
                   <span>Restante: <strong>{(1024 - parseFloat(dbMetrics.totalMB)).toFixed(2)} MB libres</strong></span>
                 </div>
               </div>
 
               <p className="db-metric-footnote">
-                El evento actual consume una fracción mínima del límite gratuito de 1.024 MB de Firestore Spark.
+                Métrica consolidada de todos los eventos académicos registrados en la plataforma. Consume una fracción mínima del límite gratuito de 1.024 MB (1 GiB) de Firestore Spark.
               </p>
             </div>
 
@@ -2014,53 +1981,22 @@ export default function AdminPanel({
           <div className="db-collections-panel">
             <h4 className="db-panel-heading">
               <Database size={18} />
-              <span>Desglose de Colecciones en Tiempo Real ({dbMetrics.totalDocumentos} documentos activos)</span>
+              <span>Desglose de Colecciones Globales en Tiempo Real ({dbMetrics.totalDocumentos} documentos en total)</span>
             </h4>
 
             <div className="db-collections-grid">
-              <div className="db-collection-card">
-                <div className="col-top">
-                  <span className="col-name">asistencias</span>
-                  <span className="col-count">{dbMetrics.asistenciasCount} docs</span>
+              {(dbMetrics.collections || []).map((col) => (
+                <div className="db-collection-card" key={col.name}>
+                  <div className="col-top">
+                    <span className="col-name">{col.label || col.name}</span>
+                    <span className="col-count">{col.count} docs</span>
+                  </div>
+                  <div className="col-size-bar">
+                    <span>Tamaño acumulado: <strong>{col.kb} KB</strong> ({col.bytes.toLocaleString()} bytes)</span>
+                  </div>
+                  <div className="col-meta">{col.desc}</div>
                 </div>
-                <div className="col-size-bar">
-                  <span>Tamaño estimado: <strong>{dbMetrics.asistenciasKB} KB</strong></span>
-                </div>
-                <div className="col-meta">Datos de registro, georreferenciación y vehículo</div>
-              </div>
-
-              <div className="db-collection-card">
-                <div className="col-top">
-                  <span className="col-name">preguntas</span>
-                  <span className="col-count">{dbMetrics.preguntasCount} docs</span>
-                </div>
-                <div className="col-size-bar">
-                  <span>Tamaño estimado: <strong>{dbMetrics.preguntasKB} KB</strong></span>
-                </div>
-                <div className="col-meta">Interacción y preguntas a ponentes en vivo</div>
-              </div>
-
-              <div className="db-collection-card">
-                <div className="col-top">
-                  <span className="col-name">evaluaciones</span>
-                  <span className="col-count">{dbMetrics.evaluacionesCount} docs</span>
-                </div>
-                <div className="col-size-bar">
-                  <span>Tamaño estimado: <strong>{dbMetrics.evaluacionesKB} KB</strong></span>
-                </div>
-                <div className="col-meta">Rúbrica de calificación docente y ponencias</div>
-              </div>
-
-              <div className="db-collection-card">
-                <div className="col-top">
-                  <span className="col-name">satisfaccion</span>
-                  <span className="col-count">{dbMetrics.satisfaccionCount} docs</span>
-                </div>
-                <div className="col-size-bar">
-                  <span>Tamaño estimado: <strong>{dbMetrics.satisfaccionKB} KB</strong></span>
-                </div>
-                <div className="col-meta">Métricas de calidad, logística y NPS</div>
-              </div>
+              ))}
             </div>
           </div>
 
@@ -2095,9 +2031,14 @@ export default function AdminPanel({
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      const res = await importDatabaseBackupJSON(file);
-                      alert(res.message);
-                      if (res.success && onDataUpdated) onDataUpdated();
+                      try {
+                        const text = await file.text();
+                        const res = importDatabaseBackupJSON(text);
+                        alert(res.message || (res.success ? 'Respaldo importado correctamente.' : 'Error al importar'));
+                        if (res.success && onDataUpdated) onDataUpdated();
+                      } catch (err) {
+                        alert('Error al leer el archivo JSON: ' + err.message);
+                      }
                     }
                   }}
                 />

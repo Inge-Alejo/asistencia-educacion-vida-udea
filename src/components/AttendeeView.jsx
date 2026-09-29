@@ -176,63 +176,6 @@ export default function AttendeeView({
     setInscritosList(getEventInscritos(evento?.id));
   }
 
-  // Estados y Sincronización para Encuestas Relámpago en Vivo (Live Polls)
-  const [polls, setPolls] = useState(() => getEventPolls(evento?.id));
-  const [userVotes, setUserVotes] = useState({});
-  const [votingPollId, setVotingPollId] = useState(null);
-  const [isPollsSectionOpen, setIsPollsSectionOpen] = useState(true);
-
-  useEffect(() => {
-    const updatePolls = () => {
-      const current = getEventPolls(evento?.id);
-      setPolls(current);
-
-      const docToCheck = currentDoc || sessionInfo?.documento || formData.documento;
-      if (docToCheck) {
-        const votesMap = {};
-        current.forEach(p => {
-          const v = getUserPollVote(p.id, docToCheck);
-          if (v) votesMap[p.id] = v;
-        });
-        setUserVotes(votesMap);
-      }
-    };
-
-    updatePolls();
-    const handler = (e) => {
-      if (!e.key || e.key === 'udea_med_polls_v1' || e.key === 'udea_med_poll_votes_v1') {
-        updatePolls();
-      }
-    };
-    window.addEventListener('storage', handler);
-    return () => window.removeEventListener('storage', handler);
-  }, [evento?.id, currentDoc, sessionInfo?.documento, formData.documento]);
-
-  const activePoll = useMemo(() => (polls || []).find(p => p.estado === 'ACTIVA'), [polls]);
-
-  const handleVoteOnPoll = async (pollId, opcionId) => {
-    const docToUse = currentDoc || sessionInfo?.documento || formData.documento || 'anonimo';
-    setVotingPollId(pollId);
-    try {
-      const res = await votePoll(pollId, opcionId, docToUse, evento.id);
-      if (res.success) {
-        setPolls(getEventPolls(evento.id));
-        setUserVotes(prev => ({
-          ...prev,
-          [pollId]: { opcionId, pollId, documento: docToUse }
-        }));
-        triggerCelebrationConfetti();
-        if (onDataUpdated) onDataUpdated();
-      } else {
-        alert(res.message);
-      }
-    } catch (err) {
-      console.error('Error al registrar voto:', err);
-    } finally {
-      setVotingPollId(null);
-    }
-  };
-
   useEffect(() => {
     if (!evento?.id) return;
     const unsubscribe = subscribeToEventInscritos(evento.id, (docs) => {
@@ -255,6 +198,63 @@ export default function AttendeeView({
 
   const currentDoc = (formData?.documento || '').trim();
   const normalizedCurrentDoc = normalizeDocumentId(currentDoc);
+
+  // Estados y Sincronización para Encuestas Relámpago en Vivo (Live Polls)
+  const [polls, setPolls] = useState(() => getEventPolls(evento?.id));
+  const [userVotes, setUserVotes] = useState({});
+  const [votingPollId, setVotingPollId] = useState(null);
+  const [isPollsSectionOpen, setIsPollsSectionOpen] = useState(true);
+
+  useEffect(() => {
+    const updatePolls = () => {
+      const current = getEventPolls(evento?.id);
+      setPolls(current);
+
+      const docToCheck = currentDoc || sessionInfo?.documento || formData?.documento;
+      if (docToCheck) {
+        const votesMap = {};
+        current.forEach(p => {
+          const v = getUserPollVote(p.id, docToCheck);
+          if (v) votesMap[p.id] = v;
+        });
+        setUserVotes(votesMap);
+      }
+    };
+
+    updatePolls();
+    const handler = (e) => {
+      if (!e.key || e.key === 'udea_med_polls_v1' || e.key === 'udea_med_poll_votes_v1') {
+        updatePolls();
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, [evento?.id, currentDoc, sessionInfo?.documento, formData?.documento]);
+
+  const activePoll = useMemo(() => (polls || []).find(p => p.estado === 'ACTIVA'), [polls]);
+
+  const handleVoteOnPoll = async (pollId, opcionId) => {
+    const docToUse = currentDoc || sessionInfo?.documento || formData?.documento || 'anonimo';
+    setVotingPollId(pollId);
+    try {
+      const res = await votePoll(pollId, opcionId, docToUse, evento?.id);
+      if (res.success) {
+        setPolls(getEventPolls(evento?.id));
+        setUserVotes(prev => ({
+          ...prev,
+          [pollId]: { opcionId, pollId, documento: docToUse }
+        }));
+        triggerCelebrationConfetti();
+        if (onDataUpdated) onDataUpdated();
+      } else {
+        alert(res.message);
+      }
+    } catch (err) {
+      console.error('Error al registrar voto:', err);
+    } finally {
+      setVotingPollId(null);
+    }
+  };
 
   // Set en memoria para validación O(1) instantánea sin degradación de rendimiento
   const inscritosSet = useMemo(() => {

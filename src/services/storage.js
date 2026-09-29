@@ -52,6 +52,19 @@ export function markRecordAsDeleted(recordId) {
   } catch {}
 }
 
+export function dispatchStorageEvent(key) {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+  try {
+    if (typeof StorageEvent !== 'undefined') {
+      window.dispatchEvent(new StorageEvent('storage', { key }));
+      return;
+    }
+  } catch {}
+  try {
+    window.dispatchEvent(new Event('storage'));
+  } catch {}
+}
+
 const VERIFICATION_SALT = 'udea_medicina_escarapela_2026_salt_seguridad';
 
 // Generar firma criptográfica para la escarapela digital (anti-falsificación)
@@ -1647,7 +1660,7 @@ export async function deleteMealDelivery(deliveryId) {
     }
   }
 
-  window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_MEALS }));
+  dispatchStorageEvent(STORAGE_KEY_MEALS);
   return list;
 }
 
@@ -1689,7 +1702,7 @@ export async function createPoll(pollData) {
     const all = raw ? JSON.parse(raw) : [];
     const updated = [record, ...all.filter(p => p.id !== id)];
     localStorage.setItem(STORAGE_KEY_POLLS, JSON.stringify(updated));
-    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_POLLS }));
+    dispatchStorageEvent(STORAGE_KEY_POLLS);
 
     if (isFirebaseConfigured() && db) {
       await setDoc(doc(db, 'encuestas_en_vivo', id), record);
@@ -1713,7 +1726,7 @@ export async function togglePollStatus(pollId, nuevoEstado) {
       return p;
     });
     localStorage.setItem(STORAGE_KEY_POLLS, JSON.stringify(updated));
-    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_POLLS }));
+    dispatchStorageEvent(STORAGE_KEY_POLLS);
 
     if (isFirebaseConfigured() && db) {
       await updateDoc(doc(db, 'encuestas_en_vivo', pollId), { estado: nuevoEstado });
@@ -1731,7 +1744,7 @@ export async function deletePoll(pollId) {
     const all = raw ? JSON.parse(raw) : [];
     const updated = all.filter(p => p.id !== pollId);
     localStorage.setItem(STORAGE_KEY_POLLS, JSON.stringify(updated));
-    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_POLLS }));
+    dispatchStorageEvent(STORAGE_KEY_POLLS);
 
     if (isFirebaseConfigured() && db) {
       await deleteDoc(doc(db, 'encuestas_en_vivo', pollId));
@@ -1803,18 +1816,22 @@ export async function votePoll(pollId, opcionId, documento, eventoId) {
     });
 
     localStorage.setItem(STORAGE_KEY_POLLS, JSON.stringify(newPolls));
-    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_POLLS }));
+    dispatchStorageEvent(STORAGE_KEY_POLLS);
 
     // 3. Sincronizar en Cloud Firestore si está configurado
     if (isFirebaseConfigured() && db && updatedPoll) {
-      await setDoc(doc(db, 'encuestas_en_vivo', pollId), updatedPoll, { merge: true });
-      await setDoc(doc(db, 'votos_encuestas', voteKey), {
-        pollId,
-        opcionId,
-        documento: normDoc,
-        eventoId,
-        fecha: new Date().toISOString()
-      });
+      try {
+        await setDoc(doc(db, 'encuestas_en_vivo', pollId), updatedPoll, { merge: true });
+        await setDoc(doc(db, 'votos_encuestas', voteKey), {
+          pollId,
+          opcionId,
+          documento: normDoc,
+          eventoId,
+          fecha: new Date().toISOString()
+        });
+      } catch (cloudErr) {
+        console.warn('Aviso sincronizando voto en Cloud Firestore:', cloudErr);
+      }
     }
 
     return { success: true, poll: updatedPoll };
@@ -2082,6 +2099,103 @@ export function importDatabaseBackupJSON(jsonString) {
 // GESTIÓN DE LISTAS DE INSCRITOS POR EVENTO (EXCEL / CSV)
 // =========================================================================
 const STORAGE_KEY_INSCRITOS_PREFIX = 'udea_med_inscritos_';
+
+// Obtener métricas consolidadas de almacenamiento global en tiempo real (Todos los eventos)
+export function getGlobalDatabaseMetrics() {
+  if (typeof window === 'undefined') {
+    return {
+      totalBytes: 0,
+      totalKB: '0.00',
+      totalMB: '0.0000',
+      porcentajeUso: '0.0000',
+      totalDocumentos: 0,
+      collections: [],
+      isFirebaseLive: false,
+      lastSync: '00:00:00'
+    };
+  }
+
+  const collectionsDef = [
+    { key: STORAGE_KEY_EVENTS, name: 'eventos', label: 'Eventos Académicos', desc: 'Configuración, ponentes, fechas y modalidades de eventos' },
+    { key: STORAGE_KEY_ATTENDANCE, name: 'asistencias', label: 'Asistencias Presenciales', desc: 'Datos de registro de participantes, geolocalización satelital y vehículos' },
+    { key: STORAGE_KEY_QUESTIONS, name: 'preguntas', label: 'Preguntas a Ponentes', desc: 'Preguntas en vivo, votos de interés y respuestas en auditorio' },
+    { key: STORAGE_KEY_EVALUATIONS, name: 'evaluaciones', label: 'Calificación de Ponencias', desc: 'Rúbrica de evaluación docente, claridad y aplicabilidad' },
+    { key: STORAGE_KEY_SATISFACTION, name: 'satisfaccion', label: 'Encuestas de Satisfacción', desc: 'Encuestas institucionales de calidad académica y NPS' },
+    { key: STORAGE_KEY_MEALS, name: 'refrigerios', label: 'Entrega de Refrigerios', desc: 'Control de canje de alimentación y código de barras' },
+    { key: STORAGE_KEY_POLLS, name: 'votaciones', label: 'Votaciones en Vivo', desc: 'Encuestas relámpago, preguntas rápidas y casos clínicos en vivo' },
+    { key: STORAGE_KEY_POLL_VOTES, name: 'votos_encuestas', label: 'Votos de Participantes', desc: 'Votos individuales registrados en encuestas relámpago' }
+  ];
+
+  // Medir también bases de inscritos precargadas por evento (udea_med_inscritos_*)
+  let inscritosTotalBytes = 0;
+  let inscritosCount = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(STORAGE_KEY_INSCRITOS_PREFIX)) {
+      const val = localStorage.getItem(k) || '[]';
+      try {
+        const parsed = JSON.parse(val);
+        const docs = Array.isArray(parsed?.documents) ? parsed.documents : (Array.isArray(parsed) ? parsed : []);
+        inscritosCount += docs.length;
+      } catch {}
+      inscritosTotalBytes += typeof Blob !== 'undefined' ? new Blob([val]).size : val.length;
+    }
+  }
+
+  let grandTotalBytes = inscritosTotalBytes;
+  let grandTotalDocs = inscritosCount;
+
+  const collectionMetrics = collectionsDef.map(col => {
+    const raw = localStorage.getItem(col.key) || '[]';
+    let count = 0;
+    try {
+      const parsed = JSON.parse(raw);
+      count = Array.isArray(parsed) ? parsed.length : 0;
+    } catch {}
+
+    const bytes = typeof Blob !== 'undefined' ? new Blob([raw]).size : raw.length;
+    grandTotalBytes += bytes;
+    grandTotalDocs += count;
+
+    return {
+      name: col.name,
+      label: col.label,
+      desc: col.desc,
+      count,
+      bytes,
+      kb: (bytes / 1024).toFixed(1),
+      mb: (bytes / (1024 * 1024)).toFixed(3)
+    };
+  });
+
+  if (inscritosCount > 0 || inscritosTotalBytes > 0) {
+    collectionMetrics.push({
+      name: 'inscritos_precargados',
+      label: 'Listados Oficiales de Inscritos',
+      desc: 'Bases de datos de participantes preinscritos cargadas por Excel/CSV',
+      count: inscritosCount,
+      bytes: inscritosTotalBytes,
+      kb: (inscritosTotalBytes / 1024).toFixed(1),
+      mb: (inscritosTotalBytes / (1024 * 1024)).toFixed(3)
+    });
+  }
+
+  const MAX_STORAGE_BYTES = 1024 * 1024 * 1024; // 1 GiB límite plan Firebase Spark Gratuito
+  const totalKB = (grandTotalBytes / 1024).toFixed(2);
+  const totalMB = (grandTotalBytes / (1024 * 1024)).toFixed(4);
+  const porcentajeUso = ((grandTotalBytes / MAX_STORAGE_BYTES) * 100).toFixed(4);
+
+  return {
+    totalBytes: grandTotalBytes,
+    totalKB,
+    totalMB,
+    porcentajeUso,
+    totalDocumentos: grandTotalDocs,
+    collections: collectionMetrics,
+    isFirebaseLive: isFirebaseConfigured(),
+    lastSync: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  };
+}
 
 export function getEventInscritos(eventoId) {
   if (!eventoId) return [];

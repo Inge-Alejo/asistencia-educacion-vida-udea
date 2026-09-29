@@ -54,5 +54,15 @@ service cloud.firestore {
     match /inscritos/{eventoId} {
       allow read, write: if true;
     }
+
+    // Colección de Encuestas Relámpago y Votaciones en Vivo (Live Polls)
+    match /encuestas_en_vivo/{pollId} {
+      allow read, write: if true;
+    }
+
+    // Colección de Votos en Encuestas Relámpago
+    match /votos_encuestas/{voteId} {
+      allow read, write: if true;
+    }
   }
 }
