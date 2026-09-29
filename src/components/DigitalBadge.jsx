@@ -42,6 +42,16 @@ export default function DigitalBadge({
   const badgeCardRef = useRef(null);
   const barcodeSvgRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
+  const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
+  const [shareStatus, setShareStatus] = useState(null);
+
+  useEffect(() => {
+    if (!shareStatus) return;
+    const timer = setTimeout(() => {
+      setShareStatus(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [shareStatus]);
 
   // Renderizar código de barras 1D Code 128 con la cédula/documento del asistente
   useEffect(() => {
@@ -353,33 +363,91 @@ export default function DigitalBadge({
     }
   };
 
-  // Compartir la credencial oficial por WhatsApp con mensaje estructurado
-  const handleShareWhatsApp = () => {
-    const nombre = (asistente.nombreCompleto || 'Asistente').trim();
-    const doc = (asistente.documento || '').trim();
-    const titulo = (evento.titulo || 'Evento Académico').trim();
-    const fecha = evento.fecha || evento.fechaInicio || '';
-    const lugar = evento.lugar || 'Facultad de Medicina UdeA';
-    const comprobante = asistente.id || '';
+  // Compartir la imagen de la escarapela directamente por WhatsApp (sin emojis ni bloques de texto)
+  const fallbackDesktopShare = async (blob, fileName) => {
+    let copied = false;
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof window.ClipboardItem !== 'undefined') {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+        copied = true;
+      } catch (clipErr) {
+        console.warn('No se pudo copiar automáticamente la imagen al portapapeles:', clipErr);
+      }
+    }
 
-    const lines = [
-      `🏛️ *Universidad de Antioquia - Facultad de Medicina*`,
-      `📋 *Escarapela Digital y Comprobante de Asistencia*`,
-      ``,
-      `👤 *Asistente:* ${nombre}`,
-      doc ? `🪪 *Documento:* ${doc}` : null,
-      `🎓 *Evento:* ${titulo}`,
-      fecha ? `📅 *Fecha:* ${fecha}` : null,
-      lugar ? `📍 *Lugar:* ${lugar}` : null,
-      comprobante ? `🔖 *Código de Registro:* ${comprobante}` : null,
-      ``,
-      `🔗 *Verificar credencial oficial en línea:*`,
-      verificationUrl
-    ].filter(Boolean);
+    // Descargar el archivo PNG para que el usuario siempre lo tenga disponible
+    const pngUrl = URL.createObjectURL(blob);
+    const downloadLink = document.createElement('a');
+    downloadLink.download = fileName;
+    downloadLink.href = pngUrl;
+    downloadLink.click();
+    setTimeout(() => URL.revokeObjectURL(pngUrl), 5000);
 
-    const message = encodeURIComponent(lines.join('\n'));
-    const url = `https://wa.me/?text=${message}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    // Abrir WhatsApp Web
+    window.open('https://web.whatsapp.com/', '_blank', 'noopener,noreferrer');
+
+    setShareStatus({
+      type: 'success',
+      message: copied
+        ? 'Imagen copiada al portapapeles y descargada. En WhatsApp Web presiona Ctrl+V en tu chat para pegarla.'
+        : 'Imagen descargada. Se abrió WhatsApp Web para adjuntarla en tu chat.'
+    });
+  };
+
+  const handleShareWhatsApp = async () => {
+    if (downloading || sharingWhatsApp) return;
+    setSharingWhatsApp(true);
+    setShareStatus(null);
+
+    try {
+      const canvas = await generateBadgeCanvas();
+      if (!canvas) {
+        setSharingWhatsApp(false);
+        return;
+      }
+
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) {
+        throw new Error('No se pudo generar el archivo de imagen de la escarapela.');
+      }
+
+      const cleanDoc = (asistente.documento || 'UdeA').toString().replace(/[^a-zA-Z0-9]/g, '');
+      const eventIdClean = (evento.id || 'EVT').replace(/[^a-zA-Z0-9]/g, '');
+      const fileName = `Escarapela_UdeA_${cleanDoc}_${eventIdClean}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      // Si el navegador soporta compartir archivos nativamente (móviles Android / iOS con WhatsApp instalado)
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'Escarapela Digital UdeA'
+          });
+          setShareStatus({
+            type: 'success',
+            message: 'Imagen enviada para compartir.'
+          });
+        } catch (shareErr) {
+          if (shareErr.name !== 'AbortError') {
+            console.warn('Error al compartir con Web Share API, usando método alternativo:', shareErr);
+            await fallbackDesktopShare(blob, fileName);
+          }
+        }
+      } else {
+        // En navegadores de escritorio (PC / Mac)
+        await fallbackDesktopShare(blob, fileName);
+      }
+    } catch (err) {
+      console.error('Error al compartir la imagen por WhatsApp:', err);
+      setShareStatus({
+        type: 'error',
+        message: 'No fue posible preparar la imagen. Puedes usar el botón Imagen (PNG) para guardarla directamente.'
+      });
+    } finally {
+      setSharingWhatsApp(false);
+    }
   };
 
   const badgeContent = (
@@ -515,11 +583,26 @@ export default function DigitalBadge({
 
           {/* Barra de Acciones fija en la parte inferior: siempre visible de inmediato */}
           <div className="badge-modal-footer-actions no-print">
+            {shareStatus && (
+              <div className={`badge-share-status-bar status-${shareStatus.type}`}>
+                <CheckCircle2 size={16} />
+                <span className="badge-share-status-text">{shareStatus.message}</span>
+                <button
+                  type="button"
+                  className="btn-close-status"
+                  onClick={() => setShareStatus(null)}
+                  aria-label="Cerrar aviso"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               className="btn-action-pdf-primary"
               onClick={handleDownloadBadgePDF}
-              disabled={downloading}
+              disabled={downloading || sharingWhatsApp}
               title="Descargar credencial oficial en formato PDF"
             >
               <FileDown size={17} />
@@ -530,7 +613,7 @@ export default function DigitalBadge({
               type="button"
               className="btn-action-png-secondary"
               onClick={handleDownloadBadgePNG}
-              disabled={downloading}
+              disabled={downloading || sharingWhatsApp}
               title="Guardar imagen PNG en su teléfono"
             >
               <ImageIcon size={16} />
@@ -541,10 +624,11 @@ export default function DigitalBadge({
               type="button"
               className="btn-action-whatsapp"
               onClick={handleShareWhatsApp}
-              title="Compartir credencial oficial por WhatsApp"
+              disabled={downloading || sharingWhatsApp}
+              title="Compartir imagen de la credencial por WhatsApp"
             >
               <WhatsAppIcon size={16} />
-              <span>WhatsApp</span>
+              <span>{sharingWhatsApp ? 'Preparando...' : 'WhatsApp'}</span>
             </button>
 
             <a
@@ -567,11 +651,25 @@ export default function DigitalBadge({
     <div>
       {badgeContent}
       <div className="badge-modal-footer-actions inline-actions no-print">
+        {shareStatus && (
+          <div className={`badge-share-status-bar status-${shareStatus.type}`}>
+            <CheckCircle2 size={16} />
+            <span className="badge-share-status-text">{shareStatus.message}</span>
+            <button
+              type="button"
+              className="btn-close-status"
+              onClick={() => setShareStatus(null)}
+              aria-label="Cerrar aviso"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <button
           type="button"
           className="btn-action-pdf-primary"
           onClick={handleDownloadBadgePDF}
-          disabled={downloading}
+          disabled={downloading || sharingWhatsApp}
         >
           <FileDown size={17} />
           <span>{downloading ? 'Generando PDF...' : 'Descargar PDF'}</span>
@@ -580,7 +678,7 @@ export default function DigitalBadge({
           type="button"
           className="btn-action-png-secondary"
           onClick={handleDownloadBadgePNG}
-          disabled={downloading}
+          disabled={downloading || sharingWhatsApp}
         >
           <ImageIcon size={16} />
           <span>Imagen (PNG)</span>
@@ -589,10 +687,11 @@ export default function DigitalBadge({
           type="button"
           className="btn-action-whatsapp"
           onClick={handleShareWhatsApp}
-          title="Compartir credencial oficial por WhatsApp"
+          disabled={downloading || sharingWhatsApp}
+          title="Compartir imagen de la credencial por WhatsApp"
         >
           <WhatsAppIcon size={16} />
-          <span>WhatsApp</span>
+          <span>{sharingWhatsApp ? 'Preparando...' : 'WhatsApp'}</span>
         </button>
       </div>
     </div>
