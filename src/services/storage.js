@@ -28,6 +28,8 @@ const STORAGE_KEY_EVALUATIONS = 'udea_med_evaluations_v1';
 const STORAGE_KEY_SATISFACTION = 'udea_med_satisfaction_v1';
 const STORAGE_KEY_VERIFICATIONS = 'udea_med_verifications_v1';
 const STORAGE_KEY_MEALS = 'udea_med_meals_deliveries_v1';
+const STORAGE_KEY_POLLS = 'udea_med_polls_v1';
+const STORAGE_KEY_POLL_VOTES = 'udea_med_poll_votes_v1';
 const STORAGE_KEY_TOMBSTONES = 'udea_med_deleted_records_tombstones_v1';
 
 // Registro permanente de IDs eliminados para evitar resurrección en tiempo real
@@ -1649,6 +1651,179 @@ export async function deleteMealDelivery(deliveryId) {
   return list;
 }
 
+// =========================================================================
+// GESTIÓN DE ENCUESTAS RELÁMPAGO EN VIVO (LIVE POLLS / MENTIMETER / SLIDO)
+// =========================================================================
+
+export function getEventPolls(eventoId) {
+  if (typeof window === 'undefined' || !eventoId) return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_POLLS);
+    const all = raw ? JSON.parse(raw) : [];
+    const tombstones = getDeletedRecordIds();
+    return all.filter(p => p.eventoId === eventoId && !tombstones.has(String(p.id)));
+  } catch {
+    return [];
+  }
+}
+
+export async function createPoll(pollData) {
+  if (!pollData || !pollData.eventoId) return { success: false, message: 'Faltan datos de la encuesta' };
+  const id = pollData.id || `POLL-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const record = {
+    ...pollData,
+    id,
+    pregunta: String(pollData.pregunta || '').trim(),
+    estado: pollData.estado || 'ACTIVA',
+    fechaCreacion: pollData.fechaCreacion || new Date().toISOString(),
+    totalVotos: Number(pollData.totalVotos) || 0,
+    opciones: (pollData.opciones || []).map((opt, idx) => ({
+      id: opt.id || `opt-${idx + 1}`,
+      texto: String(opt.texto || opt || '').trim(),
+      votos: Number(opt.votos) || 0
+    }))
+  };
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_POLLS);
+    const all = raw ? JSON.parse(raw) : [];
+    const updated = [record, ...all.filter(p => p.id !== id)];
+    localStorage.setItem(STORAGE_KEY_POLLS, JSON.stringify(updated));
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_POLLS }));
+
+    if (isFirebaseConfigured() && db) {
+      await setDoc(doc(db, 'encuestas_en_vivo', id), record);
+    }
+    return { success: true, record };
+  } catch (err) {
+    console.error('Error al crear encuesta relámpago:', err);
+    return { success: false, message: err.message };
+  }
+}
+
+export async function togglePollStatus(pollId, nuevoEstado) {
+  if (!pollId) return;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_POLLS);
+    const all = raw ? JSON.parse(raw) : [];
+    const updated = all.map(p => {
+      if (p.id === pollId) {
+        return { ...p, estado: nuevoEstado };
+      }
+      return p;
+    });
+    localStorage.setItem(STORAGE_KEY_POLLS, JSON.stringify(updated));
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_POLLS }));
+
+    if (isFirebaseConfigured() && db) {
+      await updateDoc(doc(db, 'encuestas_en_vivo', pollId), { estado: nuevoEstado });
+    }
+  } catch (err) {
+    console.error('Error al alternar estado de encuesta:', err);
+  }
+}
+
+export async function deletePoll(pollId) {
+  if (!pollId) return;
+  markRecordAsDeleted(pollId);
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_POLLS);
+    const all = raw ? JSON.parse(raw) : [];
+    const updated = all.filter(p => p.id !== pollId);
+    localStorage.setItem(STORAGE_KEY_POLLS, JSON.stringify(updated));
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_POLLS }));
+
+    if (isFirebaseConfigured() && db) {
+      await deleteDoc(doc(db, 'encuestas_en_vivo', pollId));
+    }
+  } catch (err) {
+    console.error('Error al eliminar encuesta relámpago:', err);
+  }
+}
+
+export function getUserPollVote(pollId, documento) {
+  if (typeof window === 'undefined' || !pollId || !documento) return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_POLL_VOTES);
+    const all = raw ? JSON.parse(raw) : {};
+    const normDoc = normalizeDocumentId(documento);
+    return all[`${pollId}_${normDoc}`] || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function votePoll(pollId, opcionId, documento, eventoId) {
+  if (!pollId || !opcionId || !documento) {
+    return { success: false, message: 'Datos incompletos para registrar el voto' };
+  }
+  const normDoc = normalizeDocumentId(documento);
+  const voteKey = `${pollId}_${normDoc}`;
+
+  // Comprobar si el participante ya votó en esta encuesta
+  const existingVote = getUserPollVote(pollId, documento);
+  if (existingVote) {
+    return { success: false, message: 'Ya has registrado tu voto en esta encuesta relámpago', vote: existingVote };
+  }
+
+  try {
+    // 1. Guardar recibo de voto local
+    const rawVotes = localStorage.getItem(STORAGE_KEY_POLL_VOTES);
+    const allVotes = rawVotes ? JSON.parse(rawVotes) : {};
+    allVotes[voteKey] = {
+      pollId,
+      opcionId,
+      documento: normDoc,
+      eventoId,
+      fecha: new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEY_POLL_VOTES, JSON.stringify(allVotes));
+
+    // 2. Incrementar contador en la encuesta localmente
+    const rawPolls = localStorage.getItem(STORAGE_KEY_POLLS);
+    const allPolls = rawPolls ? JSON.parse(rawPolls) : [];
+    let updatedPoll = null;
+
+    const newPolls = allPolls.map(p => {
+      if (p.id === pollId) {
+        const newOptions = (p.opciones || []).map(opt => {
+          if (opt.id === opcionId) {
+            return { ...opt, votos: (Number(opt.votos) || 0) + 1 };
+          }
+          return opt;
+        });
+        updatedPoll = {
+          ...p,
+          totalVotos: (Number(p.totalVotos) || 0) + 1,
+          opciones: newOptions
+        };
+        return updatedPoll;
+      }
+      return p;
+    });
+
+    localStorage.setItem(STORAGE_KEY_POLLS, JSON.stringify(newPolls));
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_POLLS }));
+
+    // 3. Sincronizar en Cloud Firestore si está configurado
+    if (isFirebaseConfigured() && db && updatedPoll) {
+      await setDoc(doc(db, 'encuestas_en_vivo', pollId), updatedPoll, { merge: true });
+      await setDoc(doc(db, 'votos_encuestas', voteKey), {
+        pollId,
+        opcionId,
+        documento: normDoc,
+        eventoId,
+        fecha: new Date().toISOString()
+      });
+    }
+
+    return { success: true, poll: updatedPoll };
+  } catch (err) {
+    console.error('Error al registrar voto en encuesta:', err);
+    return { success: false, message: err.message };
+  }
+}
+
 // Suscripción en Tiempo Real Multi-dispositivo (Firestore Snapshot en vivo)
 export function subscribeToEventData(eventId, onUpdate) {
   if (!eventId) return () => {};
@@ -1662,7 +1837,8 @@ export function subscribeToEventData(eventId, onUpdate) {
       STORAGE_KEY_QUESTIONS,
       STORAGE_KEY_EVALUATIONS,
       STORAGE_KEY_SATISFACTION,
-      STORAGE_KEY_MEALS
+      STORAGE_KEY_MEALS,
+      STORAGE_KEY_POLLS
     ].includes(e.key)) {
       if (onUpdate) onUpdate();
     }
@@ -1684,8 +1860,8 @@ export function subscribeToEventData(eventId, onUpdate) {
         return id && !tombstones.has(String(id));
       });
 
-      // Para preguntas, evaluaciones y satisfacción: Cloud Firestore es la fuente de verdad en vivo
-      if (storageKey === STORAGE_KEY_QUESTIONS || storageKey === STORAGE_KEY_EVALUATIONS || storageKey === STORAGE_KEY_SATISFACTION) {
+      // Para preguntas, evaluaciones, encuestas y satisfacción: Cloud Firestore es la fuente de verdad en vivo
+      if (storageKey === STORAGE_KEY_QUESTIONS || storageKey === STORAGE_KEY_EVALUATIONS || storageKey === STORAGE_KEY_SATISFACTION || storageKey === STORAGE_KEY_POLLS) {
         const combined = [...validCloudList, ...localOtherEvents];
         localStorage.setItem(storageKey, JSON.stringify(combined));
         return validCloudList;
@@ -1788,6 +1964,19 @@ export function subscribeToEventData(eventId, onUpdate) {
       );
       unsubs.push(unsubMeals);
 
+      // Sincronización en vivo de Encuestas Relámpago (Live Polls)
+      const unsubPolls = onSnapshot(
+        query(collection(db, 'encuestas_en_vivo'), where('eventoId', '==', eventId)),
+        (snapshot) => {
+          const cloudPolls = [];
+          snapshot.forEach(docSnap => cloudPolls.push(docSnap.data()));
+          reconcileCollection(STORAGE_KEY_POLLS, cloudPolls, 'id', 'encuestas_en_vivo');
+          if (onUpdate) onUpdate();
+        },
+        (err) => console.warn('Firestore encuestas_en_vivo snapshot:', err)
+      );
+      unsubs.push(unsubPolls);
+
       // Sincronización en vivo de Lista Oficial de Inscritos (Excel / CSV)
       const unsubInscritos = onSnapshot(
         doc(db, 'inscritos', eventId),
@@ -1843,7 +2032,8 @@ export function exportDatabaseBackupJSON() {
       questions: JSON.parse(localStorage.getItem(STORAGE_KEY_QUESTIONS) || '[]'),
       evaluations: JSON.parse(localStorage.getItem(STORAGE_KEY_EVALUATIONS) || '[]'),
       satisfaction: JSON.parse(localStorage.getItem(STORAGE_KEY_SATISFACTION) || '[]'),
-      meals: JSON.parse(localStorage.getItem(STORAGE_KEY_MEALS) || '[]')
+      meals: JSON.parse(localStorage.getItem(STORAGE_KEY_MEALS) || '[]'),
+      polls: JSON.parse(localStorage.getItem(STORAGE_KEY_POLLS) || '[]')
     }
   };
 
@@ -1873,6 +2063,9 @@ export function importDatabaseBackupJSON(jsonString) {
     localStorage.setItem(STORAGE_KEY_SATISFACTION, JSON.stringify(backup.data.satisfaction || []));
     if (backup.data.meals) {
       localStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(backup.data.meals || []));
+    }
+    if (backup.data.polls) {
+      localStorage.setItem(STORAGE_KEY_POLLS, JSON.stringify(backup.data.polls || []));
     }
 
     return {

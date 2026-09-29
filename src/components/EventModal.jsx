@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2, UtensilsCrossed, Coffee, ClipboardList, Hash, RefreshCw } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2, UtensilsCrossed, Coffee, ClipboardList, Hash, RefreshCw, BarChart3 } from 'lucide-react';
 import { getEventDaysList } from '../services/networkTime';
 
 const DEFAULT_MEALS = [
@@ -37,6 +37,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
   const [microsoftFormsUrl, setMicrosoftFormsUrl] = useState(initialEvent?.microsoftFormsUrl || '');
   const [habilitarMicrosoftForms, setHabilitarMicrosoftForms] = useState(Boolean(initialEvent?.habilitarMicrosoftForms ?? (initialEvent?.microsoftFormsUrl ? true : false)));
   const [habilitarPonentes, setHabilitarPonentes] = useState(initialEvent?.habilitarPonentes ?? (initialEvent ? Boolean(initialEvent.ponentes && initialEvent.ponentes.length > 0) : true));
+  const [habilitarEncuestasEnVivo, setHabilitarEncuestasEnVivo] = useState(initialEvent?.habilitarEncuestasEnVivo ?? true);
 
   const [ponentes, setPonentes] = useState(() => (
     initialEvent?.ponentes?.length
@@ -68,6 +69,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
     setMicrosoftFormsUrl(initialEvent?.microsoftFormsUrl || '');
     setHabilitarMicrosoftForms(Boolean(initialEvent?.habilitarMicrosoftForms ?? (initialEvent?.microsoftFormsUrl ? true : false)));
     setHabilitarPonentes(initialEvent?.habilitarPonentes ?? (initialEvent ? Boolean(initialEvent.ponentes && initialEvent.ponentes.length > 0) : true));
+    setHabilitarEncuestasEnVivo(initialEvent?.habilitarEncuestasEnVivo ?? true);
     setPonentes(initialEvent?.ponentes?.length
       ? initialEvent.ponentes.map(p => ({ ...p, activo: p.activo ?? true }))
       : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '', activo: true }]
@@ -173,6 +175,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       microsoftFormsUrl: habilitarMicrosoftForms ? microsoftFormsUrl.trim() : '',
       habilitarMicrosoftForms,
       habilitarPonentes,
+      habilitarEncuestasEnVivo,
       ponentes: habilitarPonentes
         ? ponentes
             .filter(p => p.nombre.trim() !== '')
@@ -869,6 +872,32 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               </span>
             </div>
           )}
+
+          {/* CONTROL EXCLUSIVO: Habilitar Encuestas Relámpago en Vivo */}
+          <div className="form-toggle-card">
+            <div className="toggle-info">
+              <div className="toggle-icon-wrap" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
+                <BarChart3 size={22} />
+              </div>
+              <div>
+                <label className="toggle-title" htmlFor="switch-encuestas">
+                  Habilitar Votaciones y Encuestas Relámpago en Vivo (Live Polls)
+                </label>
+                <p className="toggle-description">
+                  Permite a los ponentes y moderadores lanzar preguntas o casos clínicos de opción múltiple para que los asistentes voten desde sus dispositivos móviles con resultados y gráficos en tiempo real.
+                </p>
+              </div>
+            </div>
+            <label className="switch">
+              <input
+                id="switch-encuestas"
+                type="checkbox"
+                checked={habilitarEncuestasEnVivo}
+                onChange={(e) => setHabilitarEncuestasEnVivo(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
+          </div>
 
           <div className="modal-actions-footer">
             <button type="button" className="btn-secondary" onClick={onClose}>

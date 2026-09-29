@@ -4,7 +4,8 @@ import {
   Filter, CheckCircle, Clock, MapPin, Car, AlertCircle, FileSpreadsheet,
   ExternalLink, Trash2, Shield, KeyRound, LogOut, Upload, X, Award,
   Database, HardDrive, Server, Activity, Wifi, Camera, Edit3,
-  CheckCircle2, Globe, Phone, Cloud, AlertTriangle, UtensilsCrossed, Barcode
+  CheckCircle2, Globe, Phone, Cloud, AlertTriangle, UtensilsCrossed, Barcode,
+  BarChart3, Lock, Play
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import QRScannerModal from './QRScannerModal';
@@ -26,7 +27,11 @@ import {
   exportDatabaseBackupJSON,
   importDatabaseBackupJSON,
   saveEvent,
-  togglePonenteActivo
+  togglePonenteActivo,
+  getEventPolls,
+  createPoll,
+  togglePollStatus,
+  deletePoll
 } from '../services/storage';
 import { changeAdminPassword } from '../services/auth';
 
@@ -105,6 +110,67 @@ export default function AdminPanel({
     setPrevEventId(evento?.id);
     setMsFormsUrl(evento?.microsoftFormsUrl || '');
   }
+
+  // Estados para Votaciones y Encuestas Relámpago en Vivo
+  const [polls, setPolls] = useState(() => getEventPolls(evento?.id));
+  const [isCreatingPoll, setIsCreatingPoll] = useState(false);
+  const [newPollQuestion, setNewPollQuestion] = useState('');
+  const [newPollOptions, setNewPollOptions] = useState(['', '', '']);
+  const [isSubmittingPoll, setIsSubmittingPoll] = useState(false);
+
+  useEffect(() => {
+    setPolls(getEventPolls(evento?.id));
+  }, [evento?.id, asistencias, preguntas]);
+
+  const handleCrearEncuesta = async (e) => {
+    e.preventDefault();
+    const cleanPregunta = newPollQuestion.trim();
+    const cleanOpciones = newPollOptions.map(o => o.trim()).filter(Boolean);
+    if (!cleanPregunta) {
+      alert('Por favor escribe la pregunta o caso clínico.');
+      return;
+    }
+    if (cleanOpciones.length < 2) {
+      alert('Debes incluir al menos dos opciones para que los participantes puedan votar.');
+      return;
+    }
+    setIsSubmittingPoll(true);
+    try {
+      const res = await createPoll({
+        eventoId: evento.id,
+        pregunta: cleanPregunta,
+        opciones: cleanOpciones.map((txt, idx) => ({ id: `opt-${idx + 1}`, texto: txt, votos: 0 })),
+        estado: 'ACTIVA'
+      });
+      if (res.success) {
+        setPolls(getEventPolls(evento.id));
+        setNewPollQuestion('');
+        setNewPollOptions(['', '', '']);
+        setIsCreatingPoll(false);
+        if (onDataUpdated) onDataUpdated();
+      } else {
+        alert('Error al crear encuesta: ' + res.message);
+      }
+    } catch (err) {
+      alert('Error inesperado: ' + err.message);
+    } finally {
+      setIsSubmittingPoll(false);
+    }
+  };
+
+  const handleToggleEstadoEncuesta = async (pollId, nuevoEstado) => {
+    await togglePollStatus(pollId, nuevoEstado);
+    setPolls(getEventPolls(evento.id));
+    if (onDataUpdated) onDataUpdated();
+  };
+
+  const handleEliminarEncuesta = async (pollId) => {
+    if (confirm('¿Eliminar esta encuesta relámpago permanentemente?')) {
+      await deletePoll(pollId);
+      setPolls(getEventPolls(evento.id));
+      if (onDataUpdated) onDataUpdated();
+    }
+  };
 
   // Estados para eliminación masiva de datos con cuenta regresiva de 3s
   const [showPurgeModal, setShowPurgeModal] = useState(false);
@@ -586,6 +652,13 @@ export default function AdminPanel({
           </button>
         )}
         <button
+          className={`tab-link ${activeTab === 'encuestas' ? 'active' : ''}`}
+          onClick={() => setActiveTab('encuestas')}
+        >
+          <BarChart3 size={16} />
+          <span>Votaciones en Vivo {evento?.habilitarEncuestasEnVivo === false ? '(Desactivado)' : `(${polls.length})`}</span>
+        </button>
+        <button
           className={`tab-link ${activeTab === 'satisfaccion' ? 'active' : ''}`}
           onClick={() => setActiveTab('satisfaccion')}
         >
@@ -1062,6 +1135,337 @@ export default function AdminPanel({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* PESTAÑA: ENCUESTAS RELÁMPAGO Y VOTACIONES EN VIVO */}
+      {activeTab === 'encuestas' && (
+        <div className="tab-panel">
+          {/* Barra de control superior */}
+          <div className="polls-admin-header-card" style={{ background: '#FFFFFF', padding: '1.25rem', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '1.25rem', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#F5F3FF', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <BarChart3 size={24} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0F172A', fontWeight: 700 }}>
+                    Votaciones y Encuestas Relámpago en Vivo (Live Polls)
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.84rem', color: '#64748B' }}>
+                    Lanza preguntas de opción múltiple o casos clínicos interactivos para que el público vote en tiempo real desde sus móviles.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {evento?.habilitarEncuestasEnVivo === false ? (
+                  <button
+                    type="button"
+                    className="btn-primary-action"
+                    style={{ background: '#7C3AED', borderColor: '#6D28D9' }}
+                    onClick={async () => {
+                      await saveEvent({ ...evento, habilitarEncuestasEnVivo: true });
+                      if (onDataUpdated) onDataUpdated();
+                    }}
+                  >
+                    <CheckCircle2 size={16} />
+                    <span>Activar Módulo para este Evento</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-primary-action"
+                    style={{ background: '#0F5938', borderColor: '#0B432A' }}
+                    onClick={() => setIsCreatingPoll(prev => !prev)}
+                  >
+                    {isCreatingPoll ? <X size={16} /> : <Plus size={16} />}
+                    <span>{isCreatingPoll ? 'Cancelar' : 'Nueva Encuesta Relámpago'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Aviso si el módulo está desactivado en la configuración del evento */}
+            {evento?.habilitarEncuestasEnVivo === false && (
+              <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#92400E', fontSize: '0.88rem' }}>
+                <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Módulo actualmente deshabilitado:</strong> Los asistentes no verán la sección de votaciones en vivo en sus celulares. Puedes activarlo con el botón superior o desde "Editar Evento".
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Formulario de creación de nueva encuesta */}
+          {isCreatingPoll && (
+            <div className="card-form-new-poll animated-step" style={{ background: '#F8FAFC', padding: '1.25rem', borderRadius: '12px', border: '1.5px solid #7C3AED', marginBottom: '1.5rem', boxShadow: '0 4px 12px rgba(124, 58, 237, 0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.65rem' }}>
+                <h4 style={{ margin: 0, color: '#5B21B6', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '1rem', fontWeight: 700 }}>
+                  <BarChart3 size={18} /> Configurar Nueva Pregunta / Caso Clínico
+                </h4>
+                <span style={{ fontSize: '0.78rem', background: '#EDE9FE', color: '#6D28D9', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                  Votación Inmediata
+                </span>
+              </div>
+
+              <form onSubmit={handleCrearEncuesta}>
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontWeight: 600, color: '#1E293B', display: 'block', marginBottom: '4px' }}>
+                    Pregunta a consultar al auditorio: <span style={{ color: '#DC2626' }}>*</span>
+                  </label>
+                  <textarea
+                    className="form-input"
+                    rows={2}
+                    placeholder="Ej: ¿Cuál es la terapia de primera línea indicada ante este caso clínico?"
+                    value={newPollQuestion}
+                    onChange={(e) => setNewPollQuestion(e.target.value)}
+                    required
+                    style={{ width: '100%', resize: 'vertical', minHeight: '60px' }}
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontWeight: 600, color: '#1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span>Opciones de respuesta: <span style={{ color: '#DC2626' }}>*</span></span>
+                    {newPollOptions.length < 6 && (
+                      <button
+                        type="button"
+                        style={{ background: 'none', border: 'none', color: '#7C3AED', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+                        onClick={() => setNewPollOptions([...newPollOptions, ''])}
+                      >
+                        <Plus size={13} /> Agregar opción
+                      </button>
+                    )}
+                  </label>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {newPollOptions.map((opt, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#EDE9FE', color: '#6D28D9', fontWeight: 700, fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {String.fromCharCode(65 + idx)}
+                        </span>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder={`Opción ${String.fromCharCode(65 + idx)}${idx < 2 ? ' (Obligatoria)' : ' (Opcional)'}`}
+                          value={opt}
+                          onChange={(e) => {
+                            const copy = [...newPollOptions];
+                            copy[idx] = e.target.value;
+                            setNewPollOptions(copy);
+                          }}
+                          required={idx < 2}
+                          style={{ flex: 1 }}
+                        />
+                        {newPollOptions.length > 2 && (
+                          <button
+                            type="button"
+                            className="btn-action-pill delete"
+                            onClick={() => setNewPollOptions(newPollOptions.filter((_, i) => i !== idx))}
+                            title="Eliminar esta opción"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      setIsCreatingPoll(false);
+                      setNewPollQuestion('');
+                      setNewPollOptions(['', '', '']);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary-action"
+                    disabled={isSubmittingPoll}
+                    style={{ background: '#7C3AED', borderColor: '#6D28D9' }}
+                  >
+                    <BarChart3 size={16} />
+                    <span>{isSubmittingPoll ? 'Publicando...' : 'Lanzar Encuesta al Público'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Listado de Encuestas */}
+          <div className="polls-admin-list" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {polls.length === 0 ? (
+              <div className="empty-state-card" style={{ background: '#FFFFFF', padding: '3rem 1.5rem', borderRadius: '12px', textAlign: 'center', border: '1px dashed #CBD5E1' }}>
+                <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#F1F5F9', color: '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+                  <BarChart3 size={28} />
+                </div>
+                <h4 style={{ margin: '0 0 0.5rem', color: '#1E293B', fontSize: '1.05rem', fontWeight: 700 }}>
+                  No hay encuestas relámpago registradas
+                </h4>
+                <p style={{ margin: '0 auto 1.25rem', color: '#64748B', maxWidth: '420px', fontSize: '0.88rem', lineHeight: 1.4 }}>
+                  Crea tu primera pregunta de opción múltiple para que los asistentes voten en tiempo real durante la conferencia o caso clínico.
+                </p>
+                {evento?.habilitarEncuestasEnVivo !== false && (
+                  <button
+                    type="button"
+                    className="btn-primary-action"
+                    onClick={() => setIsCreatingPoll(true)}
+                    style={{ margin: '0 auto' }}
+                  >
+                    <Plus size={16} />
+                    <span>Crear Primera Encuesta</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              polls.map((poll) => {
+                const totalVotos = Number(poll.totalVotos) || 0;
+                const isActiva = poll.estado === 'ACTIVA';
+
+                return (
+                  <div
+                    key={poll.id}
+                    className="poll-admin-card"
+                    style={{
+                      background: '#FFFFFF',
+                      borderRadius: '12px',
+                      border: isActiva ? '2px solid #7C3AED' : '1px solid #E2E8F0',
+                      padding: '1.25rem',
+                      boxShadow: isActiva ? '0 4px 16px rgba(124, 58, 237, 0.08)' : '0 2px 6px rgba(0,0,0,0.02)',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '0.76rem',
+                          fontWeight: 700,
+                          padding: '3px 10px',
+                          borderRadius: '20px',
+                          background: isActiva ? '#DCFCE7' : '#F1F5F9',
+                          color: isActiva ? '#166534' : '#64748B',
+                          border: `1px solid ${isActiva ? '#86EFAC' : '#CBD5E1'}`
+                        }}>
+                          {isActiva ? '🟢 ACTIVA (Recibiendo votos)' : '🔒 CERRADA'}
+                        </span>
+                        <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
+                          👥 {totalVotos} {totalVotos === 1 ? 'voto' : 'votos'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        {isActiva ? (
+                          <button
+                            type="button"
+                            className="btn-action-pill"
+                            style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', padding: '4px 10px', fontSize: '0.78rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '6px' }}
+                            onClick={() => handleToggleEstadoEncuesta(poll.id, 'CERRADA')}
+                            title="Cerrar votación (bloquea nuevos votos)"
+                          >
+                            <Lock size={13} />
+                            <span>Cerrar Votación</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-action-pill"
+                            style={{ background: '#EDE9FE', color: '#6D28D9', border: '1px solid #C4B5FD', padding: '4px 10px', fontSize: '0.78rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '6px' }}
+                            onClick={() => handleToggleEstadoEncuesta(poll.id, 'ACTIVA')}
+                            title="Reabrir votación para recibir más respuestas"
+                          >
+                            <Play size={13} />
+                            <span>Reabrir Votación</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-action-pill delete"
+                          onClick={() => handleEliminarEncuesta(poll.id)}
+                          title="Eliminar encuesta"
+                          style={{ padding: '5px 8px' }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <h4 style={{ margin: '0 0 1.15rem', color: '#0F172A', fontSize: '1.08rem', fontWeight: 700, lineHeight: 1.35 }}>
+                      {poll.pregunta}
+                    </h4>
+
+                    {/* Barras de resultados en vivo */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {(poll.opciones || []).map((opt, idx) => {
+                        const count = Number(opt.votos) || 0;
+                        const pct = totalVotos > 0 ? Math.round((count / totalVotos) * 100) : 0;
+                        const isLeading = totalVotos > 0 && Math.max(...poll.opciones.map(o => Number(o.votos) || 0)) === count && count > 0;
+
+                        return (
+                          <div key={opt.id || idx} style={{ background: '#F8FAFC', borderRadius: '8px', padding: '10px 12px', border: '1px solid #E2E8F0', position: 'relative', overflow: 'hidden' }}>
+                            {/* Barra de progreso de fondo */}
+                            <div
+                              style={{
+                                position: 'absolute',
+                                left: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: `${pct}%`,
+                                background: isLeading ? 'rgba(15, 89, 56, 0.12)' : 'rgba(124, 58, 237, 0.08)',
+                                transition: 'width 0.4s ease',
+                                pointerEvents: 'none'
+                              }}
+                            />
+
+                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{
+                                  width: '24px',
+                                  height: '24px',
+                                  borderRadius: '50%',
+                                  background: isLeading ? '#0F5938' : '#64748B',
+                                  color: '#FFFFFF',
+                                  fontWeight: 700,
+                                  fontSize: '0.75rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0
+                                }}>
+                                  {String.fromCharCode(65 + idx)}
+                                </span>
+                                <span style={{ fontWeight: 600, color: '#1E293B', fontSize: '0.92rem' }}>
+                                  {opt.texto}
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                <span style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                                  {count} {count === 1 ? 'voto' : 'votos'}
+                                </span>
+                                <strong style={{ fontSize: '0.95rem', color: isLeading ? '#0F5938' : '#7C3AED', minWidth: '42px', textAlign: 'right' }}>
+                                  {pct}%
+                                </strong>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}

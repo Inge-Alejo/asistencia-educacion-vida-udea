@@ -5,7 +5,7 @@ import {
   Phone, CreditCard, MessageSquare, ThumbsUp, HelpCircle,
   Clock, ShieldCheck, ChevronRight, ChevronLeft, ExternalLink, FileText, Check,
   Navigation, Radio, Award, Calendar, KeyRound, RotateCcw, UserPlus,
-  Barcode, X
+  Barcode, X, BarChart3, ChevronDown, ChevronUp
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import {
@@ -17,7 +17,10 @@ import {
   recordSatisfaction,
   getEventInscritos,
   subscribeToEventInscritos,
-  parseColombianDocumentBarcode
+  parseColombianDocumentBarcode,
+  getEventPolls,
+  getUserPollVote,
+  votePoll
 } from '../services/storage';
 import { maskFullName, maskEmail, areNamesMatching, sanitizeText } from '../services/sanitizer';
 import { getOfficialColombiaTime, getEventDaysList, checkEventDayStatus, getColombiaLocalDateStr } from '../services/networkTime';
@@ -172,6 +175,63 @@ export default function AttendeeView({
     setPrevInscritosEventId(evento?.id);
     setInscritosList(getEventInscritos(evento?.id));
   }
+
+  // Estados y Sincronización para Encuestas Relámpago en Vivo (Live Polls)
+  const [polls, setPolls] = useState(() => getEventPolls(evento?.id));
+  const [userVotes, setUserVotes] = useState({});
+  const [votingPollId, setVotingPollId] = useState(null);
+  const [isPollsSectionOpen, setIsPollsSectionOpen] = useState(true);
+
+  useEffect(() => {
+    const updatePolls = () => {
+      const current = getEventPolls(evento?.id);
+      setPolls(current);
+
+      const docToCheck = currentDoc || sessionInfo?.documento || formData.documento;
+      if (docToCheck) {
+        const votesMap = {};
+        current.forEach(p => {
+          const v = getUserPollVote(p.id, docToCheck);
+          if (v) votesMap[p.id] = v;
+        });
+        setUserVotes(votesMap);
+      }
+    };
+
+    updatePolls();
+    const handler = (e) => {
+      if (!e.key || e.key === 'udea_med_polls_v1' || e.key === 'udea_med_poll_votes_v1') {
+        updatePolls();
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, [evento?.id, currentDoc, sessionInfo?.documento, formData.documento]);
+
+  const activePoll = useMemo(() => (polls || []).find(p => p.estado === 'ACTIVA'), [polls]);
+
+  const handleVoteOnPoll = async (pollId, opcionId) => {
+    const docToUse = currentDoc || sessionInfo?.documento || formData.documento || 'anonimo';
+    setVotingPollId(pollId);
+    try {
+      const res = await votePoll(pollId, opcionId, docToUse, evento.id);
+      if (res.success) {
+        setPolls(getEventPolls(evento.id));
+        setUserVotes(prev => ({
+          ...prev,
+          [pollId]: { opcionId, pollId, documento: docToUse }
+        }));
+        triggerCelebrationConfetti();
+        if (onDataUpdated) onDataUpdated();
+      } else {
+        alert(res.message);
+      }
+    } catch (err) {
+      console.error('Error al registrar voto:', err);
+    } finally {
+      setVotingPollId(null);
+    }
+  };
 
   useEffect(() => {
     if (!evento?.id) return;
@@ -1176,6 +1236,261 @@ export default function AttendeeView({
             <X size={16} />
           </button>
         </div>
+      )}
+
+      {/* MÓDULO INTERACTIVO DE VOTACIONES EN VIVO (LIVE POLLS) */}
+      {evento?.habilitarEncuestasEnVivo !== false && polls.length > 0 && (
+        <section className="live-polls-attendee-card animated-step" style={{
+          background: '#FFFFFF',
+          borderRadius: '14px',
+          border: activePoll ? '2px solid #7C3AED' : '1px solid #E2E8F0',
+          boxShadow: activePoll ? '0 8px 24px rgba(124, 58, 237, 0.12)' : '0 2px 8px rgba(0, 0, 0, 0.04)',
+          margin: '0 0 1.25rem 0',
+          overflow: 'hidden'
+        }}>
+          {/* Cabecera del módulo de votaciones */}
+          <div
+            style={{
+              background: activePoll ? 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)' : '#F8FAFC',
+              color: activePoll ? '#FFFFFF' : '#1E293B',
+              padding: '0.9rem 1.15rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer'
+            }}
+            onClick={() => setIsPollsSectionOpen(prev => !prev)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                background: activePoll ? 'rgba(255, 255, 255, 0.2)' : '#EDE9FE',
+                color: activePoll ? '#FFFFFF' : '#7C3AED',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <BarChart3 size={18} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <strong style={{ fontSize: '0.95rem' }}>Votaciones en Vivo</strong>
+                  {activePoll && (
+                    <span style={{
+                      fontSize: '0.72rem',
+                      background: '#10B981',
+                      color: '#FFFFFF',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontWeight: 700
+                    }}>
+                      🟢 EN VIVO
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: '0.76rem', opacity: activePoll ? 0.9 : 0.7 }}>
+                  {activePoll ? 'El ponente ha lanzado una pregunta. ¡Vota ahora!' : 'Resultados de preguntas del evento'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: activePoll ? '#FFFFFF' : '#64748B',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+              aria-label={isPollsSectionOpen ? 'Contraer votaciones' : 'Expandir votaciones'}
+            >
+              {isPollsSectionOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            </button>
+          </div>
+
+          {/* Cuerpo del módulo expandible */}
+          {isPollsSectionOpen && (
+            <div style={{ padding: '1.15rem' }}>
+              {(() => {
+                const currentPoll = activePoll || polls[0];
+                if (!currentPoll) return null;
+
+                const myVote = userVotes[currentPoll.id] || getUserPollVote(currentPoll.id, currentDoc || sessionInfo?.documento || formData.documento);
+                const hasVoted = Boolean(myVote);
+                const isActiva = currentPoll.estado === 'ACTIVA';
+                const totalVotos = Number(currentPoll.totalVotos) || 0;
+
+                return (
+                  <div>
+                    <h4 style={{ margin: '0 0 1rem', fontSize: '1.05rem', color: '#0F172A', fontWeight: 700, lineHeight: 1.4 }}>
+                      {currentPoll.pregunta}
+                    </h4>
+
+                    {/* Caso 1: La encuesta está activa y el usuario NO ha votado todavía */}
+                    {isActiva && !hasVoted ? (
+                      <div>
+                        <p style={{ margin: '0 0 0.85rem', fontSize: '0.84rem', color: '#6D28D9', fontWeight: 600 }}>
+                          👇 Toca una de las opciones para enviar tu respuesta:
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {(currentPoll.opciones || []).map((opt, idx) => (
+                            <button
+                              key={opt.id || idx}
+                              type="button"
+                              disabled={votingPollId === currentPoll.id}
+                              onClick={() => handleVoteOnPoll(currentPoll.id, opt.id)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '12px 14px',
+                                borderRadius: '10px',
+                                border: '1.5px solid #CBD5E1',
+                                background: '#F8FAFC',
+                                color: '#1E293B',
+                                fontSize: '0.92rem',
+                                fontWeight: 600,
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = '#7C3AED';
+                                e.currentTarget.style.background = '#F5F3FF';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = '#CBD5E1';
+                                e.currentTarget.style.background = '#F8FAFC';
+                              }}
+                            >
+                              <span style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '50%',
+                                background: '#EDE9FE',
+                                color: '#6D28D9',
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                              }}>
+                                {String.fromCharCode(65 + idx)}
+                              </span>
+                              <span style={{ flex: 1 }}>{opt.texto}</span>
+                              <ChevronRight size={16} color="#94A3B8" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Caso 2: El usuario ya votó o la encuesta está cerrada (muestra barras de porcentaje en vivo) */
+                      <div>
+                        {hasVoted && (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: '#DCFCE7',
+                            color: '#166534',
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            marginBottom: '0.85rem'
+                          }}>
+                            <CheckCircle2 size={16} />
+                            <span>¡Tu voto ha sido registrado! Resultados en tiempo real:</span>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {(currentPoll.opciones || []).map((opt, idx) => {
+                            const count = Number(opt.votos) || 0;
+                            const pct = totalVotos > 0 ? Math.round((count / totalVotos) * 100) : 0;
+                            const isMyChoice = myVote && myVote.opcionId === opt.id;
+                            const isLeading = totalVotos > 0 && Math.max(...currentPoll.opciones.map(o => Number(o.votos) || 0)) === count && count > 0;
+
+                            return (
+                              <div
+                                key={opt.id || idx}
+                                style={{
+                                  position: 'relative',
+                                  overflow: 'hidden',
+                                  borderRadius: '8px',
+                                  border: isMyChoice ? '2px solid #10B981' : '1px solid #E2E8F0',
+                                  background: isMyChoice ? '#F0FDF4' : '#F8FAFC',
+                                  padding: '10px 12px'
+                                }}
+                              >
+                                {/* Barra animada de fondo */}
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    left: 0,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: `${pct}%`,
+                                    background: isMyChoice ? 'rgba(16, 185, 129, 0.18)' : (isLeading ? 'rgba(124, 58, 237, 0.14)' : 'rgba(148, 163, 184, 0.12)'),
+                                    transition: 'width 0.4s ease',
+                                    pointerEvents: 'none'
+                                  }}
+                                />
+
+                                <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: '50%',
+                                      background: isMyChoice ? '#10B981' : (isLeading ? '#7C3AED' : '#64748B'),
+                                      color: '#FFFFFF',
+                                      fontWeight: 700,
+                                      fontSize: '0.75rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      flexShrink: 0
+                                    }}>
+                                      {String.fromCharCode(65 + idx)}
+                                    </span>
+                                    <span style={{ fontWeight: isMyChoice ? 700 : 600, color: '#1E293B', fontSize: '0.9rem' }}>
+                                      {opt.texto} {isMyChoice && <span style={{ color: '#059669', fontSize: '0.78rem', fontWeight: 700 }}>(Tu voto ✓)</span>}
+                                    </span>
+                                  </div>
+
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                    <strong style={{ fontSize: '0.95rem', color: isMyChoice ? '#059669' : '#475569' }}>
+                                      {pct}%
+                                    </strong>
+                                    <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                                      ({count})
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', color: '#64748B' }}>
+                          <span>👥 Total: {totalVotos} {totalVotos === 1 ? 'voto registrado' : 'votos registrados'}</span>
+                          <span>{isActiva ? '🟢 Votación abierta' : '🔒 Votación finalizada'}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </section>
       )}
 
       {/* ANCLA PARA DESPLAZAMIENTO AUTOMÁTICO AL INICIO DEL MÓDULO */}
