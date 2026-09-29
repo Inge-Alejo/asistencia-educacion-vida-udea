@@ -502,6 +502,17 @@ export default function AdminPanel({
               }}
             />
           </label>
+          <a
+            href="https://vercel.com/dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}
+            title="Abrir métricas de visitantes y velocidad en Vercel Analytics"
+          >
+            <Activity size={15} />
+            <span>Vercel Analytics</span>
+          </a>
           {onDeleteEvent && (
             <button
               className="btn-danger-outline"
@@ -2050,6 +2061,29 @@ export default function AdminPanel({
                   }}
                 />
               </label>
+            </div>
+          </div>
+
+          {/* Tarjeta de Telemetría y Analíticas de Vercel */}
+          <div className="db-backup-card" style={{ marginTop: '1.25rem' }}>
+            <div className="backup-card-info">
+              <h4>Métricas y Tráfico Web Oficial (Vercel Analytics & Speed Insights)</h4>
+              <p>
+                Visualice visitas de asistentes, dispositivos (móvil vs. PC), velocidad de carga (Core Web Vitals) y concurrencia en vivo directamente en la consola de Vercel.
+              </p>
+            </div>
+            <div className="backup-card-actions">
+              <a
+                href="https://vercel.com/dashboard"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary-action"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Activity size={16} />
+                <span>Abrir Panel de Vercel</span>
+                <ExternalLink size={14} />
+              </a>
             </div>
           </div>
         </div>

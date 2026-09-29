@@ -80,7 +80,7 @@ export default function DigitalBadge({
   if (!asistente || !evento) return null;
 
   // Determinar la URL oficial base para la verificación
-  const officialProdDomain = 'https://asistencia-educacion-vida-udea.vercel.app';
+  const officialProdDomain = 'https://asistencia-facultad-medicina-udea.vercel.app';
   const detectedOrigin = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1'))
     ? window.location.origin
     : officialProdDomain;

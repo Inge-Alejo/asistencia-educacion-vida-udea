@@ -7,8 +7,10 @@ export default function QRProjectionModal({ isOpen, onClose, evento, asistencias
   const qrRef = useRef(null);
   const [copied, setCopied] = useState(false);
 
-  // Dominio oficial de producción para escaneo móvil en vivo
-  const baseUrl = 'https://asistencia-educacion-vida-udea.vercel.app';
+  // Dominio oficial de producción para escaneo móvil en vivo (detectado dinámicamente según el dominio activo)
+  const baseUrl = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1'))
+    ? window.location.origin
+    : 'https://asistencia-facultad-medicina-udea.vercel.app';
 
   if (!isOpen || !evento) return null;
 
