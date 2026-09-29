@@ -780,7 +780,6 @@ export default function AttendeeView({
     sugerencias: ''
   });
   const [satisfaccionEnviada, setSatisfaccionEnviada] = useState(false);
-  const [showEmbeddedForms, setShowEmbeddedForms] = useState(true);
   const [formsCompleted, setFormsCompleted] = useState(() => {
     try {
       return localStorage.getItem(`udea_forms_completed_${evento?.id}`) === 'true';
@@ -2867,8 +2866,8 @@ export default function AttendeeView({
             )}
           </div>
 
-          {/* 2. INTEGRACIÓN INSTITUCIONAL EXTERNA (MICROSOFT FORMS / GOOGLE FORMS) */}
-          {Boolean(evento.habilitarMicrosoftForms && (formsEmbedUrl || evento.microsoftFormsUrl)) && (
+          {/* 2. INTEGRACIÓN INSTITUCIONAL EXTERNA (BOTÓN DIRECTO A MICROSOFT FORMS) */}
+          {Boolean(evento.habilitarMicrosoftForms && (formsDirectUrl || formsEmbedUrl || evento.microsoftFormsUrl)) && (
             <div className="ms-forms-user-card animated-step" style={{ marginTop: '24px', borderTop: '2px solid #E2E8F0', paddingTop: '20px' }}>
               <div className="ms-forms-header" style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
                 <div className="ms-icon-wrap" style={{ background: '#0F5938', color: '#fff', borderRadius: '12px', padding: '12px', flexShrink: 0 }}>
@@ -2877,69 +2876,44 @@ export default function AttendeeView({
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                     <h3 style={{ margin: 0, fontSize: '1.12rem', color: '#0F5938', fontWeight: 700 }}>
-                      Encuesta Oficial Institucional
+                      Encuesta Oficial Institucional (Microsoft Forms)
                     </h3>
                     <span style={{ fontSize: '0.72rem', background: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '999px', fontWeight: 600 }}>
                       Requisito de Calidad UdeA
                     </span>
                   </div>
                   <p style={{ margin: 0, fontSize: '0.9rem', color: '#475569', lineHeight: 1.45 }}>
-                    Para finalizar su participación oficial, por favor diligencie el formulario institucional de la Facultad a continuación o en nueva pestaña:
+                    Para finalizar su participación oficial, por favor abra y diligencie la encuesta institucional de la Facultad haciendo clic en el botón a continuación:
                   </p>
                 </div>
               </div>
 
-              <div className="ms-forms-action-bar" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <a
-                    href={formsDirectUrl || formsEmbedUrl || evento.microsoftFormsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-open-external-forms"
-                    style={{
-                      flex: '1 1 240px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '10px',
-                      padding: '12px 18px',
-                      background: 'linear-gradient(135deg, #0F5938 0%, #15803D 100%)',
-                      color: '#ffffff',
-                      textDecoration: 'none',
-                      borderRadius: '10px',
-                      fontWeight: 700,
-                      fontSize: '0.92rem',
-                      boxShadow: '0 4px 12px rgba(15, 89, 56, 0.25)',
-                      transition: 'all 0.2s ease',
-                      textAlign: 'center'
-                    }}
-                  >
-                    <ExternalLink size={17} />
-                    <span>Abrir en Pantalla Completa / Nueva Pestaña</span>
-                  </a>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowEmbeddedForms(!showEmbeddedForms)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      padding: '12px 16px',
-                      background: '#F1F5F9',
-                      border: '1px solid #CBD5E1',
-                      borderRadius: '10px',
-                      color: '#334155',
-                      fontWeight: 600,
-                      fontSize: '0.88rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {showEmbeddedForms ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    <span>{showEmbeddedForms ? 'Ocultar vista embebida' : 'Mostrar formulario aquí'}</span>
-                  </button>
-                </div>
+              <div className="ms-forms-action-bar" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '18px' }}>
+                <a
+                  href={formsDirectUrl || formsEmbedUrl || evento.microsoftFormsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-open-external-forms"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    padding: '15px 22px',
+                    background: 'linear-gradient(135deg, #0F5938 0%, #15803D 100%)',
+                    color: '#ffffff',
+                    textDecoration: 'none',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '1.02rem',
+                    boxShadow: '0 4px 14px rgba(15, 89, 56, 0.3)',
+                    transition: 'all 0.2s ease',
+                    textAlign: 'center'
+                  }}
+                >
+                  <ExternalLink size={20} />
+                  <span>Abrir Encuesta Oficial en Microsoft Forms</span>
+                </a>
 
                 {/* Confirmación interactiva de diligenciamiento */}
                 <button
@@ -2956,7 +2930,7 @@ export default function AttendeeView({
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '8px',
-                    padding: '10px 16px',
+                    padding: '11px 16px',
                     background: formsCompleted ? '#F0FDF4' : '#F8FAFC',
                     border: formsCompleted ? '1.5px solid #22C55E' : '1px solid #CBD5E1',
                     borderRadius: '8px',
@@ -2971,29 +2945,6 @@ export default function AttendeeView({
                   <span>{formsCompleted ? '✓ Encuesta institucional marcada como diligenciada' : 'Marcar como diligenciada tras completarla'}</span>
                 </button>
               </div>
-
-              {showEmbeddedForms && (
-                <div className="ms-forms-iframe-container" style={{ marginTop: '16px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid #CBD5E1', boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
-                  <iframe
-                    src={formsEmbedUrl || evento.microsoftFormsUrl}
-                    title="Formulario Oficial Facultad de Medicina UdeA"
-                    className="ms-forms-iframe"
-                    style={{
-                      width: '100%',
-                      height: '640px',
-                      minHeight: '520px',
-                      border: 'none',
-                      display: 'block',
-                      backgroundColor: '#ffffff'
-                    }}
-                    allowFullScreen
-                    webkitallowfullscreen="true"
-                    mozallowfullscreen="true"
-                    msallowfullscreen="true"
-                    loading="lazy"
-                  ></iframe>
-                </div>
-              )}
             </div>
           )}
 
