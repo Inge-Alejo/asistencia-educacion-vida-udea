@@ -4,12 +4,10 @@
 
 import * as XLSX from 'xlsx';
 import { sanitizeExcelFormula } from './sanitizer';
-import { getMealDeliveries, normalizeDocumentId } from './storage';
 
 export function exportEventDataToExcel({
   evento = {},
   asistencias = [],
-  entregasComidas = [],
   preguntas = [],
   evaluaciones = [],
   satisfaccion = []
@@ -21,19 +19,10 @@ export function exportEventDataToExcel({
   const safeEvaluaciones = Array.isArray(evaluaciones) ? evaluaciones : [];
   const safeSatisfaccion = Array.isArray(satisfaccion) ? satisfaccion : [];
   const safeEvento = evento || {};
-  const safeEntregas = Array.isArray(entregasComidas) && entregasComidas.length > 0
-    ? entregasComidas
-    : (safeEvento.id ? getMealDeliveries(safeEvento.id) : []);
 
-  // Determinar comidas configuradas o entregadas para consolidar en la hoja de asistencias
-  const hasMeals = safeEvento.habilitarAlimentacion || safeEntregas.length > 0;
-  const configuredMeals = Array.isArray(safeEvento.comidasConfig) && safeEvento.comidasConfig.length > 0
-    ? safeEvento.comidasConfig.map(c => (typeof c === 'string' ? c : c.nombre)).filter(Boolean)
-    : Array.from(new Set(safeEntregas.map(e => e.comidaNombre).filter(Boolean)));
-
-  // 1. Hoja de Asistencias y Geolocalización
+  // 1. Hoja de Asistencias
   const asistenciasData = safeAsistencias.map((a, index) => {
-    const row = {
+    return {
       'N°': index + 1,
       'Código Asistencia': sanitizeExcelFormula(a.id),
       'Tipo Doc.': sanitizeExcelFormula(a.tipoDocumento || 'CC'),
@@ -44,45 +33,15 @@ export function exportEventDataToExcel({
       'Vinculación / Rol': sanitizeExcelFormula(a.vinculacion),
       'Placa Vehículo': sanitizeExcelFormula(a.placaVehiculo || 'No registrada / No requería'),
       'Fecha y Hora': a.fechaRegistro,
-      'Estado Presencial': a.geolocalizacion?.esPresencial ? 'EN SEDE / PRESENCIAL' : 'FUERA DE RANGO / REMOTO',
-      'Distancia a Facultad (m)': a.geolocalizacion?.distanciaSedeMetros ?? 'N/A',
-      'Latitud': a.geolocalizacion?.latitud ?? 'N/A',
-      'Longitud': a.geolocalizacion?.longitud ?? 'N/A',
-      'Precisión GPS (m)': a.geolocalizacion?.precisionMetros ?? 'N/A',
       'Habeas Data (Ley 1581/2012)': a.habeasDataAceptado !== false ? 'AUTORIZADO Y FIRMADO' : 'PENDIENTE',
       'Fecha Aceptación Habeas Data': a.fechaHabeasData || a.fechaRegistro
     };
-
-    if (hasMeals) {
-      const attendeeDeliveries = safeEntregas.filter(
-        e => normalizeDocumentId(e.documento) === normalizeDocumentId(a.documento)
-      );
-
-      if (configuredMeals.length > 0) {
-        configuredMeals.forEach(mealName => {
-          const match = attendeeDeliveries.find(
-            e => (e.comidaNombre || '').trim().toLowerCase() === mealName.trim().toLowerCase()
-          );
-          row[`Alimentación: ${mealName}`] = match
-            ? `SÍ (${match.horaEntrega || 'Reclamado'})`
-            : 'NO RECLAMADO';
-        });
-        row['Total Comidas Reclamadas'] = `${attendeeDeliveries.length} / ${configuredMeals.length}`;
-      } else {
-        row['Comidas Reclamadas'] = attendeeDeliveries.length > 0
-          ? attendeeDeliveries.map(e => `${e.comidaNombre || 'Comida'} (${e.horaEntrega || ''})`).join(', ')
-          : 'NO RECLAMADO';
-        row['Total Comidas Reclamadas'] = attendeeDeliveries.length;
-      }
-    }
-
-    return row;
   });
 
   const wsAsistencias = XLSX.utils.json_to_sheet(asistenciasData.length > 0 ? asistenciasData : [
     { 'Mensaje': 'No se registran asistencias para este evento aún.' }
   ]);
-  XLSX.utils.book_append_sheet(wb, wsAsistencias, '1_Asistencias_y_GPS');
+  XLSX.utils.book_append_sheet(wb, wsAsistencias, '1_Asistencias');
 
   // 2. Hoja de Preguntas a Ponentes (Q&A en Vivo)
   const preguntasData = safePreguntas.map((q, index) => {
@@ -143,42 +102,15 @@ export function exportEventDataToExcel({
   ]);
   XLSX.utils.book_append_sheet(wb, wsSatisfaccion, '4_Satisfaccion_General');
 
-  // 5. Hoja de Alimentación y Refrigerios (si está habilitado o hay registros)
-  if (safeEvento.habilitarAlimentacion || safeEntregas.length > 0) {
-    const comidasData = safeEntregas.map((c, index) => ({
-      'N°': index + 1,
-      'Documento': sanitizeExcelFormula(c.documento),
-      'Tipo Doc.': sanitizeExcelFormula(c.tipoDocumento || 'CC'),
-      'Nombre Asistente': sanitizeExcelFormula(c.nombreCompleto),
-      'Comida / Refrigerio': sanitizeExcelFormula(c.comidaNombre),
-      'Hora Entrega': c.horaEntrega || '',
-      'Fecha Entrega': c.fechaEntrega || c.fechaDia || (c.registradoEn ? String(c.registradoEn).split(' ')[0] : ''),
-      'Método Registro': (c.metodo === 'BARCODE_SCANNER_USB' || c.metodo === 'HONEYWELL_USB_DESK' || c.metodo === 'ESCANER_USB')
-        ? 'Escáner de Código de Barras USB'
-        : c.metodo === 'MANUAL'
-        ? 'Manual por Cédula'
-        : 'Cámara QR',
-      'Operador Logístico': sanitizeExcelFormula(c.operador || 'Logística UdeA')
-    }));
-
-    const wsComidas = XLSX.utils.json_to_sheet(comidasData.length > 0 ? comidasData : [
-      { 'Mensaje': 'No se registran entregas de alimentación para este evento aún.' }
-    ]);
-    XLSX.utils.book_append_sheet(wb, wsComidas, '5_Alimentacion_Refrigerios');
-  }
-
-  // 6. Hoja Resumen Ejecutivo / Metadatos del Evento
+  // 5. Hoja Resumen Ejecutivo / Metadatos del Evento
   const resumenEvento = [
     { 'Parámetro': 'Evento Académico', 'Detalle': sanitizeExcelFormula(safeEvento.titulo || 'Evento Académico UdeA') },
     { 'Parámetro': 'Organizador', 'Detalle': 'Educación a lo Largo de la Vida - Facultad de Medicina UdeA' },
     { 'Parámetro': 'Fecha del Evento', 'Detalle': `${safeEvento.fecha || 'N/A'} (${safeEvento.horaInicio || 'N/A'} - ${safeEvento.horaFin || 'N/A'})` },
     { 'Parámetro': 'Lugar / Auditorio', 'Detalle': sanitizeExcelFormula(safeEvento.lugar || 'Facultad de Medicina') },
     { 'Parámetro': 'Registro Vehicular Habilitado', 'Detalle': safeEvento.habilitarPlacaVehiculo ? 'SÍ (Parqueadero Activo)' : 'NO' },
-    { 'Parámetro': 'Control de Alimentación / Refrigerios', 'Detalle': safeEvento.habilitarAlimentacion ? `SÍ (${(safeEvento.comidasConfig || []).map(c => `${c.nombre}${c.cantidadTotal ? ` [${c.cantidadTotal} raciones]` : ''}`).join(', ') || 'Activo'})` : 'NO' },
     { 'Parámetro': 'Módulo de Ponentes Habilitado', 'Detalle': safeEvento.habilitarPonentes !== false ? `SÍ (${(safeEvento.ponentes || []).length} ponentes)` : 'NO' },
     { 'Parámetro': 'Total Asistentes Registrados', 'Detalle': safeAsistencias.length },
-    { 'Parámetro': 'Asistencias Validadas Presenciales GPS', 'Detalle': safeAsistencias.filter(a => a.geolocalizacion?.esPresencial).length },
-    { 'Parámetro': 'Total Entregas de Alimentación', 'Detalle': safeEntregas.length },
     { 'Parámetro': 'Total Preguntas a Ponentes', 'Detalle': safePreguntas.length },
     { 'Parámetro': 'Total Evaluaciones de Ponentes', 'Detalle': safeEvaluaciones.length },
     { 'Parámetro': 'Total Encuestas de Satisfacción', 'Detalle': safeSatisfaccion.length },
@@ -226,8 +158,6 @@ export function exportMicrosoftFormsFormat({ evento = {}, asistencias = [], sati
       'Tipo de Vinculación': sanitizeExcelFormula(a.vinculacion),
       'Teléfono': sanitizeExcelFormula(a.telefono),
       'Placa Vehículo': sanitizeExcelFormula(a.placaVehiculo || 'N/A'),
-      'Validación Presencial GPS': a.geolocalizacion?.esPresencial ? 'En Sede' : 'Remoto',
-      'Distancia a la Sede (Metros)': a.geolocalizacion?.distanciaSedeMetros ?? 'N/A',
       'Calificación General Evento (1-5)': sat.cumplimientoObjetivos || 'Sin respuesta',
       'Recomendación NPS (0-10)': sat.npsRecomendacion ?? 'Sin respuesta',
       'Comentarios y Sugerencias': sanitizeExcelFormula(sat.sugerencias || 'Sin respuesta')

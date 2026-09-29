@@ -904,9 +904,9 @@ export default function AdminPanel({
 
                         <button
                           className="btn-action-pill delete"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm('¿Eliminar esta pregunta?')) {
-                              deleteQuestion(q.id);
+                              await deleteQuestion(q.id);
                               if (onDataUpdated) onDataUpdated();
                             }
                           }}

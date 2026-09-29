@@ -28,6 +28,27 @@ const STORAGE_KEY_EVALUATIONS = 'udea_med_evaluations_v1';
 const STORAGE_KEY_SATISFACTION = 'udea_med_satisfaction_v1';
 const STORAGE_KEY_VERIFICATIONS = 'udea_med_verifications_v1';
 const STORAGE_KEY_MEALS = 'udea_med_meals_deliveries_v1';
+const STORAGE_KEY_TOMBSTONES = 'udea_med_deleted_records_tombstones_v1';
+
+// Registro permanente de IDs eliminados para evitar resurrección en tiempo real
+export function getDeletedRecordIds() {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_TOMBSTONES);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function markRecordAsDeleted(recordId) {
+  if (typeof window === 'undefined' || !recordId) return;
+  try {
+    const current = getDeletedRecordIds();
+    current.add(String(recordId));
+    localStorage.setItem(STORAGE_KEY_TOMBSTONES, JSON.stringify(Array.from(current)));
+  } catch {}
+}
 
 const VERIFICATION_SALT = 'udea_medicina_escarapela_2026_salt_seguridad';
 
@@ -1390,16 +1411,24 @@ export async function toggleQuestionFeatured(qId) {
 }
 
 export async function deleteQuestion(qId) {
+  if (!qId) return [];
+  markRecordAsDeleted(qId);
+
   const list = getQuestions().filter(q => q.id !== qId);
   localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(list));
 
   if (isFirebaseConfigured() && db) {
     try {
       await deleteDoc(doc(db, 'preguntas', qId));
-    } catch {
-      // Firestore sync notice
+      console.info('✓ Pregunta eliminada de Cloud Firestore:', qId);
+    } catch (err) {
+      console.warn('Error eliminando pregunta en Firestore:', err);
     }
   }
+
+  try {
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_QUESTIONS }));
+  } catch {}
 
   return list;
 }
@@ -1641,25 +1670,37 @@ export function subscribeToEventData(eventId, onUpdate) {
   window.addEventListener('storage', storageHandler);
   unsubs.push(() => window.removeEventListener('storage', storageHandler));
 
-  // Función auxiliar de reconciliación segura y bidireccional (evita sobreescritura accidental)
+  // Función auxiliar de reconciliación segura y bidireccional (evita sobreescritura y resurrección de eliminados)
   const reconcileCollection = (storageKey, cloudList, idField = 'id', collectionName = null) => {
     try {
+      const tombstones = getDeletedRecordIds();
       const rawLocal = localStorage.getItem(storageKey);
       const currentLocal = rawLocal ? JSON.parse(rawLocal) : [];
-      const localOtherEvents = currentLocal.filter(item => item.eventoId !== eventId);
-      const localForEvent = currentLocal.filter(item => item.eventoId === eventId);
+      const localOtherEvents = currentLocal.filter(item => item.eventoId !== eventId && !tombstones.has(String(item[idField])));
 
-      // Mapa indexado por ID para unión segura sin pérdida de datos
+      // Filtrar registros que hayan sido eliminados localmente
+      const validCloudList = (cloudList || []).filter(item => {
+        const id = item[idField];
+        return id && !tombstones.has(String(id));
+      });
+
+      // Para preguntas, evaluaciones y satisfacción: Cloud Firestore es la fuente de verdad en vivo
+      if (storageKey === STORAGE_KEY_QUESTIONS || storageKey === STORAGE_KEY_EVALUATIONS || storageKey === STORAGE_KEY_SATISFACTION) {
+        const combined = [...validCloudList, ...localOtherEvents];
+        localStorage.setItem(storageKey, JSON.stringify(combined));
+        return validCloudList;
+      }
+
+      // Para asistencias y otros registros: fusionar sin resucitar eliminados
       const mergedMap = new Map();
+      const localForEvent = currentLocal.filter(item => item.eventoId === eventId && !tombstones.has(String(item[idField])));
 
-      // 1. Cargar registros locales existentes de este evento
       localForEvent.forEach(item => {
         const key = item[idField] || (item.documento ? `doc_${item.documento}` : null) || JSON.stringify(item);
         mergedMap.set(key, item);
       });
 
-      // 2. Fusionar registros de la nube
-      cloudList.forEach(item => {
+      validCloudList.forEach(item => {
         const key = item[idField] || (item.documento ? `doc_${item.documento}` : null) || JSON.stringify(item);
         if (mergedMap.has(key)) {
           mergedMap.set(key, { ...mergedMap.get(key), ...item });
@@ -1671,18 +1712,6 @@ export function subscribeToEventData(eventId, onUpdate) {
       const mergedForEvent = Array.from(mergedMap.values());
       const combined = [...mergedForEvent, ...localOtherEvents];
       localStorage.setItem(storageKey, JSON.stringify(combined));
-
-      // 3. Si hay registros locales que aún no están en la nube, subirlos proactivamente
-      if (collectionName && isFirebaseConfigured() && db) {
-        const cloudIds = new Set(cloudList.map(c => c[idField]).filter(Boolean));
-        localForEvent.forEach(localItem => {
-          if (localItem[idField] && !cloudIds.has(localItem[idField])) {
-            setDoc(doc(db, collectionName, localItem[idField]), localItem, { merge: true }).catch(err => {
-              console.warn(`Aviso sincronizando ${collectionName} hacia la nube:`, err);
-            });
-          }
-        });
-      }
 
       return mergedForEvent;
     } catch (err) {

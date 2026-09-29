@@ -102,6 +102,64 @@ export default function AttendeeView({
     return () => { isMounted = false; };
   }, []);
 
+  const moduleTopRef = useRef(null);
+  const isFirstRender = useRef(true);
+
+  const triggerCelebrationConfetti = useCallback(() => {
+    try {
+      // Ráfaga 1: Centro con colores institucionales UdeA
+      confetti({
+        particleCount: 90,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ['#0F5938', '#008744', '#C59B27', '#ffffff', '#10B981']
+      });
+
+      // Ráfaga 2: Cañón izquierdo
+      setTimeout(() => {
+        confetti({
+          particleCount: 55,
+          angle: 60,
+          spread: 60,
+          origin: { x: 0.1, y: 0.65 },
+          colors: ['#0F5938', '#C59B27', '#ffffff']
+        });
+      }, 180);
+
+      // Ráfaga 3: Cañón derecho
+      setTimeout(() => {
+        confetti({
+          particleCount: 55,
+          angle: 120,
+          spread: 60,
+          origin: { x: 0.9, y: 0.65 },
+          colors: ['#008744', '#C59B27', '#10B981']
+        });
+      }, 360);
+    } catch (err) {
+      console.warn('Error al disparar confeti:', err);
+    }
+  }, []);
+
+  const scrollToModuleTop = useCallback(() => {
+    setTimeout(() => {
+      if (moduleTopRef.current) {
+        moduleTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 100);
+  }, []);
+
+  // Auto-scroll al inicio del módulo activo cuando cambia el paso
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    scrollToModuleTop();
+  }, [activeStep, scrollToModuleTop]);
+
   const currentEventId = evento?.id || '';
   const eventDays = useMemo(() => getEventDaysList(evento), [evento]);
   const dayStatus = useMemo(() => checkEventDayStatus(evento, officialTime.fechaStr), [evento, officialTime.fechaStr]);
@@ -906,14 +964,12 @@ export default function AttendeeView({
 
       // Desbloquear todos los pasos siguientes y avanzar de inmediato a Preguntas (Paso 3) o Satisfacción (Paso 5)
       setMaxUnlockedStep(5);
-      setActiveStep(hasPonentes ? 3 : 5);
+      const nextStep = hasPonentes ? 3 : 5;
+      setActiveStep(nextStep);
 
-      confetti({
-        particleCount: 90,
-        spread: 75,
-        origin: { y: 0.6 },
-        colors: ['#0F5938', '#008744', '#C59B27', '#ffffff']
-      });
+      // Celebración festiva con confeti y desplazamiento suave al encabezado del nuevo módulo
+      triggerCelebrationConfetti();
+      scrollToModuleTop();
 
       if (onDataUpdated) onDataUpdated();
     } else {
@@ -932,7 +988,9 @@ export default function AttendeeView({
               registrado: true
             }));
           } catch {}
-          setActiveStep(hasPonentes ? 3 : 5);
+          const nextStep = hasPonentes ? 3 : 5;
+          setActiveStep(nextStep);
+          scrollToModuleTop();
           return;
         }
       }
@@ -1119,6 +1177,9 @@ export default function AttendeeView({
           </button>
         </div>
       )}
+
+      {/* ANCLA PARA DESPLAZAMIENTO AUTOMÁTICO AL INICIO DEL MÓDULO */}
+      <div ref={moduleTopRef} id="stepper-module-top" style={{ scrollMarginTop: '24px' }} />
 
       {/* BARRA DE PROGRESO SECUENCIAL INTERACTIVA */}
       <nav className="stepper-progress-nav" aria-label="Progreso secuencial del registro">
