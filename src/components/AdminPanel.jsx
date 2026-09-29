@@ -247,6 +247,7 @@ export default function AdminPanel({
   // Consolidado total de todos los eventos académicos de la Facultad
   // -------------------------------------------------------------
   const dbMetrics = useMemo(() => {
+    void (asistencias.length + preguntas.length + evaluaciones.length + satisfaccion.length + entregasComidas.length + polls.length + events.length + activeTab);
     return getGlobalDatabaseMetrics();
   }, [asistencias, preguntas, evaluaciones, satisfaccion, entregasComidas, polls, events, activeTab]);
 

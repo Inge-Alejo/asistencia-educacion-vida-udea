@@ -7,12 +7,9 @@ import {
   ShieldCheck,
   QrCode,
   Search,
-  ExternalLink,
-  Sparkles,
   ArrowRight,
   GraduationCap,
   Award,
-  CheckCircle2,
   Lock,
   Camera,
   UserCheck,
@@ -129,7 +126,7 @@ export default function InstitutionalLanding({
 
         {activeTodayEvents.length > 0 ? (
           <div className="live-events-grid">
-            {activeTodayEvents.map(({ evt, status }) => {
+            {activeTodayEvents.map(({ evt }) => {
               const activePonentes = (evt.ponentes || []).filter(p => p.activo !== false);
               const inscritosDocs = getEventInscritos(evt.id);
               const hasInscritos = Boolean(

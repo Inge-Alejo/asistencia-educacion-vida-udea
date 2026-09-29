@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Camera,
   X,
   QrCode,
   AlertTriangle,
   RotateCcw,
-  CheckCircle2,
   Lock,
-  ArrowRight,
-  Sparkles,
-  Search
+  ArrowRight
 } from 'lucide-react';
 import jsQR from 'jsqr';
 
@@ -49,7 +45,7 @@ export default function AuditoriumQRScannerModal({
   const [isLoadingCamera, setIsLoadingCamera] = useState(true);
   const [manualCode, setManualCode] = useState(() => targetEvent?.id || '');
   const [manualError, setManualError] = useState('');
-  const [facingMode, setFacingMode] = useState('environment');
+  const facingMode = 'environment';
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -119,6 +115,51 @@ export default function AuditoriumQRScannerModal({
     }
   }, [events, targetEvent, onClose, onSelectEvent, stopCamera]);
 
+  // Bucle de lectura continua fotograma a fotograma
+  const startScanLoop = useCallback(() => {
+    if (animFrameIdRef.current) {
+      cancelAnimationFrame(animFrameIdRef.current);
+      animFrameIdRef.current = null;
+    }
+
+    const scanFrame = () => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+
+      if (!video || !canvas) {
+        animFrameIdRef.current = requestAnimationFrame(scanFrame);
+        return;
+      }
+
+      if (
+        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+        video.videoWidth > 0 &&
+        video.videoHeight > 0
+      ) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const qrCode = jsQR(imgData.data, imgData.width, imgData.height, {
+            inversionAttempts: 'dontInvert'
+          });
+
+          if (qrCode && qrCode.data) {
+            handleDecodedQR(qrCode.data);
+            return;
+          }
+        }
+      }
+
+      animFrameIdRef.current = requestAnimationFrame(scanFrame);
+    };
+
+    animFrameIdRef.current = requestAnimationFrame(scanFrame);
+  }, [handleDecodedQR]);
+
   // Iniciar la cámara
   const startCamera = useCallback(async () => {
     stopCamera();
@@ -169,52 +210,7 @@ export default function AuditoriumQRScannerModal({
         );
       }
     }
-  }, [facingMode, stopCamera]);
-
-  // Bucle de lectura continua fotograma a fotograma
-  const startScanLoop = useCallback(() => {
-    if (animFrameIdRef.current) {
-      cancelAnimationFrame(animFrameIdRef.current);
-      animFrameIdRef.current = null;
-    }
-
-    const scanFrame = () => {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-
-      if (!video || !canvas) {
-        animFrameIdRef.current = requestAnimationFrame(scanFrame);
-        return;
-      }
-
-      if (
-        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-        video.videoWidth > 0 &&
-        video.videoHeight > 0
-      ) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const qrCode = jsQR(imgData.data, imgData.width, imgData.height, {
-            inversionAttempts: 'dontInvert'
-          });
-
-          if (qrCode && qrCode.data) {
-            handleDecodedQR(qrCode.data);
-            return;
-          }
-        }
-      }
-
-      animFrameIdRef.current = requestAnimationFrame(scanFrame);
-    };
-
-    animFrameIdRef.current = requestAnimationFrame(scanFrame);
-  }, [handleDecodedQR]);
+  }, [facingMode, stopCamera, startScanLoop]);
 
   useEffect(() => {
     if (isOpen) {

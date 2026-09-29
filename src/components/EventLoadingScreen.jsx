@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2, GraduationCap, ShieldCheck } from 'lucide-react';
+import { Loader2, ShieldCheck } from 'lucide-react';
 
 export default function EventLoadingScreen({
   message = 'Cargando evento académico...',

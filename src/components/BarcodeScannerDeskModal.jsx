@@ -221,7 +221,7 @@ export default function BarcodeScannerDeskModal({
         // Si además está en modo entrega de comida, registrarla de inmediato
         if (scanMode === 'meal' && activeMealObj) {
           const saveMeal = await recordMealDelivery({
-            eventoId: evento?.id,
+            eventoId: eventId,
             comidaId: activeMealObj.id,
             comidaNombre: activeMealObj.nombre,
             documento: docClean,
@@ -571,7 +571,6 @@ export default function BarcodeScannerDeskModal({
     }
   }, [
     eventId,
-    evento?.inscritosData,
     asistencias,
     scanMode,
     activeMealObj,

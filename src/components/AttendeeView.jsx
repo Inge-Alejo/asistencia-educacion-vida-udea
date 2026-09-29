@@ -553,7 +553,7 @@ export default function AttendeeView({
         });
       }
     }
-  }, [asistencias, currentEventId, inscritosParticipants, isCurrentDocVerified]);
+  }, [asistencias, currentEventId, inscritosParticipants, isCurrentDocVerified, hasPonentes]);
 
   // Interceptor global de pulsaciones para Escáner de Código de Barras USB (HID Wedge)
   useEffect(() => {
@@ -755,9 +755,10 @@ export default function AttendeeView({
   }, [formData.nombreCompleto, activeAttendeeRecord, sessionInfo]);
 
   // Estado de Preguntas a Ponentes (filtrando ponentes activos)
+  const rawPonentes = evento?.ponentes;
   const ponentesActivos = useMemo(() => {
-    return (evento?.ponentes || []).filter(p => p.activo !== false);
-  }, [evento?.ponentes]);
+    return (rawPonentes || []).filter(p => p.activo !== false);
+  }, [rawPonentes]);
 
   const defaultPonenteId = ponentesActivos[0]?.id || evento?.ponentes?.[0]?.id || '';
   const [preguntaForm, setPreguntaForm] = useState(() => ({

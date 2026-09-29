@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import {
   CalendarX,
   Calendar,
-  Clock,
   MapPin,
   ArrowLeft,
   Award,
   AlertCircle,
   HelpCircle,
-  ShieldAlert,
   ChevronRight
 } from 'lucide-react';
 

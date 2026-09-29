@@ -852,6 +852,7 @@ export function parseColombianDocumentBarcode(raw) {
   // de la Registraduría Nacional / IDEMIA con alta densidad binaria/base64.
   // No contiene texto plano; decodificarlo como texto arrojaría basura y dañaría la interfaz.
   const hasMrzMarkers = str.includes('<') && (str.includes('COL') || str.includes('I<') || str.includes('ID'));
+  // eslint-disable-next-line no-control-regex
   if (!hasMrzMarkers && (str.length > 130 || str.includes('eyJ') || /[\x00-\x08\x0E-\x1F]/.test(raw))) {
     let hasTraditionalPdf417Offset = false;
     for (let i = 35; i <= 65; i++) {
@@ -948,6 +949,7 @@ export function parseColombianDocumentBarcode(raw) {
 
   // 4. Código PDF417 de la Registraduría Nacional (Cédula Tradicional Amarilla o Tarjeta de Identidad TI)
   if (str.length > 50 || str.includes('PubDSK')) {
+    // eslint-disable-next-line no-control-regex
     const cleaned = str.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
 
     let docOffset = -1;
@@ -1864,7 +1866,7 @@ export function subscribeToEventData(eventId, onUpdate) {
   unsubs.push(() => window.removeEventListener('storage', storageHandler));
 
   // Función auxiliar de reconciliación segura y bidireccional (evita sobreescritura y resurrección de eliminados)
-  const reconcileCollection = (storageKey, cloudList, idField = 'id', collectionName = null) => {
+  const reconcileCollection = (storageKey, cloudList, idField = 'id', _collectionName = null) => {
     try {
       const tombstones = getDeletedRecordIds();
       const rawLocal = localStorage.getItem(storageKey);
