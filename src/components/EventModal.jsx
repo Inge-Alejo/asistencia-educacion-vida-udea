@@ -516,6 +516,32 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             </div>
           </div>
 
+          {/* CONTROL EXCLUSIVO: Habilitar Encuestas Relámpago en Vivo (Live Polls) */}
+          <div className="form-toggle-card">
+            <div className="toggle-info">
+              <div className="toggle-icon-wrap" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
+                <BarChart3 size={22} />
+              </div>
+              <div>
+                <label className="toggle-title" htmlFor="switch-encuestas">
+                  Habilitar Votaciones y Encuestas Relámpago en Vivo (Live Polls)
+                </label>
+                <p className="toggle-description">
+                  Permite a los ponentes y moderadores lanzar preguntas o casos clínicos de opción múltiple para que los asistentes voten desde sus dispositivos móviles con resultados y gráficos en tiempo real.
+                </p>
+              </div>
+            </div>
+            <label className="switch">
+              <input
+                id="switch-encuestas"
+                type="checkbox"
+                checked={habilitarEncuestasEnVivo}
+                onChange={(e) => setHabilitarEncuestasEnVivo(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
+          </div>
+
           {/* CONTROL EXCLUSIVO: Habilitar Registro de Placa de Vehículo */}
           <div className="form-toggle-card">
             <div className="toggle-info">
@@ -873,31 +899,6 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             </div>
           )}
 
-          {/* CONTROL EXCLUSIVO: Habilitar Encuestas Relámpago en Vivo */}
-          <div className="form-toggle-card">
-            <div className="toggle-info">
-              <div className="toggle-icon-wrap" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
-                <BarChart3 size={22} />
-              </div>
-              <div>
-                <label className="toggle-title" htmlFor="switch-encuestas">
-                  Habilitar Votaciones y Encuestas Relámpago en Vivo (Live Polls)
-                </label>
-                <p className="toggle-description">
-                  Permite a los ponentes y moderadores lanzar preguntas o casos clínicos de opción múltiple para que los asistentes voten desde sus dispositivos móviles con resultados y gráficos en tiempo real.
-                </p>
-              </div>
-            </div>
-            <label className="switch">
-              <input
-                id="switch-encuestas"
-                type="checkbox"
-                checked={habilitarEncuestasEnVivo}
-                onChange={(e) => setHabilitarEncuestasEnVivo(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
-          </div>
 
           <div className="modal-actions-footer">
             <button type="button" className="btn-secondary" onClick={onClose}>
