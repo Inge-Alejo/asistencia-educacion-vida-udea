@@ -301,12 +301,14 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
     const documentsSet = new Set();
     const participants = {};
     const originalSample = [];
+    const duplicates = [];
+    const emptyOrInvalidRows = [];
 
     for (let r = headerRowIndex + 1; r < rows.length; r++) {
       const row = rows[r];
-      if (!Array.isArray(row) || row.length <= docColIndex) continue;
+      if (!Array.isArray(row)) continue;
 
-      const rawValue = row[docColIndex];
+      const rawValue = row.length > docColIndex ? row[docColIndex] : '';
       const normalizedDoc = normalizeDocumentId(rawValue);
 
       // Descartar celdas vacías o cadenas de menos de 4 caracteres
@@ -334,6 +336,19 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
           if (originalSample.length < 8) {
             originalSample.push(normalizedDoc);
           }
+        } else {
+          duplicates.push({
+            fila: r + 1,
+            documento: normalizedDoc
+          });
+        }
+      } else {
+        const hasAnyContent = row.some(cell => String(cell || '').trim() !== '');
+        if (hasAnyContent) {
+          emptyOrInvalidRows.push({
+            fila: r + 1,
+            valor: rawValue
+          });
         }
       }
     }
@@ -344,6 +359,8 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
       throw new Error('No se encontraron registros válidos de documentos en la columna detectada.');
     }
 
+    const totalDataRows = rows.length - (headerRowIndex + 1);
+
     return {
       success: true,
       count: documents.length,
@@ -351,7 +368,14 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
       participants,
       fileName,
       detectedColumn: detectedColumnName,
-      sample: originalSample
+      sample: originalSample,
+      totalRowsInFile: rows.length,
+      headerRowNumber: headerRowIndex + 1,
+      metadataRowsCount: headerRowIndex + 1,
+      totalDataRows,
+      duplicatesCount: duplicates.length,
+      duplicates,
+      emptyOrInvalidRowsCount: emptyOrInvalidRows.length
     };
   } catch (err) {
     console.error('Error al analizar archivo de inscritos:', err);

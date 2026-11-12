@@ -2334,6 +2334,10 @@ export async function saveEventInscritos(eventoId, data) {
     fileName: data.fileName || 'Inscritos.xlsx',
     detectedColumn: data.detectedColumn || '',
     sample: (data.documents || []).slice(0, 10),
+    totalRowsInFile: data.totalRowsInFile || null,
+    metadataRowsCount: data.metadataRowsCount || null,
+    totalDataRows: data.totalDataRows || null,
+    duplicatesCount: data.duplicatesCount || 0,
     actualizadoEn: new Date().toISOString()
   };
 

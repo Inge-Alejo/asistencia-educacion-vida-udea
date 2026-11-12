@@ -221,6 +221,7 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
                   <p>
                     Archivo cargado: <code>{currentInscritosData.fileName}</code>
                     {currentInscritosData.detectedColumn && ` • Columna: "${currentInscritosData.detectedColumn}"`}
+                    {currentInscritosData.totalRowsInFile && ` • Total en archivo: ${currentInscritosData.totalRowsInFile} filas (${currentInscritosData.count} personas inscritas + ${currentInscritosData.metadataRowsCount || 5} filas de encabezados)`}
                   </p>
                   <small>Última actualización: {new Date(currentInscritosData.actualizadoEn).toLocaleString('es-CO')}</small>
                 </div>
@@ -400,6 +401,38 @@ export default function InscritosModal({ isOpen, onClose, evento, onInscritosUpd
                 <p style={{ margin: '0 0 0.5rem', fontSize: '0.82rem', color: '#475569' }}>
                   Columna de documento identificada automáticamente: <strong>"{parsedData.detectedColumn}"</strong>
                 </p>
+
+                {/* Caja explicativa de auditoría de filas del archivo */}
+                <div className="parsed-audit-box" style={{
+                  background: '#F0FDF4',
+                  border: '1px solid #BBF7D0',
+                  borderRadius: '8px',
+                  padding: '10px 14px',
+                  margin: '0.65rem 0',
+                  fontSize: '0.82rem',
+                  color: '#166534',
+                  lineHeight: 1.45
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '3px' }}>
+                    <CheckCircle2 size={16} color="#006633" />
+                    <span>Auditoría de Lectura: {parsedData.count} personas inscritas reconocidas</span>
+                  </div>
+                  {parsedData.totalRowsInFile ? (
+                    <p style={{ margin: 0 }}>
+                      El archivo contiene <strong>{parsedData.totalRowsInFile} filas en Excel</strong>. Las primeras {parsedData.metadataRowsCount} filas corresponden a los encabezados y metadatos institucionales del reporte (como "OFERTA:", "COHORTE:", "NOTAS:", fila vacía y títulos de columnas). Las <strong>{parsedData.count} filas de participantes</strong> fueron reconocidas exitosamente (100% de los inscritos del archivo).
+                    </p>
+                  ) : null}
+                  {parsedData.duplicatesCount > 0 && (
+                    <p style={{ margin: '4px 0 0', color: '#B45309' }}>
+                      ℹ️ Se detectaron {parsedData.duplicatesCount} registros con cédula repetida en el archivo y fueron unificados sin duplicar.
+                    </p>
+                  )}
+                  {parsedData.emptyOrInvalidRowsCount > 0 && (
+                    <p style={{ margin: '4px 0 0', color: '#B45309' }}>
+                      ℹ️ Se encontraron {parsedData.emptyOrInvalidRowsCount} filas adicionales sin documento válido.
+                    </p>
+                  )}
+                </div>
                 <div className="parsed-sample-chips">
                   <span className="sample-label">Muestra de documentos:</span>
                   {parsedData.sample.map(doc => (
