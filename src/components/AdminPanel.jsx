@@ -375,9 +375,9 @@ export default function AdminPanel({
               <span className="live-dot"></span> Sincronizado en Vivo
             </span>
             <span className="gps-status-pill" style={{
-              background: eventConfig.gpsObligatorio ? '#FEF2F2' : '#F0FDF4',
-              color: eventConfig.gpsObligatorio ? '#991B1B' : '#166534',
-              border: eventConfig.gpsObligatorio ? '1px solid #FECACA' : '1px solid #BBF7D0',
+              background: eventConfig.gpsObligatorio ? '#F0FDF4' : '#F8FAFC',
+              color: eventConfig.gpsObligatorio ? '#006633' : '#475569',
+              border: eventConfig.gpsObligatorio ? '1px solid #86EFAC' : '1px solid #CBD5E1',
               padding: '3px 9px',
               borderRadius: '12px',
               fontSize: '0.78rem',
@@ -387,7 +387,7 @@ export default function AdminPanel({
               gap: '4px'
             }}>
               <MapPin size={12} />
-              <span>GPS: {eventConfig.gpsObligatorio ? 'Obligatorio' : 'No Obligatorio'}</span>
+              <span>GPS: {eventConfig.gpsObligatorio ? 'Obligatorio' : 'Desactivado'}</span>
             </span>
             <span className={`db-status-pill ${isFirebaseConfigured() ? 'cloud' : 'local'}`}>
               {isFirebaseConfigured() ? (

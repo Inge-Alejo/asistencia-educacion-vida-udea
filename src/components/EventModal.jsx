@@ -829,10 +829,10 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             </div>
           </div>
 
-          {/* CONFIGURACIÓN DEL GPS */}
+          {/* CONFIGURACIÓN DEL GPS: OBLIGATORIO O DESACTIVADO */}
           <div className="form-toggle-card gps-config-card" style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '16px', marginTop: '14px', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-              <div className="toggle-icon-wrap" style={{ background: gpsObligatorio ? '#EFF6FF' : '#F1F5F9', color: gpsObligatorio ? '#1D4ED8' : '#64748B', borderRadius: '8px', padding: '8px' }}>
+              <div className="toggle-icon-wrap" style={{ background: gpsObligatorio ? '#DCFCE7' : '#F1F5F9', color: gpsObligatorio ? '#006633' : '#64748B', borderRadius: '8px', padding: '8px' }}>
                 <MapPin size={22} />
               </div>
               <div>
@@ -840,7 +840,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                   Configuración de Ubicación GPS
                 </h4>
                 <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B' }}>
-                  Determine si la geolocalización satelital es obligatoria para certificar la asistencia a este evento.
+                  Determine si la geolocalización satelital está activada de forma obligatoria o completamente desactivada para este evento.
                 </p>
               </div>
             </div>
@@ -848,55 +848,57 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
               <button
                 type="button"
-                className={`duration-pill-btn ${!gpsObligatorio ? 'active' : ''}`}
+                className={`gps-option-btn ${!gpsObligatorio ? 'disabled-selected' : 'unselected'}`}
                 onClick={() => setGpsObligatorio(false)}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
-                  padding: '12px 14px',
-                  textAlign: 'left',
-                  background: !gpsObligatorio ? '#F0FDF4' : '#FFFFFF',
-                  borderColor: !gpsObligatorio ? '#16A34A' : '#E2E8F0',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: '4px' }}>
-                  <strong style={{ color: !gpsObligatorio ? '#166534' : '#334155', fontSize: '0.9rem' }}>
-                    GPS No Obligatorio
-                  </strong>
-                  {!gpsObligatorio && <CheckCircle2 size={16} style={{ color: '#16A34A' }} />}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <strong style={{ color: !gpsObligatorio ? '#0F172A' : '#475569', fontSize: '0.92rem' }}>
+                      GPS Desactivado
+                    </strong>
+                    <span style={{
+                      fontSize: '0.7rem',
+                      background: !gpsObligatorio ? '#E2E8F0' : '#F1F5F9',
+                      color: !gpsObligatorio ? '#1E293B' : '#64748B',
+                      padding: '2px 7px',
+                      borderRadius: '4px',
+                      fontWeight: 700
+                    }}>
+                      Desactivado
+                    </span>
+                  </div>
+                  {!gpsObligatorio && <CheckCircle2 size={16} style={{ color: '#475569' }} />}
                 </div>
-                <span style={{ fontSize: '0.76rem', color: '#64748B', lineHeight: 1.35 }}>
-                  El participante puede completar su asistencia sin que la ubicación sea requerida. Denegar permisos no bloqueará el registro.
+                <span style={{ fontSize: '0.78rem', color: !gpsObligatorio ? '#334155' : '#64748B', lineHeight: 1.4 }}>
+                  El evento no solicita ni utiliza geolocalización. Los participantes registran su asistencia de forma directa sin activar el sensor GPS.
                 </span>
               </button>
 
               <button
                 type="button"
-                className={`duration-pill-btn ${gpsObligatorio ? 'active' : ''}`}
+                className={`gps-option-btn ${gpsObligatorio ? 'enabled-selected' : 'unselected'}`}
                 onClick={() => setGpsObligatorio(true)}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
-                  padding: '12px 14px',
-                  textAlign: 'left',
-                  background: gpsObligatorio ? '#EFF6FF' : '#FFFFFF',
-                  borderColor: gpsObligatorio ? '#2563EB' : '#E2E8F0',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: '4px' }}>
-                  <strong style={{ color: gpsObligatorio ? '#1E40AF' : '#334155', fontSize: '0.9rem' }}>
-                    GPS Obligatorio
-                  </strong>
-                  {gpsObligatorio && <CheckCircle2 size={16} style={{ color: '#2563EB' }} />}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <strong style={{ color: gpsObligatorio ? '#006633' : '#475569', fontSize: '0.92rem' }}>
+                      GPS Obligatorio
+                    </strong>
+                    <span style={{
+                      fontSize: '0.7rem',
+                      background: gpsObligatorio ? '#DCFCE7' : '#F1F5F9',
+                      color: gpsObligatorio ? '#166534' : '#64748B',
+                      padding: '2px 7px',
+                      borderRadius: '4px',
+                      fontWeight: 700
+                    }}>
+                      Obligatorio
+                    </span>
+                  </div>
+                  {gpsObligatorio && <CheckCircle2 size={16} style={{ color: '#006633' }} />}
                 </div>
-                <span style={{ fontSize: '0.76rem', color: '#64748B', lineHeight: 1.35 }}>
-                  El sensor GPS del celular es un requisito obligatorio. Se exigirá captura de ubicación válida para completar la asistencia.
+                <span style={{ fontSize: '0.78rem', color: gpsObligatorio ? '#14532D' : '#64748B', lineHeight: 1.4 }}>
+                  El sensor GPS del celular es indispensable. Se exige la verificación satelital de presencia en el auditorio o sede para certificar la asistencia.
                 </span>
               </button>
             </div>

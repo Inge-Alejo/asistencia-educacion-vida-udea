@@ -412,7 +412,7 @@ body {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.25rem;
 }
 
 .event-hero-banner {
@@ -3927,6 +3927,46 @@ input:checked+.slider::before {
   border-color: #475569;
 }
 
+/* Opciones de Configuración de GPS (Obligatorio o Desactivado) */
+.gps-option-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px 14px;
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.gps-option-btn.disabled-selected {
+  background-color: #F8FAFC !important;
+  border: 2px solid #64748B !important;
+  color: #0F172A !important;
+  box-shadow: 0 2px 6px rgba(100, 116, 139, 0.12);
+}
+
+.gps-option-btn.enabled-selected {
+  background-color: #F0FDF4 !important;
+  border: 2px solid #006633 !important;
+  color: #006633 !important;
+  box-shadow: 0 2px 6px rgba(0, 102, 51, 0.12);
+}
+
+.gps-option-btn.unselected {
+  background-color: #FFFFFF !important;
+  border: 1.5px solid #E2E8F0 !important;
+  color: #64748B !important;
+}
+
+.gps-option-btn.unselected:hover {
+  border-color: #CBD5E1 !important;
+  background-color: #F8FAFC !important;
+}
+
 /* ==========================================================================
    BOTONES Y ACCIONES DE ELIMINACIÓN ADMINISTRATIVA
    ========================================================================== */
@@ -4205,6 +4245,12 @@ input:checked+.slider::before {
     border-radius: 12px !important;
   }
 
+  .success-attendance-box {
+    padding: 1.25rem 0.85rem !important;
+    border-radius: 10px !important;
+    gap: 0.65rem !important;
+  }
+
   .module-header {
     gap: 0.75rem !important;
     margin-bottom: 1.15rem !important;
@@ -4281,6 +4327,7 @@ input:checked+.slider::before {
     max-width: 100% !important;
     box-sizing: border-box !important;
     min-width: 0 !important;
+    gap: 1rem !important;
   }
 
   .stepper-track {

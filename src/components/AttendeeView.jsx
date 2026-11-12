@@ -1233,8 +1233,8 @@ export default function AttendeeView({
         </div>
       </section>
 
-      {/* BANNER DE SESIÓN ACTIVA PERSISTENTE (Si el usuario ya registró asistencia) */}
-      {asistenciaRegistrada && (
+      {/* BANNER DE SESIÓN ACTIVA PERSISTENTE (Si el usuario ya registró asistencia y navega otros módulos) */}
+      {asistenciaRegistrada && activeStep !== 2 && (
         <div className="attendee-active-session-banner animated-step">
           <div className="session-banner-left">
             <div className="session-badge-check">
@@ -1590,38 +1590,40 @@ export default function AttendeeView({
       )}
 
       {/* ANCLA PARA DESPLAZAMIENTO AUTOMÁTICO AL INICIO DEL MÓDULO */}
-      <div ref={moduleTopRef} id="stepper-module-top" style={{ scrollMarginTop: '24px' }} />
+      <div ref={moduleTopRef} id="stepper-module-top" style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />
 
-      {/* BARRA DE PROGRESO SECUENCIAL INTERACTIVA */}
-      <nav className="stepper-progress-nav" aria-label="Progreso secuencial del registro">
-        <div className="stepper-track">
-          {availableSteps.map((item, idx) => {
-            const isCompleted = item.step < activeStep || (item.step === 2 && isRegisteredForEvent);
-            const isCurrent = item.step === activeStep;
-            const isAccessible = (isRegisteredForEvent || activeStep >= nextModuleStep)
-              ? (item.step >= nextModuleStep || item.step === 2)
-              : (item.step <= maxUnlockedStep);
+      {/* BARRA DE PROGRESO SECUENCIAL INTERACTIVA (Solo visible si hay más de 1 paso) */}
+      {availableSteps.length > 1 && (
+        <nav className="stepper-progress-nav" aria-label="Progreso secuencial del registro">
+          <div className="stepper-track">
+            {availableSteps.map((item, idx) => {
+              const isCompleted = item.step < activeStep || (item.step === 2 && isRegisteredForEvent);
+              const isCurrent = item.step === activeStep;
+              const isAccessible = (isRegisteredForEvent || activeStep >= nextModuleStep)
+                ? (item.step >= nextModuleStep || item.step === 2)
+                : (item.step <= maxUnlockedStep);
 
-            return (
-              <button
-                key={item.step}
-                ref={isCurrent ? activeStepBtnRef : null}
-                type="button"
-                className={`stepper-step-btn ${isCurrent ? 'current' : ''} ${isCompleted ? 'completed' : ''} ${!isAccessible ? 'locked' : ''}`}
-                onClick={() => {
-                  if (isAccessible) setActiveStep(item.step);
-                }}
-                disabled={!isAccessible}
-              >
-                <div className="step-circle">
-                  {isCompleted ? <Check size={14} /> : <span>{idx + 1}</span>}
-                </div>
-                <span className="step-label">{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+              return (
+                <button
+                  key={item.step}
+                  ref={isCurrent ? activeStepBtnRef : null}
+                  type="button"
+                  className={`stepper-step-btn ${isCurrent ? 'current' : ''} ${isCompleted ? 'completed' : ''} ${!isAccessible ? 'locked' : ''}`}
+                  onClick={() => {
+                    if (isAccessible) setActiveStep(item.step);
+                  }}
+                  disabled={!isAccessible}
+                >
+                  <div className="step-circle">
+                    {isCompleted ? <Check size={14} /> : <span>{idx + 1}</span>}
+                  </div>
+                  <span className="step-label">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
 
       {/* =========================================================================
           PASO 1: VALIDACIÓN DE GEOLOCALIZACIÓN GPS (SI ES OBLIGATORIO)
@@ -1633,7 +1635,9 @@ export default function AttendeeView({
               <MapPin size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
+              {totalStepsCount > 1 && (
+                <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
+              )}
               <h2 className="module-title">Verificación de Ubicación Presencial</h2>
               <p className="module-desc">
                 {eventConfig.gpsObligatorio
@@ -1821,22 +1825,43 @@ export default function AttendeeView({
           ========================================================================= */}
       {activeStep === 2 && (
         <section className="attendee-card-module animated-step">
-          <div className="module-header">
-            <div className="module-icon-wrap">
-              <ShieldCheck size={22} />
-            </div>
-            <div>
-              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
-              <h2 className="module-title">Registro Oficial de Asistencia</h2>
-              <p className="module-desc">
-                Ingrese sus datos personales para la emisión oficial del certificado de Educación a lo Largo de la Vida.
-              </p>
-              <div className="usb-scanner-ready-badge">
-                <Barcode size={15} />
-                <span>Lector de cédulas USB activo: Si escaneas tu cédula física, tus datos del listado de inscritos se autocompletarán al instante.</span>
+          {!(isRegisteredForEvent && (!evento?.esMultidia || yaRegistroHoy)) ? (
+            <div className="module-header">
+              <div className="module-icon-wrap">
+                <ShieldCheck size={22} />
+              </div>
+              <div>
+                {totalStepsCount > 1 && (
+                  <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
+                )}
+                <h2 className="module-title">Registro Oficial de Asistencia</h2>
+                <p className="module-desc">
+                  Ingrese sus datos personales para la emisión oficial del certificado de Educación a lo Largo de la Vida.
+                </p>
+                <div className="usb-scanner-ready-badge">
+                  <Barcode size={15} />
+                  <span>Lector de cédulas USB activo: Si escaneas tu cédula física, tus datos del listado de inscritos se autocompletarán al instante.</span>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="module-header" style={{ marginBottom: '1.25rem' }}>
+              <div className="module-icon-wrap" style={{ background: '#DCFCE7', color: '#166534' }}>
+                <CheckCircle2 size={24} />
+              </div>
+              <div>
+                <span className="session-tag" style={{ display: 'inline-block', marginBottom: '4px' }}>
+                  Asistencia Registrada Oficialmente
+                </span>
+                <h2 className="module-title" style={{ color: '#0F5938', margin: 0 }}>
+                  Constancia de Asistencia
+                </h2>
+                <p className="module-desc" style={{ marginTop: '4px' }}>
+                  Tu participación ha sido confirmada y certificada para este evento académico.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Tarjeta de Jornada Multidía */}
           {evento?.esMultidia && (
@@ -2396,44 +2421,6 @@ export default function AttendeeView({
                     </span>
                   </div>
                 )}
-
-                {/* BLOQUE OPCIONAL DISCRETO DE GPS (Cuando el GPS no es obligatorio) */}
-                {!eventConfig.gpsObligatorio && (
-                  <div className="form-group col-span-2" style={{
-                    background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '8px',
-                    padding: '0.75rem 1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '0.75rem',
-                    fontSize: '0.85rem'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#475569' }}>
-                      <MapPin size={16} color="#006633" />
-                      <span>
-                        {geoState.obtenida
-                          ? (geoState.esPresencial
-                              ? `Ubicación validada en sede (${geoState.distancia} m del auditorio)`
-                              : `Ubicación satelital registrada (${geoState.distancia || 0} m)`)
-                          : 'Ubicación GPS: Opcional para este evento (no condiciona el registro)'}
-                      </span>
-                    </div>
-                    {!geoState.obtenida && (
-                      <button
-                        type="button"
-                        className="btn-change-participant-mini"
-                        onClick={handleObtenerUbicacion}
-                        disabled={geoState.cargando}
-                        title="Capturar ubicación satelital de forma voluntaria"
-                      >
-                        {geoState.cargando ? 'Obteniendo...' : 'Capturar GPS (Opcional)'}
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* AUTORIZACIÓN DE TRATAMIENTO DE DATOS PERSONALES (HABEAS DATA - LEY 1581 DE 2012) */}
@@ -2596,7 +2583,9 @@ export default function AttendeeView({
               <HelpCircle size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
+              {totalStepsCount > 1 && (
+                <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
+              )}
               <h2 className="module-title">Preguntas a los Ponentes en Vivo</h2>
               <p className="module-desc">
                 Envíe su pregunta o caso clínico. El moderador en el auditorio la recibirá en tiempo real.
@@ -2753,7 +2742,9 @@ export default function AttendeeView({
               <Star size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
+              {totalStepsCount > 1 && (
+                <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
+              )}
               <h2 className="module-title">Calificación Individual de Ponentes</h2>
               <p className="module-desc">
                 Evalúe a los conferencistas del evento. Su retroalimentación promueve la excelencia académica.
@@ -2945,7 +2936,9 @@ export default function AttendeeView({
               <ThumbsUp size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
+              {totalStepsCount > 1 && (
+                <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
+              )}
               <h2 className="module-title">
                 {evento.habilitarMicrosoftForms && evento.microsoftFormsUrl ? 'Encuesta Institucional (Microsoft Forms) y Satisfacción' : 'Encuesta de Satisfacción General'}
               </h2>
