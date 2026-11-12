@@ -1247,9 +1247,13 @@ export default function AttendeeView({
               </div>
               <h3 className="session-user-name">¡Hola, {formData.nombreCompleto || 'Asistente'}!</h3>
               <p className="session-desc-text">
-                {hasPonentes
+                {nextModuleStep === 3
                   ? 'Tu asistencia a este evento ya está confirmada. Puedes interactuar en tiempo real con preguntas a los ponentes o calificar sus ponencias.'
-                  : 'Tu asistencia a este evento ya está confirmada. Puedes responder la encuesta de satisfacción académica o consultar tu escarapela digital.'}
+                  : nextModuleStep === 4
+                  ? 'Tu asistencia a este evento ya está confirmada. Puedes calificar las ponencias del evento.'
+                  : nextModuleStep === 5
+                  ? 'Tu asistencia a este evento ya está confirmada. Puedes responder la encuesta de satisfacción académica.'
+                  : 'Tu asistencia a este evento ya está confirmada. Tu participación ha quedado registrada exitosamente.'}
               </p>
             </div>
           </div>
@@ -1891,13 +1895,6 @@ export default function AttendeeView({
                 <div style={{ marginTop: '0.75rem', background: '#ECFDF5', border: '1px solid #A7F3D0', padding: '0.65rem 0.85rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#065F46', fontSize: '0.85rem' }}>
                   <CheckCircle2 size={16} color="#10B981" />
                   <span><strong>¡Asistencia de hoy ({officialTime.fechaStr}) registrada!</strong> Tienes tu acreditación lista para la sesión actual.</span>
-                </div>
-              )}
-
-              {!dayStatus.esDiaActivo && (
-                <div style={{ marginTop: '0.75rem', background: '#FFFBEB', border: '1px solid #FCD34D', padding: '0.65rem 0.85rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#92400E', fontSize: '0.82rem' }}>
-                  <AlertTriangle size={16} color="#D97706" />
-                  <span>Aviso: La fecha oficial de hoy ({officialTime.fechaStr}) no corresponde al calendario programado de sesiones de este evento. Sin embargo, puedes registrarte si estás asistiendo a una jornada extraordinaria.</span>
                 </div>
               )}
             </div>
