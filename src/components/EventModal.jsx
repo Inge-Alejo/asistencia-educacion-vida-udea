@@ -1,7 +1,35 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Car, User, BookOpen, Link, Layers, CheckCircle2, UtensilsCrossed, Coffee, ClipboardList, Hash, RefreshCw, BarChart3 } from 'lucide-react';
+import {
+  X,
+  Plus,
+  Trash2,
+  Calendar,
+  Clock,
+  MapPin,
+  Car,
+  User,
+  BookOpen,
+  Link,
+  Layers,
+  CheckCircle2,
+  UtensilsCrossed,
+  Coffee,
+  ClipboardList,
+  Hash,
+  RefreshCw,
+  BarChart3,
+  Award,
+  QrCode,
+  MessageSquare,
+  Star,
+  ThumbsUp,
+  ClipboardCheck,
+  Sliders,
+  ShieldCheck
+} from 'lucide-react';
 import { getEventDaysList } from '../services/networkTime';
 import { parseMicrosoftFormsUrl } from '../services/sanitizer';
+import { getEventConfig } from '../services/storage';
 
 const DEFAULT_MEALS = [
   { id: 'comida-1', nombre: 'Refrigerio Mañana', horario: '09:30 - 10:30', cantidadTotal: 100 },
@@ -28,7 +56,10 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
   const [horaInicio, setHoraInicio] = useState(initialEvent?.horaInicio || '08:00');
   const [horaFin, setHoraFin] = useState(initialEvent?.horaFin || '17:00');
   const [lugar, setLugar] = useState(initialEvent?.lugar || 'Auditorio Manuel Uribe Ángel - Facultad de Medicina UdeA');
-  const [habilitarPlacaVehiculo, setHabilitarPlacaVehiculo] = useState(initialEvent?.habilitarPlacaVehiculo ?? true);
+  const initialConfig = useMemo(() => getEventConfig(initialEvent), [initialEvent]);
+
+  const [modulos, setModulos] = useState(() => initialConfig.modulos);
+  const [gpsObligatorio, setGpsObligatorio] = useState(() => initialConfig.gpsObligatorio);
   const [habilitarAlimentacion, setHabilitarAlimentacion] = useState(Boolean(initialEvent?.habilitarAlimentacion));
   const [comidasConfig, setComidasConfig] = useState(() => (
     Array.isArray(initialEvent?.comidasConfig) && initialEvent.comidasConfig.length > 0
@@ -37,8 +68,6 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
   ));
   const [microsoftFormsUrl, setMicrosoftFormsUrl] = useState(initialEvent?.microsoftFormsUrl || '');
   const [habilitarMicrosoftForms, setHabilitarMicrosoftForms] = useState(Boolean(initialEvent?.habilitarMicrosoftForms ?? (initialEvent?.microsoftFormsUrl ? true : false)));
-  const [habilitarPonentes, setHabilitarPonentes] = useState(initialEvent?.habilitarPonentes ?? (initialEvent ? Boolean(initialEvent.ponentes && initialEvent.ponentes.length > 0) : true));
-  const [habilitarEncuestasEnVivo, setHabilitarEncuestasEnVivo] = useState(initialEvent?.habilitarEncuestasEnVivo ?? true);
 
   const [ponentes, setPonentes] = useState(() => (
     initialEvent?.ponentes?.length
@@ -48,6 +77,7 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
 
   // Sincronizar estado si cambia el evento a editar o se abre en modo creación
   if ((initialEvent?.id || null) !== prevEventId) {
+    const freshConfig = getEventConfig(initialEvent);
     setPrevEventId(initialEvent?.id || null);
     setCodigoEvento(initialEvent?.id || generateSimpleEventCode());
     setTitulo(initialEvent?.titulo || '');
@@ -60,7 +90,8 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
     setHoraFin(initialEvent?.horaFin || '17:00');
     setHorariosPorDia(initialEvent?.horariosPorDia || {});
     setLugar(initialEvent?.lugar || 'Auditorio Manuel Uribe Ángel - Facultad de Medicina UdeA');
-    setHabilitarPlacaVehiculo(initialEvent?.habilitarPlacaVehiculo ?? true);
+    setModulos(freshConfig.modulos);
+    setGpsObligatorio(freshConfig.gpsObligatorio);
     setHabilitarAlimentacion(Boolean(initialEvent?.habilitarAlimentacion));
     setComidasConfig(
       Array.isArray(initialEvent?.comidasConfig) && initialEvent.comidasConfig.length > 0
@@ -69,13 +100,19 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
     );
     setMicrosoftFormsUrl(initialEvent?.microsoftFormsUrl || '');
     setHabilitarMicrosoftForms(Boolean(initialEvent?.habilitarMicrosoftForms ?? (initialEvent?.microsoftFormsUrl ? true : false)));
-    setHabilitarPonentes(initialEvent?.habilitarPonentes ?? (initialEvent ? Boolean(initialEvent.ponentes && initialEvent.ponentes.length > 0) : true));
-    setHabilitarEncuestasEnVivo(initialEvent?.habilitarEncuestasEnVivo ?? true);
     setPonentes(initialEvent?.ponentes?.length
       ? initialEvent.ponentes.map(p => ({ ...p, activo: p.activo ?? true }))
       : [{ id: 'PON-INIT-1', nombre: '', titulo: '', temaPonencia: '', activo: true }]
     );
   }
+
+  const handleToggleModulo = (key) => {
+    if (key === 'asistencia') return;
+    setModulos(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   const [horariosPorDia, setHorariosPorDia] = useState(() => initialEvent?.horariosPorDia || {});
 
@@ -147,6 +184,20 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       .toUpperCase()
       .replace(/[^A-Z0-9-]/g, '');
 
+    const finalModulos = {
+      asistencia: true,
+      validacionInscritos: Boolean(modulos.validacionInscritos),
+      escarapelaDigital: Boolean(modulos.escarapelaDigital),
+      codigoQR: Boolean(modulos.codigoQR),
+      placaVehiculo: Boolean(modulos.placaVehiculo),
+      preguntasPonentes: Boolean(modulos.preguntasPonentes),
+      evaluacionPonentes: Boolean(modulos.evaluacionPonentes),
+      encuestaSatisfaccion: Boolean(modulos.encuestaSatisfaccion),
+      encuestasEnVivo: Boolean(modulos.encuestasEnVivo)
+    };
+
+    const hasPonentesActive = finalModulos.preguntasPonentes || finalModulos.evaluacionPonentes;
+
     const eventPayload = {
       id: cleanEventId,
       titulo: titulo.trim(),
@@ -161,7 +212,12 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
       horariosPorDia: computedHorariosPorDia,
       lugar,
       coordenadas: initialEvent?.coordenadas || { lat: 6.261341, lng: -75.566464 },
-      habilitarPlacaVehiculo,
+      configuracion: {
+        modulos: finalModulos,
+        gpsObligatorio: Boolean(gpsObligatorio)
+      },
+      gpsObligatorio: Boolean(gpsObligatorio),
+      habilitarPlacaVehiculo: finalModulos.placaVehiculo,
       habilitarAlimentacion,
       comidasConfig: habilitarAlimentacion
         ? comidasConfig.filter(c => c.nombre && c.nombre.trim()).map(c => ({
@@ -173,15 +229,15 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
               : null
           }))
         : [],
-      microsoftFormsUrl: habilitarMicrosoftForms ? (parseMicrosoftFormsUrl(microsoftFormsUrl).embedUrl || microsoftFormsUrl.trim()) : '',
-      habilitarMicrosoftForms,
-      habilitarPonentes,
-      habilitarEncuestasEnVivo,
-      ponentes: habilitarPonentes
+      microsoftFormsUrl: (finalModulos.encuestaSatisfaccion && habilitarMicrosoftForms) ? (parseMicrosoftFormsUrl(microsoftFormsUrl).embedUrl || microsoftFormsUrl.trim()) : '',
+      habilitarMicrosoftForms: Boolean(finalModulos.encuestaSatisfaccion && habilitarMicrosoftForms),
+      habilitarPonentes: hasPonentesActive,
+      habilitarEncuestasEnVivo: finalModulos.encuestasEnVivo,
+      ponentes: hasPonentesActive
         ? ponentes
             .filter(p => p.nombre.trim() !== '')
             .map(p => ({ ...p, activo: p.activo ?? true }))
-        : [],
+        : (initialEvent?.ponentes || []),
       inscritosResumen: initialEvent?.inscritosResumen || null,
       inscritosData: initialEvent?.inscritosData || null
     };
@@ -517,56 +573,333 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             </div>
           </div>
 
-          {/* CONTROL EXCLUSIVO: Habilitar Encuestas Relámpago en Vivo (Live Polls) */}
-          <div className="form-toggle-card">
-            <div className="toggle-info">
-              <div className="toggle-icon-wrap" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
-                <BarChart3 size={22} />
+          {/* SECCIÓN OFICIAL: CONFIGURACIÓN DE MÓDULOS DE ASISTENCIA */}
+          <div className="form-section-header-box" style={{ marginTop: '24px', marginBottom: '14px', borderTop: '2px solid #E2E8F0', paddingTop: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <div style={{ background: '#E8F5E9', color: '#0F5938', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                <Sliders size={20} />
               </div>
-              <div>
-                <label className="toggle-title" htmlFor="switch-encuestas">
-                  Habilitar Votaciones y Encuestas Relámpago en Vivo (Live Polls)
-                </label>
-                <p className="toggle-description">
-                  Permite a los ponentes y moderadores lanzar preguntas o casos clínicos de opción múltiple para que los asistentes voten desde sus dispositivos móviles con resultados y gráficos en tiempo real.
-                </p>
-              </div>
+              <h3 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 700, color: '#0F5938' }}>
+                Configuración de módulos de asistencia
+              </h3>
             </div>
-            <label className="switch">
-              <input
-                id="switch-encuestas"
-                type="checkbox"
-                checked={habilitarEncuestasEnVivo}
-                onChange={(e) => setHabilitarEncuestasEnVivo(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
+            <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748B', lineHeight: 1.45 }}>
+              Seleccione qué módulos y herramientas estarán habilitados para este evento académico. La confirmación de asistencia es el módulo principal y se encuentra siempre activa.
+            </p>
           </div>
 
-          {/* CONTROL EXCLUSIVO: Habilitar Registro de Placa de Vehículo */}
-          <div className="form-toggle-card">
-            <div className="toggle-info">
-              <div className="toggle-icon-wrap">
-                <Car size={22} className="car-icon" />
+          <div className="modules-config-grid" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* 1. Confirmación de Asistencia (Módulo Principal) */}
+            <div className="form-toggle-card" style={{ background: '#F0FDF4', border: '1.5px solid #86EFAC' }}>
+              <div className="toggle-info">
+                <div className="toggle-icon-wrap" style={{ background: '#DCFCE7', color: '#166534' }}>
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <label className="toggle-title" style={{ color: '#166534' }}>
+                      1. Confirmación de Asistencia (Módulo Principal)
+                    </label>
+                    <span style={{ fontSize: '0.72rem', background: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                      Obligatorio / Permanente
+                    </span>
+                  </div>
+                  <p className="toggle-description" style={{ color: '#15803D' }}>
+                    Procedimiento fundamental de identificación del asistente, captura de datos personales y validación oficial. Siempre activo e indispensable.
+                  </p>
+                </div>
+              </div>
+              <label className="switch" style={{ opacity: 0.85, cursor: 'not-allowed' }} title="Este módulo es indispensable y no puede desactivarse">
+                <input
+                  type="checkbox"
+                  checked={true}
+                  disabled
+                  readOnly
+                />
+                <span className="slider round" style={{ backgroundColor: '#16A34A' }}></span>
+              </label>
+            </div>
+
+            {/* 2. Validación contra el listado de inscritos */}
+            <div className="form-toggle-card">
+              <div className="toggle-info">
+                <div className="toggle-icon-wrap" style={{ background: '#ECFDF5', color: '#059669' }}>
+                  <ClipboardCheck size={22} />
+                </div>
+                <div>
+                  <label className="toggle-title" htmlFor="switch-modulo-inscritos">
+                    2. Validación contra el listado de inscritos
+                  </label>
+                  <p className="toggle-description">
+                    Verifica que el participante figure en la lista oficial de inscritos (cargada por Excel/CSV) antes de permitir registrar asistencia. Si se desactiva, cualquier persona puede registrarse.
+                  </p>
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  id="switch-modulo-inscritos"
+                  type="checkbox"
+                  checked={Boolean(modulos.validacionInscritos)}
+                  onChange={() => handleToggleModulo('validacionInscritos')}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            {/* 3. Escarapela Digital */}
+            <div className="form-toggle-card">
+              <div className="toggle-info">
+                <div className="toggle-icon-wrap" style={{ background: '#FEF3C7', color: '#D97706' }}>
+                  <Award size={22} />
+                </div>
+                <div>
+                  <label className="toggle-title" htmlFor="switch-modulo-badge">
+                    3. Escarapela Digital y Acreditación Móvil
+                  </label>
+                  <p className="toggle-description">
+                    Genera una credencial móvil instantánea para el asistente con código QR de verificación rápida y firma criptográfica para control de acceso y acreditación.
+                  </p>
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  id="switch-modulo-badge"
+                  type="checkbox"
+                  checked={Boolean(modulos.escarapelaDigital)}
+                  onChange={() => handleToggleModulo('escarapelaDigital')}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            {/* 4. Código QR y funcionalidades relacionadas */}
+            <div className="form-toggle-card">
+              <div className="toggle-info">
+                <div className="toggle-icon-wrap" style={{ background: '#EEF2FF', color: '#4F46E5' }}>
+                  <QrCode size={22} />
+                </div>
+                <div>
+                  <label className="toggle-title" htmlFor="switch-modulo-qr">
+                    4. Código QR y Proyección en Pantalla
+                  </label>
+                  <p className="toggle-description">
+                    Habilita la proyección del código QR en pantalla grande y el escaneo óptico desde cámaras para permitir el acceso rápido de los asistentes.
+                  </p>
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  id="switch-modulo-qr"
+                  type="checkbox"
+                  checked={Boolean(modulos.codigoQR)}
+                  onChange={() => handleToggleModulo('codigoQR')}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            {/* 5. Registro de placa vehicular */}
+            <div className="form-toggle-card">
+              <div className="toggle-info">
+                <div className="toggle-icon-wrap" style={{ background: '#EFF6FF', color: '#2563EB' }}>
+                  <Car size={22} />
+                </div>
+                <div>
+                  <label className="toggle-title" htmlFor="switch-modulo-placa">
+                    5. Registro de Placa Vehicular (Parqueadero)
+                  </label>
+                  <p className="toggle-description">
+                    Incluye el campo opcional en el formulario para registrar la placa del vehículo del participante con el fin de coordinar el acceso al parqueadero de la Facultad.
+                  </p>
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  id="switch-modulo-placa"
+                  type="checkbox"
+                  checked={Boolean(modulos.placaVehiculo)}
+                  onChange={() => handleToggleModulo('placaVehiculo')}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            {/* 6. Preguntas a ponentes (Live Q&A) */}
+            <div className="form-toggle-card">
+              <div className="toggle-info">
+                <div className="toggle-icon-wrap" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
+                  <MessageSquare size={22} />
+                </div>
+                <div>
+                  <label className="toggle-title" htmlFor="switch-modulo-preguntas">
+                    6. Preguntas a los Ponentes en Vivo (Live Q&A)
+                  </label>
+                  <p className="toggle-description">
+                    Muro interactivo en tiempo real para que los asistentes formulen preguntas o casos clínicos a los conferencistas con protección anti-spam y moderación.
+                  </p>
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  id="switch-modulo-preguntas"
+                  type="checkbox"
+                  checked={Boolean(modulos.preguntasPonentes)}
+                  onChange={() => handleToggleModulo('preguntasPonentes')}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            {/* 7. Evaluación individual de ponentes */}
+            <div className="form-toggle-card">
+              <div className="toggle-info">
+                <div className="toggle-icon-wrap" style={{ background: '#FFFBEB', color: '#F59E0B' }}>
+                  <Star size={22} />
+                </div>
+                <div>
+                  <label className="toggle-title" htmlFor="switch-modulo-evaluacion">
+                    7. Evaluación Individual de Ponentes
+                  </label>
+                  <p className="toggle-description">
+                    Formulario dinámico de calificación pedagógica y clínica (1 a 5 estrellas) para evaluar individualmente a cada conferencista o docente del evento.
+                  </p>
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  id="switch-modulo-evaluacion"
+                  type="checkbox"
+                  checked={Boolean(modulos.evaluacionPonentes)}
+                  onChange={() => handleToggleModulo('evaluacionPonentes')}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            {/* 8. Encuesta general de satisfacción y NPS */}
+            <div className="form-toggle-card">
+              <div className="toggle-info">
+                <div className="toggle-icon-wrap" style={{ background: '#F0FDFA', color: '#0D9488' }}>
+                  <ThumbsUp size={22} />
+                </div>
+                <div>
+                  <label className="toggle-title" htmlFor="switch-modulo-satisfaccion">
+                    8. Encuesta General de Satisfacción y NPS
+                  </label>
+                  <p className="toggle-description">
+                    Mide el cumplimiento de objetivos del evento, organización logística, recomendación institucional (NPS 0 a 10) y comentarios abiertos.
+                  </p>
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  id="switch-modulo-satisfaccion"
+                  type="checkbox"
+                  checked={Boolean(modulos.encuestaSatisfaccion)}
+                  onChange={() => handleToggleModulo('encuestaSatisfaccion')}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            {/* 9. Encuestas y votaciones en vivo */}
+            <div className="form-toggle-card">
+              <div className="toggle-info">
+                <div className="toggle-icon-wrap" style={{ background: '#FDF2F8', color: '#DB2777' }}>
+                  <BarChart3 size={22} />
+                </div>
+                <div>
+                  <label className="toggle-title" htmlFor="switch-modulo-encuestas">
+                    9. Encuestas y Votaciones en Vivo (Live Polls)
+                  </label>
+                  <p className="toggle-description">
+                    Permite a moderadores y ponentes lanzar preguntas relámpago de opción múltiple para votación inmediata desde el celular con gráficos interactivos.
+                  </p>
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  id="switch-modulo-encuestas"
+                  type="checkbox"
+                  checked={Boolean(modulos.encuestasEnVivo)}
+                  onChange={() => handleToggleModulo('encuestasEnVivo')}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+          </div>
+
+          {/* CONFIGURACIÓN DEL GPS */}
+          <div className="form-toggle-card gps-config-card" style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '16px', marginTop: '14px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div className="toggle-icon-wrap" style={{ background: gpsObligatorio ? '#EFF6FF' : '#F1F5F9', color: gpsObligatorio ? '#1D4ED8' : '#64748B', borderRadius: '8px', padding: '8px' }}>
+                <MapPin size={22} />
               </div>
               <div>
-                <label className="toggle-title" htmlFor="switch-placa">
-                  Habilitar Registro de Placa del Vehículo
-                </label>
-                <p className="toggle-description">
-                  Si se activa, el formulario de asistencia incluirá el campo opcional para la placa vehicular del participante para coordinar el ingreso al parqueadero de la Facultad.
+                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#1E293B' }}>
+                  Configuración de Ubicación GPS
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B' }}>
+                  Determine si la geolocalización satelital es obligatoria para certificar la asistencia a este evento.
                 </p>
               </div>
             </div>
-            <label className="switch">
-              <input
-                id="switch-placa"
-                type="checkbox"
-                checked={habilitarPlacaVehiculo}
-                onChange={(e) => setHabilitarPlacaVehiculo(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
+              <button
+                type="button"
+                className={`duration-pill-btn ${!gpsObligatorio ? 'active' : ''}`}
+                onClick={() => setGpsObligatorio(false)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  padding: '12px 14px',
+                  textAlign: 'left',
+                  background: !gpsObligatorio ? '#F0FDF4' : '#FFFFFF',
+                  borderColor: !gpsObligatorio ? '#16A34A' : '#E2E8F0',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: '4px' }}>
+                  <strong style={{ color: !gpsObligatorio ? '#166534' : '#334155', fontSize: '0.9rem' }}>
+                    GPS No Obligatorio
+                  </strong>
+                  {!gpsObligatorio && <CheckCircle2 size={16} style={{ color: '#16A34A' }} />}
+                </div>
+                <span style={{ fontSize: '0.76rem', color: '#64748B', lineHeight: 1.35 }}>
+                  El participante puede completar su asistencia sin que la ubicación sea requerida. Denegar permisos no bloqueará el registro.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`duration-pill-btn ${gpsObligatorio ? 'active' : ''}`}
+                onClick={() => setGpsObligatorio(true)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  padding: '12px 14px',
+                  textAlign: 'left',
+                  background: gpsObligatorio ? '#EFF6FF' : '#FFFFFF',
+                  borderColor: gpsObligatorio ? '#2563EB' : '#E2E8F0',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: '4px' }}>
+                  <strong style={{ color: gpsObligatorio ? '#1E40AF' : '#334155', fontSize: '0.9rem' }}>
+                    GPS Obligatorio
+                  </strong>
+                  {gpsObligatorio && <CheckCircle2 size={16} style={{ color: '#2563EB' }} />}
+                </div>
+                <span style={{ fontSize: '0.76rem', color: '#64748B', lineHeight: 1.35 }}>
+                  El sensor GPS del celular es un requisito obligatorio. Se exigirá captura de ubicación válida para completar la asistencia.
+                </span>
+              </button>
+            </div>
           </div>
 
           {/* CONTROL EXCLUSIVO: Habilitar Control de Almuerzos y Refrigerios */}
@@ -722,40 +1055,14 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
             </div>
           )}
 
-          {/* CONTROL EXCLUSIVO: Habilitar Ponentes y Evaluaciones del Evento */}
-          <div className="form-toggle-card">
-            <div className="toggle-info">
-              <div className="toggle-icon-wrap speakers" style={{ background: '#EFF6FF', color: '#1D4ED8' }}>
-                <User size={22} />
-              </div>
-              <div>
-                <label className="toggle-title" htmlFor="switch-ponentes">
-                  Habilitar Ponentes y Evaluaciones del Evento
-                </label>
-                <p className="toggle-description">
-                  Active esta opción si el evento cuenta con conferencistas, docentes o expositores invitados. Si se desactiva, los asistentes no tendrán los pasos de preguntas ni calificación docente.
-                </p>
-              </div>
-            </div>
-            <label className="switch">
-              <input
-                id="switch-ponentes"
-                type="checkbox"
-                checked={habilitarPonentes}
-                onChange={(e) => setHabilitarPonentes(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
-          </div>
-
-          {/* Sección de Ponentes */}
-          {habilitarPonentes && (
+          {/* Sección de Ponentes: Activa si Preguntas o Evaluaciones están habilitadas */}
+          {(modulos.preguntasPonentes || modulos.evaluacionPonentes) ? (
             <div className="speakers-builder-section">
               <div className="section-header-row">
                 <div>
-                  <h3 className="section-title">Ponentes y Evaluaciones del Evento</h3>
+                  <h3 className="section-title">Ponentes y Conferencistas del Evento</h3>
                   <p className="section-subtitle">
-                    Cada ponente registrado generará automáticamente una tarjeta de evaluación individual para los asistentes.
+                    Los ponentes activos estarán disponibles para el muro de preguntas y las tarjetas de evaluación docente.
                   </p>
                 </div>
                 <button type="button" className="btn-add-speaker" onClick={handleAddPonente}>
@@ -853,55 +1160,69 @@ export default function EventModal({ isOpen, onClose, onSave, initialEvent = nul
                 ))}
               </div>
             </div>
+          ) : (
+            <div style={{ background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: '10px', padding: '14px 16px', margin: '14px 0', color: '#64748B', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontWeight: 600 }}>
+                <User size={17} />
+                <span>Módulo de Ponentes no activo</span>
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: '0.78rem' }}>
+                Para registrar conferencistas y docentes, active el módulo de <strong>6. Preguntas a los Ponentes en Vivo</strong> o <strong>7. Evaluación Individual de Ponentes</strong> en la configuración de módulos de asistencia. Los datos de ponentes previos se conservarán.
+              </p>
+            </div>
           )}
 
           {/* CONTROL EXCLUSIVO: Habilitar Evaluación Institucional con Microsoft Forms o Google Forms (Paso 5) */}
-          <div className="form-toggle-card">
-            <div className="toggle-info">
-              <div className="toggle-icon-wrap forms" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
-                <ClipboardList size={22} />
-              </div>
-              <div>
-                <label className="toggle-title" htmlFor="switch-forms">
-                  Habilitar Encuesta Institucional Externa (Microsoft Forms o Google Forms)
+          {modulos.encuestaSatisfaccion && (
+            <>
+              <div className="form-toggle-card">
+                <div className="toggle-info">
+                  <div className="toggle-icon-wrap forms" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
+                    <ClipboardList size={22} />
+                  </div>
+                  <div>
+                    <label className="toggle-title" htmlFor="switch-forms">
+                      Habilitar Encuesta Institucional Externa (Microsoft Forms o Google Forms)
+                    </label>
+                    <p className="toggle-description">
+                      Permite a los asistentes acceder a una encuesta oficial externa (Office 365 / Google Forms) dentro del módulo de satisfacción académica.
+                    </p>
+                  </div>
+                </div>
+                <label className="switch">
+                  <input
+                    id="switch-forms"
+                    type="checkbox"
+                    checked={habilitarMicrosoftForms}
+                    onChange={(e) => setHabilitarMicrosoftForms(e.target.checked)}
+                  />
+                  <span className="slider round"></span>
                 </label>
-                <p className="toggle-description">
-                  Permite a los asistentes acceder a una encuesta oficial externa (Office 365 / Google Forms). Al finalizar, quedará al final del flujo del asistente con acceso directo garantizado.
-                </p>
               </div>
-            </div>
-            <label className="switch">
-              <input
-                id="switch-forms"
-                type="checkbox"
-                checked={habilitarMicrosoftForms}
-                onChange={(e) => setHabilitarMicrosoftForms(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
-          </div>
 
-          {habilitarMicrosoftForms && (
-            <div className="forms-builder-section" style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0', marginTop: '-6px', marginBottom: '8px' }}>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', marginBottom: '6px', color: '#1E293B' }}>
-                <Link size={15} /> Enlace de la Encuesta (Microsoft Forms / Google Forms)
-              </label>
-              <input
-                type="text"
-                className="form-input"
-                value={microsoftFormsUrl}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const parsed = parseMicrosoftFormsUrl(val);
-                  setMicrosoftFormsUrl(parsed.embedUrl || val);
-                }}
-                placeholder="https://forms.office.com/... o pegue el código <iframe...> de Microsoft Forms"
-                required={habilitarMicrosoftForms}
-              />
-              <span className="form-help-text" style={{ marginTop: '6px', display: 'block', color: '#64748B' }}>
-                💡 <strong>Soporte Completo:</strong> Puede pegar el enlace directo o el código <code>&lt;iframe&gt;</code> completo de Microsoft Forms o Google Forms. El sistema configurará automáticamente la vista embebida en vivo (<code>forms.cloud.microsoft</code> con <code>&amp;embed=true</code>).
-              </span>
-            </div>
+              {habilitarMicrosoftForms && (
+                <div className="forms-builder-section" style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0', marginTop: '-6px', marginBottom: '8px' }}>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', marginBottom: '6px', color: '#1E293B' }}>
+                    <Link size={15} /> Enlace de la Encuesta (Microsoft Forms / Google Forms)
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={microsoftFormsUrl}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const parsed = parseMicrosoftFormsUrl(val);
+                      setMicrosoftFormsUrl(parsed.embedUrl || val);
+                    }}
+                    placeholder="https://forms.office.com/... o pegue el código <iframe...> de Microsoft Forms"
+                    required={habilitarMicrosoftForms}
+                  />
+                  <span className="form-help-text" style={{ marginTop: '6px', display: 'block', color: '#64748B' }}>
+                    💡 <strong>Soporte Completo:</strong> Puede pegar el enlace directo o el código <code>&lt;iframe&gt;</code> completo de Microsoft Forms o Google Forms. El sistema configurará automáticamente la vista embebida en vivo (<code>forms.cloud.microsoft</code> con <code>&amp;embed=true</code>).
+                  </span>
+                </div>
+              )}
+            </>
           )}
 
 

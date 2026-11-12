@@ -1,5 +1,6 @@
 import React from 'react';
 import { UserCheck, Settings, QrCode, Lock, LogOut, Calendar, GraduationCap } from 'lucide-react';
+import { getEventConfig } from '../services/storage';
 
 export default function Header({
   currentView,
@@ -125,14 +126,16 @@ export default function Header({
               </button>
             )}
 
-            <button
-              className="btn-projection-trigger"
-              onClick={onOpenQRModal}
-              title="Proyectar Código QR del Evento en pantalla grande"
-            >
-              <QrCode size={16} />
-              <span className="proj-btn-text">Proyectar QR</span>
-            </button>
+            {(!currentEvent || getEventConfig(currentEvent).modulos.codigoQR !== false) && (
+              <button
+                className="btn-projection-trigger"
+                onClick={onOpenQRModal}
+                title="Proyectar Código QR del Evento en pantalla grande"
+              >
+                <QrCode size={16} />
+                <span className="proj-btn-text">Proyectar QR</span>
+              </button>
+            )}
           </div>
         </div>
       </nav>

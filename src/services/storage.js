@@ -370,21 +370,98 @@ export async function fetchEventByIdDirect(eventId) {
   return localMatch || null;
 }
 
+// Configuración de módulos y reglas de negocio por evento
+export const DEFAULT_EVENT_CONFIG = {
+  modulos: {
+    asistencia: true,
+    validacionInscritos: true,
+    escarapelaDigital: true,
+    codigoQR: true,
+    placaVehiculo: true,
+    preguntasPonentes: true,
+    evaluacionPonentes: true,
+    encuestaSatisfaccion: true,
+    encuestasEnVivo: true
+  },
+  gpsObligatorio: false
+};
+
+// Obtiene la configuración consolidada y normalizada de un evento, asegurando
+// retrocompatibilidad total con eventos existentes creados antes de la modularidad
+export function getEventConfig(evento) {
+  if (!evento) return DEFAULT_EVENT_CONFIG;
+
+  const rawConfig = evento.configuracion || {};
+  const rawModulos = rawConfig.modulos || {};
+
+  const hasRootPonentes = evento.habilitarPonentes !== undefined
+    ? Boolean(evento.habilitarPonentes)
+    : (Array.isArray(evento.ponentes) && evento.ponentes.length > 0);
+
+  const modulos = {
+    asistencia: true, // Siempre obligatoria y permanente
+    validacionInscritos: rawModulos.validacionInscritos !== undefined
+      ? Boolean(rawModulos.validacionInscritos)
+      : true,
+    escarapelaDigital: rawModulos.escarapelaDigital !== undefined
+      ? Boolean(rawModulos.escarapelaDigital)
+      : true,
+    codigoQR: rawModulos.codigoQR !== undefined
+      ? Boolean(rawModulos.codigoQR)
+      : true,
+    placaVehiculo: rawModulos.placaVehiculo !== undefined
+      ? Boolean(rawModulos.placaVehiculo)
+      : (evento.habilitarPlacaVehiculo !== undefined ? Boolean(evento.habilitarPlacaVehiculo) : true),
+    preguntasPonentes: rawModulos.preguntasPonentes !== undefined
+      ? Boolean(rawModulos.preguntasPonentes)
+      : hasRootPonentes,
+    evaluacionPonentes: rawModulos.evaluacionPonentes !== undefined
+      ? Boolean(rawModulos.evaluacionPonentes)
+      : hasRootPonentes,
+    encuestaSatisfaccion: rawModulos.encuestaSatisfaccion !== undefined
+      ? Boolean(rawModulos.encuestaSatisfaccion)
+      : true,
+    encuestasEnVivo: rawModulos.encuestasEnVivo !== undefined
+      ? Boolean(rawModulos.encuestasEnVivo)
+      : (evento.habilitarEncuestasEnVivo !== undefined ? Boolean(evento.habilitarEncuestasEnVivo) : true)
+  };
+
+  const gpsObligatorio = rawConfig.gpsObligatorio !== undefined
+    ? Boolean(rawConfig.gpsObligatorio)
+    : Boolean(evento.gpsObligatorio ?? false);
+
+  return {
+    modulos,
+    gpsObligatorio
+  };
+}
+
 export async function saveEvent(eventData) {
+  const config = getEventConfig(eventData);
+
+  const consolidatedEvent = {
+    ...eventData,
+    configuracion: config,
+    habilitarPlacaVehiculo: config.modulos.placaVehiculo,
+    habilitarPonentes: config.modulos.preguntasPonentes || config.modulos.evaluacionPonentes,
+    habilitarEncuestasEnVivo: config.modulos.encuestasEnVivo,
+    gpsObligatorio: config.gpsObligatorio
+  };
+
   const events = getEvents();
-  const index = events.findIndex(e => e.id === eventData.id);
+  const index = events.findIndex(e => e.id === consolidatedEvent.id);
   if (index >= 0) {
-    events[index] = eventData;
+    events[index] = consolidatedEvent;
   } else {
-    events.unshift(eventData);
+    events.unshift(consolidatedEvent);
   }
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(events));
 
   // Sincronizar inmediatamente con Cloud Firestore en la colección 'eventos'
   if (isFirebaseConfigured() && db) {
     try {
-      await setDoc(doc(db, 'eventos', eventData.id), eventData);
-      console.info('✓ Evento sincronizado en Cloud Firestore en vivo:', eventData.id);
+      await setDoc(doc(db, 'eventos', consolidatedEvent.id), consolidatedEvent);
+      console.info('✓ Evento sincronizado en Cloud Firestore en vivo:', consolidatedEvent.id);
     } catch (err) {
       console.error('Error al guardar evento en Firestore:', err);
     }
@@ -392,7 +469,7 @@ export async function saveEvent(eventData) {
 
   // Notificar cambios para reactividad en todas las pestañas y componentes
   window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_EVENTS }));
-  return eventData;
+  return consolidatedEvent;
 }
 
 // Activar o desactivar ponente de un evento de manera individual y en tiempo real

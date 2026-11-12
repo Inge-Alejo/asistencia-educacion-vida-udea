@@ -20,7 +20,8 @@ import {
   parseColombianDocumentBarcode,
   getEventPolls,
   getUserPollVote,
-  votePoll
+  votePoll,
+  getEventConfig
 } from '../services/storage';
 import { maskFullName, maskEmail, areNamesMatching, sanitizeText, parseMicrosoftFormsUrl } from '../services/sanitizer';
 import { getOfficialColombiaTime, getEventDaysList, checkEventDayStatus, getColombiaLocalDateStr } from '../services/networkTime';
@@ -69,12 +70,60 @@ export default function AttendeeView({
 
   // Recuperar sesión activa persistente del asistente en este evento
   const sessionInfo = getSavedAttendeeSession(evento?.id);
-  const hasPonentes = Boolean(evento?.habilitarPonentes !== false && (evento?.ponentes?.length > 0 || !evento?.id));
+  const eventConfig = useMemo(() => getEventConfig(evento), [evento]);
+  const hasPonentes = Boolean(
+    (eventConfig.modulos.preguntasPonentes || eventConfig.modulos.evaluacionPonentes) &&
+    (evento?.ponentes?.length > 0 || !evento?.id)
+  );
 
-  // Control del Flujo Secuencial (Pasos 1 a 5 si tiene ponentes, o Pasos 1 a 3 si no tiene ponentes)
-  // 1: Ubicación GPS, 2: Datos de Asistencia, 3: Preguntas en Vivo, 4: Calificación Ponentes, 5: Microsoft Forms / Satisfacción
-  const [activeStep, setActiveStep] = useState(() => (sessionInfo?.registrado ? (hasPonentes ? 3 : 5) : 1));
-  const [maxUnlockedStep, setMaxUnlockedStep] = useState(() => (sessionInfo?.registrado ? 5 : 1));
+  // Cálculo del siguiente módulo activo post-registro
+  const nextModuleStep = useMemo(() => {
+    if (eventConfig.modulos.preguntasPonentes && hasPonentes) return 3;
+    if (eventConfig.modulos.evaluacionPonentes && hasPonentes) return 4;
+    if (eventConfig.modulos.encuestaSatisfaccion) return 5;
+    return 2; // Caso fundamental: solo asistencia habilitada
+  }, [eventConfig, hasPonentes]);
+
+  // Pasos dinámicos disponibles en el flujo según la configuración modular del evento
+  const availableSteps = useMemo(() => {
+    const list = [];
+    if (eventConfig.gpsObligatorio) {
+      list.push({ step: 1, label: 'Ubicación GPS', icon: MapPin });
+    }
+    list.push({ step: 2, label: 'Datos Asistencia', icon: User });
+    if (eventConfig.modulos.preguntasPonentes && hasPonentes) {
+      list.push({ step: 3, label: 'Preguntas en Vivo', icon: HelpCircle });
+    }
+    if (eventConfig.modulos.evaluacionPonentes && hasPonentes) {
+      list.push({ step: 4, label: 'Calificar Ponentes', icon: Star });
+    }
+    if (eventConfig.modulos.encuestaSatisfaccion) {
+      list.push({ step: 5, label: 'Satisfacción', icon: FileText });
+    }
+    return list;
+  }, [eventConfig, hasPonentes]);
+
+  // Control del Flujo Secuencial: inicia en 2 si el GPS no es obligatorio o en el siguiente módulo si ya está registrado
+  const [activeStep, setActiveStep] = useState(() => {
+    if (sessionInfo?.registrado) {
+      if (eventConfig.modulos.preguntasPonentes && hasPonentes) return 3;
+      if (eventConfig.modulos.evaluacionPonentes && hasPonentes) return 4;
+      if (eventConfig.modulos.encuestaSatisfaccion) return 5;
+      return 2;
+    }
+    return eventConfig.gpsObligatorio ? 1 : 2;
+  });
+
+  const [maxUnlockedStep, setMaxUnlockedStep] = useState(() => (
+    sessionInfo?.registrado ? 5 : (eventConfig.gpsObligatorio ? 1 : 2)
+  ));
+
+  // Número de paso actual y total de pasos dinámicos para indicadores de progreso
+  const currentStepNumber = useMemo(() => {
+    const idx = availableSteps.findIndex(s => s.step === activeStep);
+    return idx >= 0 ? idx + 1 : 1;
+  }, [availableSteps, activeStep]);
+  const totalStepsCount = availableSteps.length;
 
   // Estado de Geolocalización
   const [geoState, setGeoState] = useState({
@@ -271,11 +320,15 @@ export default function AttendeeView({
 
   // Verificación de si el documento actual figura en la lista de inscritos oficiales del evento
   const enrollmentStatus = useMemo(() => {
+    // Si la validación contra inscritos está desactivada en la configuración del evento, se admite libremente
+    if (!eventConfig.modulos.validacionInscritos) {
+      return { isEnrolled: true, hasWhitelist: false };
+    }
     if (!normalizedCurrentDoc || normalizedCurrentDoc.length < 4) {
       return { isEnrolled: true, hasWhitelist: Boolean(inscritosSet && inscritosSet.size > 0) };
     }
     return isDocumentEnrolled(inscritosSet, normalizedCurrentDoc);
-  }, [inscritosSet, normalizedCurrentDoc]);
+  }, [eventConfig.modulos.validacionInscritos, inscritosSet, normalizedCurrentDoc]);
 
   // Historial de asistencias registradas por este participante en este evento (todas las sesiones)
   const misAsistenciasEvento = useMemo(() => {
@@ -371,10 +424,7 @@ export default function AttendeeView({
     return Boolean(isDocMatch && isNameMatch);
   }, [normalizedCurrentDoc, verifiedDoc, sessionInfo, formData.nombreCompleto, registroExistente, registroPrevioEvento, inscritoData]);
 
-  // Siguiente módulo habilitado tras confirmar asistencia (Satisfacción si no hay ponentes, o Preguntas en Vivo si hay ponentes)
-  const nextModuleStep = hasPonentes ? 3 : 5;
-
-  // Si la asistencia ya está confirmada en este evento, redirigir automáticamente al siguiente módulo activo (Satisfacción / Preguntas)
+  // Si la asistencia ya está confirmada en este evento, redirigir automáticamente al siguiente módulo activo
   useEffect(() => {
     if (asistenciaRegistrada || isRegisteredForEvent) {
       if (activeStep < nextModuleStep || (!hasPonentes && (activeStep === 3 || activeStep === 4))) {
@@ -382,6 +432,25 @@ export default function AttendeeView({
       }
     }
   }, [asistenciaRegistrada, isRegisteredForEvent, hasPonentes, activeStep, nextModuleStep]);
+
+  // Reconciliación en tiempo real si el administrador activa o desactiva módulos mientras el asistente tiene la página abierta
+  useEffect(() => {
+    if (!isRegisteredForEvent) {
+      if (activeStep === 1 && !eventConfig.gpsObligatorio) {
+        setActiveStep(2);
+      }
+    } else {
+      if (activeStep === 3 && (!eventConfig.modulos.preguntasPonentes || !hasPonentes)) {
+        setActiveStep(nextModuleStep);
+      }
+      if (activeStep === 4 && (!eventConfig.modulos.evaluacionPonentes || !hasPonentes)) {
+        setActiveStep(nextModuleStep);
+      }
+      if (activeStep === 5 && !eventConfig.modulos.encuestaSatisfaccion) {
+        setActiveStep(nextModuleStep);
+      }
+    }
+  }, [eventConfig, hasPonentes, activeStep, nextModuleStep, isRegisteredForEvent]);
 
   // Si el participante ingresa nuevamente con su documento y ya tiene asistencia registrada para este evento, redirigir de inmediato
   useEffect(() => {
@@ -475,7 +544,7 @@ export default function AttendeeView({
       setCodigoComprobante(yaRegistrado.id);
       setAsistenciaRegistrada(true);
       setMaxUnlockedStep(5);
-      setActiveStep(hasPonentes ? 3 : 5);
+      setActiveStep(nextModuleStep);
       setScannerNotification({
         type: 'already_registered',
         title: '¡Asistencia de Hoy Ya Registrada!',
@@ -553,7 +622,7 @@ export default function AttendeeView({
         });
       }
     }
-  }, [asistencias, currentEventId, inscritosParticipants, isCurrentDocVerified, hasPonentes]);
+  }, [asistencias, currentEventId, inscritosParticipants, isCurrentDocVerified, nextModuleStep]);
 
   // Interceptor global de pulsaciones para Escáner de Código de Barras USB (HID Wedge)
   useEffect(() => {
@@ -648,7 +717,7 @@ export default function AttendeeView({
       } catch {}
 
       if (registroExistente) {
-        setActiveStep(hasPonentes ? 3 : 5);
+        setActiveStep(nextModuleStep);
       }
     } else {
       setChallengeError(
@@ -941,6 +1010,15 @@ export default function AttendeeView({
       return;
     }
 
+    // Validación estricta de GPS solo si el administrador configuró el GPS como obligatorio
+    if (eventConfig.gpsObligatorio && !geoState.obtenida) {
+      setErrorAsistencia(
+        'La verificación de ubicación GPS es obligatoria para este evento. Por favor active los permisos de ubicación y presione "Obtener Ubicación Satelital".'
+      );
+      setActiveStep(1);
+      return;
+    }
+
     // Validación estricta de admisión: debe figurar en la lista de inscritos si el evento tiene lista cargada
     if (enrollmentStatus.hasWhitelist && !enrollmentStatus.isEnrolled) {
       setErrorAsistencia(
@@ -979,9 +1057,9 @@ export default function AttendeeView({
       }
     }
 
-    // Placa vehicular: Totalmente OPCIONAL si el evento la tiene habilitada. Máximo 6 caracteres alfanuméricos si se provee.
+    // Placa vehicular: Totalmente OPCIONAL si el evento la tiene habilitada en su configuración modular. Máximo 6 caracteres alfanuméricos si se provee.
     const placaClean = (formData.placaVehiculo || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (evento.habilitarPlacaVehiculo && placaClean.length > 0 && (placaClean.length < 5 || placaClean.length > 6)) {
+    if (eventConfig.modulos.placaVehiculo && placaClean.length > 0 && (placaClean.length < 5 || placaClean.length > 6)) {
       setErrorAsistencia('La placa vehicular debe tener entre 5 y 6 caracteres alfanuméricos (ej: KMW452 o ABC12D). Si no cuenta con vehículo, puede dejar este campo vacío.');
       return;
     }
@@ -1003,7 +1081,7 @@ export default function AttendeeView({
       correo: sanitizeText(email, 100),
       telefono: sanitizeText(telClean, 25),
       vinculacion: formData.vinculacion,
-      placaVehiculo: (evento.habilitarPlacaVehiculo && placaClean) ? sanitizeText(placaClean, 6) : '',
+      placaVehiculo: (eventConfig.modulos.placaVehiculo && placaClean) ? sanitizeText(placaClean, 6) : '',
       habeasDataAceptado: true,
       fechaHabeasData: new Date().toISOString(),
       geolocalizacion: {
@@ -1034,10 +1112,9 @@ export default function AttendeeView({
         console.warn('Error al guardar sesión del asistente:', err);
       }
 
-      // Desbloquear todos los pasos siguientes y avanzar de inmediato a Preguntas (Paso 3) o Satisfacción (Paso 5)
+      // Desbloquear todos los pasos siguientes y avanzar de inmediato al siguiente módulo activo
       setMaxUnlockedStep(5);
-      const nextStep = hasPonentes ? 3 : 5;
-      setActiveStep(nextStep);
+      setActiveStep(nextModuleStep);
 
       // Celebración festiva con confeti y desplazamiento suave al encabezado del nuevo módulo
       triggerCelebrationConfetti();
@@ -1060,8 +1137,7 @@ export default function AttendeeView({
               registrado: true
             }));
           } catch {}
-          const nextStep = hasPonentes ? 3 : 5;
-          setActiveStep(nextStep);
+          setActiveStep(nextModuleStep);
           scrollToModuleTop();
           return;
         }
@@ -1179,7 +1255,7 @@ export default function AttendeeView({
           </div>
 
           <div className="session-banner-actions">
-            {hasPonentes && (
+            {eventConfig.modulos.preguntasPonentes && hasPonentes && (
               <button
                 type="button"
                 className={`btn-session-nav ${activeStep === 3 ? 'active' : ''}`}
@@ -1189,7 +1265,7 @@ export default function AttendeeView({
                 <span>Preguntas en Vivo</span>
               </button>
             )}
-            {hasPonentes && (
+            {eventConfig.modulos.evaluacionPonentes && hasPonentes && (
               <button
                 type="button"
                 className={`btn-session-nav ${activeStep === 4 ? 'active' : ''}`}
@@ -1199,23 +1275,27 @@ export default function AttendeeView({
                 <span>Calificar Ponentes</span>
               </button>
             )}
-            <button
-              type="button"
-              className={`btn-session-nav ${activeStep === 5 ? 'active' : ''}`}
-              onClick={() => setActiveStep(5)}
-            >
-              <FileText size={15} />
-              <span>Satisfacción</span>
-            </button>
-            <button
-              type="button"
-              className="btn-session-nav badge-btn-pill"
-              onClick={() => setIsBadgeModalOpen(true)}
-              title="Ver Escarapela Digital para ingreso"
-            >
-              <Award size={15} />
-              <span>Escarapela Digital</span>
-            </button>
+            {eventConfig.modulos.encuestaSatisfaccion && (
+              <button
+                type="button"
+                className={`btn-session-nav ${activeStep === 5 ? 'active' : ''}`}
+                onClick={() => setActiveStep(5)}
+              >
+                <FileText size={15} />
+                <span>Satisfacción</span>
+              </button>
+            )}
+            {eventConfig.modulos.escarapelaDigital && (
+              <button
+                type="button"
+                className="btn-session-nav badge-btn-pill"
+                onClick={() => setIsBadgeModalOpen(true)}
+                title="Ver Escarapela Digital para ingreso"
+              >
+                <Award size={15} />
+                <span>Escarapela Digital</span>
+              </button>
+            )}
             <button
               type="button"
               className="btn-change-attendee"
@@ -1251,7 +1331,7 @@ export default function AttendeeView({
       )}
 
       {/* MÓDULO INTERACTIVO DE VOTACIONES EN VIVO (LIVE POLLS) */}
-      {evento?.habilitarEncuestasEnVivo !== false && polls.length > 0 && (
+      {eventConfig.modulos.encuestasEnVivo && polls.length > 0 && (
         <section className="live-polls-attendee-card animated-step" style={{
           background: '#FFFFFF',
           borderRadius: '14px',
@@ -1511,20 +1591,11 @@ export default function AttendeeView({
       {/* BARRA DE PROGRESO SECUENCIAL INTERACTIVA */}
       <nav className="stepper-progress-nav" aria-label="Progreso secuencial del registro">
         <div className="stepper-track">
-          {[
-            { step: 1, label: 'Ubicación GPS', icon: MapPin },
-            { step: 2, label: 'Datos Asistencia', icon: User },
-            ...(hasPonentes ? [
-              { step: 3, label: 'Preguntas en Vivo', icon: HelpCircle },
-              { step: 4, label: 'Calificar Ponentes', icon: Star }
-            ] : []),
-            { step: 5, label: 'Satisfacción', icon: FileText }
-          ].map((item, idx) => {
+          {availableSteps.map((item, idx) => {
             const isCompleted = item.step < activeStep || (item.step === 2 && isRegisteredForEvent);
             const isCurrent = item.step === activeStep;
-            const minPostStep = hasPonentes ? 3 : 5;
-            const isAccessible = (isRegisteredForEvent || activeStep >= minPostStep)
-              ? (item.step >= minPostStep && item.step <= maxUnlockedStep)
+            const isAccessible = (isRegisteredForEvent || activeStep >= nextModuleStep)
+              ? (item.step >= nextModuleStep || item.step === 2)
               : (item.step <= maxUnlockedStep);
 
             return (
@@ -1549,19 +1620,21 @@ export default function AttendeeView({
       </nav>
 
       {/* =========================================================================
-          PASO 1: VALIDACIÓN DE GEOLOCALIZACIÓN GPS
+          PASO 1: VALIDACIÓN DE GEOLOCALIZACIÓN GPS (SI ES OBLIGATORIO)
           ========================================================================= */}
-      {activeStep === 1 && (
+      {activeStep === 1 && eventConfig.gpsObligatorio && (
         <section className="attendee-card-module animated-step">
           <div className="module-header">
             <div className="module-icon-wrap">
               <MapPin size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso 1 de {hasPonentes ? 5 : 3}</span>
+              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
               <h2 className="module-title">Verificación de Ubicación Presencial</h2>
               <p className="module-desc">
-                Compruebe su presencia en la sede o auditorio de la Facultad de Medicina para certificar su asistencia presencial.
+                {eventConfig.gpsObligatorio
+                  ? 'La organización del evento requiere la verificación de su ubicación satelital GPS para certificar su asistencia presencial.'
+                  : 'Compruebe su presencia en la sede o auditorio de la Facultad de Medicina para certificar su asistencia presencial.'}
               </p>
               <div className="usb-scanner-ready-badge">
                 <Barcode size={15} />
@@ -1709,7 +1782,9 @@ export default function AttendeeView({
               <div>
                 <strong>Aviso:</strong> {geoState.error}
                 <p style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                  Puedes continuar y registrar tu asistencia normalmente.
+                  {eventConfig.gpsObligatorio
+                    ? 'La ubicación es obligatoria para este evento. Por favor verifique los permisos de ubicación o intente nuevamente.'
+                    : 'Puedes continuar y registrar tu asistencia normalmente.'}
                 </p>
               </div>
             </div>
@@ -1721,6 +1796,11 @@ export default function AttendeeView({
               type="button"
               className="btn-primary-action"
               onClick={() => {
+                if (eventConfig.gpsObligatorio && !geoState.obtenida) {
+                  setErrorAsistencia('Es obligatorio obtener la ubicación GPS para registrar la asistencia en este evento.');
+                  return;
+                }
+                setErrorAsistencia('');
                 setMaxUnlockedStep(prev => Math.max(prev, 2));
                 setActiveStep(2);
               }}
@@ -1742,7 +1822,7 @@ export default function AttendeeView({
               <ShieldCheck size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso 2 de {hasPonentes ? 5 : 3}</span>
+              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
               <h2 className="module-title">Registro Oficial de Asistencia</h2>
               <p className="module-desc">
                 Ingrese sus datos personales para la emisión oficial del certificado de Educación a lo Largo de la Vida.
@@ -1836,58 +1916,77 @@ export default function AttendeeView({
                 <span>N° Comprobante:</span> <strong>{codigoComprobante}</strong>
               </div>
 
-              {/* Acceso a la Escarapela Digital Oficial con Código QR */}
-              <div className="badge-cta-container">
-                <button
-                  type="button"
-                  className="btn-open-badge-glow pulse"
-                  onClick={() => setIsBadgeModalOpen(true)}
-                >
-                  <Award size={20} />
-                  <span>Ver Mi Pase Digital Oficial</span>
-                </button>
-                <p className="badge-cta-hint">
-                  Incluye tu código QR de verificación oficial para identificarte e ingresar al auditorio.
-                </p>
-              </div>
+              {/* Acceso a la Escarapela Digital Oficial con Código QR (si el módulo está activo) */}
+              {eventConfig.modulos.escarapelaDigital && (
+                <div className="badge-cta-container">
+                  <button
+                    type="button"
+                    className="btn-open-badge-glow pulse"
+                    onClick={() => setIsBadgeModalOpen(true)}
+                  >
+                    <Award size={20} />
+                    <span>Ver Mi Pase Digital Oficial</span>
+                  </button>
+                  <p className="badge-cta-hint">
+                    {eventConfig.modulos.codigoQR
+                      ? 'Incluye tu código QR de verificación oficial para identificarte e ingresar al auditorio.'
+                      : 'Incluye tu comprobante oficial para identificarte e ingresar al auditorio.'}
+                  </p>
+                </div>
+              )}
 
               <div className="post-register-nav-box">
-                {hasPonentes ? (
+                {nextModuleStep !== 2 ? (
                   <>
-                    <p>Ahora puedes participar con preguntas al ponente o responder las encuestas:</p>
+                    <p>Ahora puedes continuar con las siguientes actividades del evento:</p>
                     <div className="next-steps-buttons">
-                      <button
-                        type="button"
-                        className="btn-primary-action"
-                        onClick={() => setActiveStep(3)}
-                      >
-                        <MessageSquare size={16} />
-                        <span>Ir a Preguntas al Ponente</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => setActiveStep(4)}
-                      >
-                        <Star size={16} />
-                        <span>Calificar Ponentes</span>
-                      </button>
+                      {eventConfig.modulos.preguntasPonentes && hasPonentes && (
+                        <button
+                          type="button"
+                          className="btn-primary-action"
+                          onClick={() => setActiveStep(3)}
+                        >
+                          <MessageSquare size={16} />
+                          <span>Ir a Preguntas al Ponente</span>
+                        </button>
+                      )}
+                      {eventConfig.modulos.evaluacionPonentes && hasPonentes && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => setActiveStep(4)}
+                        >
+                          <Star size={16} />
+                          <span>Calificar Ponentes</span>
+                        </button>
+                      )}
+                      {eventConfig.modulos.encuestaSatisfaccion && (
+                        <button
+                          type="button"
+                          className="btn-primary-action"
+                          onClick={() => setActiveStep(5)}
+                        >
+                          <FileText size={16} />
+                          <span>Ir a Encuesta de Satisfacción</span>
+                        </button>
+                      )}
                     </div>
                   </>
                 ) : (
-                  <>
-                    <p>Ahora puedes responder la encuesta de satisfacción académica:</p>
-                    <div className="next-steps-buttons">
-                      <button
-                        type="button"
-                        className="btn-primary-action"
-                        onClick={() => setActiveStep(5)}
-                      >
-                        <FileText size={16} />
-                        <span>Ir a Encuesta de Satisfacción</span>
-                      </button>
-                    </div>
-                  </>
+                  <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+                    <p style={{ color: '#475569', fontSize: '0.9rem', marginBottom: '0.85rem' }}>
+                      Tu asistencia ha quedado registrada correctamente. No se requieren pasos adicionales para este evento.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={handleNuevoRegistro}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', margin: '0 auto' }}
+                    >
+                      <UserPlus size={16} />
+                      <span>Realizar un nuevo registro</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -1992,11 +2091,19 @@ export default function AttendeeView({
                                   registrado: true
                                 }));
                               } catch {}
-                              setActiveStep(hasPonentes ? 3 : 5);
+                              setActiveStep(nextModuleStep);
                             }}
                           >
                             <CheckCircle2 size={15} />
-                            <span>{hasPonentes ? 'Ver mi comprobante e ir a Preguntas en Vivo' : 'Ver mi comprobante e ir a Satisfacción'}</span>
+                            <span>
+                              {nextModuleStep === 3
+                                ? 'Ver mi comprobante e ir a Preguntas en Vivo'
+                                : nextModuleStep === 4
+                                ? 'Ver mi comprobante e ir a Calificar Ponentes'
+                                : nextModuleStep === 5
+                                ? 'Ver mi comprobante e ir a Satisfacción'
+                                : 'Ver mi comprobante de asistencia'}
+                            </span>
                             <ChevronRight size={14} />
                           </button>
                           <button
@@ -2274,7 +2381,7 @@ export default function AttendeeView({
                 </div>
 
                 {/* CAMPO CONDICIONAL DE PLACA VEHICULAR: Totalmente opcional, máx 6 caracteres */}
-                {evento.habilitarPlacaVehiculo && (
+                {eventConfig.modulos.placaVehiculo && (
                   <div className="form-group col-span-2 vehicle-highlight-field">
                     <label className="form-label vehicle-label">
                       <Car size={16} /> Placa del Vehículo <span style={{ fontSize: '0.8rem', color: '#008744', fontWeight: 'normal', marginLeft: '0.35rem' }}>(Opcional si tiene carro o moto)</span>
@@ -2290,6 +2397,44 @@ export default function AttendeeView({
                     <span className="field-hint">
                       <strong>Nota informativa:</strong> Ingrese la placa únicamente si requiere autorizar el ingreso al parqueadero de la Facultad. Si asiste a pie o en transporte público, déjelo vacío.
                     </span>
+                  </div>
+                )}
+
+                {/* BLOQUE OPCIONAL DISCRETO DE GPS (Cuando el GPS no es obligatorio) */}
+                {!eventConfig.gpsObligatorio && (
+                  <div className="form-group col-span-2" style={{
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '8px',
+                    padding: '0.75rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                    fontSize: '0.85rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#475569' }}>
+                      <MapPin size={16} color="#006633" />
+                      <span>
+                        {geoState.obtenida
+                          ? (geoState.esPresencial
+                              ? `Ubicación validada en sede (${geoState.distancia} m del auditorio)`
+                              : `Ubicación satelital registrada (${geoState.distancia || 0} m)`)
+                          : 'Ubicación GPS: Opcional para este evento (no condiciona el registro)'}
+                      </span>
+                    </div>
+                    {!geoState.obtenida && (
+                      <button
+                        type="button"
+                        className="btn-change-participant-mini"
+                        onClick={handleObtenerUbicacion}
+                        disabled={geoState.cargando}
+                        title="Capturar ubicación satelital de forma voluntaria"
+                      >
+                        {geoState.cargando ? 'Obteniendo...' : 'Capturar GPS (Opcional)'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -2338,11 +2483,19 @@ export default function AttendeeView({
                             }));
                           } catch {}
                           setErrorAsistencia('');
-                          setActiveStep(hasPonentes ? 3 : 5);
+                          setActiveStep(nextModuleStep);
                         }}
                       >
                         <CheckCircle2 size={15} />
-                        <span>{hasPonentes ? 'Ver mi comprobante e ir a Preguntas en Vivo' : 'Ver mi comprobante e ir a Satisfacción'}</span>
+                        <span>
+                          {nextModuleStep === 3
+                            ? 'Ver mi comprobante e ir a Preguntas en Vivo'
+                            : nextModuleStep === 4
+                            ? 'Ver mi comprobante e ir a Calificar Ponentes'
+                            : nextModuleStep === 5
+                            ? 'Ver mi comprobante e ir a Satisfacción'
+                            : 'Ver mi comprobante de asistencia'}
+                        </span>
                         <ChevronRight size={14} />
                       </button>
                   )}
@@ -2350,14 +2503,18 @@ export default function AttendeeView({
               )}
 
               <div className="stepper-footer-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setActiveStep(1)}
-                >
-                  <ChevronLeft size={16} />
-                  <span>Volver a Ubicación</span>
-                </button>
+                {eventConfig.gpsObligatorio ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setActiveStep(1)}
+                  >
+                    <ChevronLeft size={16} />
+                    <span>Volver a Ubicación</span>
+                  </button>
+                ) : (
+                  <div></div>
+                )}
 
                 <button
                   type="submit"
@@ -2391,48 +2548,50 @@ export default function AttendeeView({
       {/* =========================================================================
           PASO 3: PREGUNTAS A PONENTES EN VIVO (LIVE Q&A)
           ========================================================================= */}
-      {activeStep === 3 && hasPonentes && (
+      {activeStep === 3 && eventConfig.modulos.preguntasPonentes && hasPonentes && (
         <>
-          {/* ACCESO DESTACADO A LA ESCARAPELA DIGITAL (Debajo de las 5 etapas y arriba de las preguntas) */}
-          <div className="step-badge-banner-cta animated-step">
-            <div className="step-badge-banner-content">
-              <div className="step-badge-icon-wrap">
-                <Award size={26} />
+          {/* ACCESO DESTACADO A LA ESCARAPELA DIGITAL (Si está activo el módulo) */}
+          {eventConfig.modulos.escarapelaDigital && (
+            <div className="step-badge-banner-cta animated-step">
+              <div className="step-badge-banner-content">
+                <div className="step-badge-icon-wrap">
+                  <Award size={26} />
+                </div>
+                <div className="step-badge-text-wrap">
+                  <h3 className="step-badge-title">Escarapela Digital</h3>
+                  <p className="step-badge-sub">
+                    {attendeeDisplayName ? (
+                      <>
+                        Hola, <strong>{attendeeDisplayName}</strong>. Presenta tu código QR institucional y comprobante de asistencia confirmada en cualquier momento.
+                      </>
+                    ) : (
+                      'Presenta tu código QR institucional y comprobante de asistencia confirmada en cualquier momento.'
+                    )}
+                  </p>
+                </div>
               </div>
-              <div className="step-badge-text-wrap">
-                <h3 className="step-badge-title">Escarapela Digital</h3>
-                <p className="step-badge-sub">
-                  {attendeeDisplayName ? (
-                    <>
-                      Hola, <strong>{attendeeDisplayName}</strong>. Presenta tu código QR institucional y comprobante de asistencia confirmada en cualquier momento.
-                    </>
-                  ) : (
-                    'Presenta tu código QR institucional y comprobante de asistencia confirmada en cualquier momento.'
-                  )}
-                </p>
+              <div className="step-badge-banner-actions">
+                <button
+                  type="button"
+                  className="btn-open-badge-glow pulse"
+                  onClick={() => setIsBadgeModalOpen(true)}
+                  title="Ver escarapela digital con código QR"
+                >
+                  <Award size={18} />
+                  <span>Ver Escarapela Digital</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-nuevo-registro-banner"
+                  onClick={handleNuevoRegistro}
+                  title="Realizar un nuevo registro de asistencia"
+                >
+                  <UserPlus size={16} />
+                  <span>Realizar nuevo registro</span>
+                </button>
               </div>
             </div>
-            <div className="step-badge-banner-actions">
-              <button
-                type="button"
-                className="btn-open-badge-glow pulse"
-                onClick={() => setIsBadgeModalOpen(true)}
-                title="Ver escarapela digital con código QR"
-              >
-                <Award size={18} />
-                <span>Ver Escarapela Digital</span>
-              </button>
-              <button
-                type="button"
-                className="btn-nuevo-registro-banner"
-                onClick={handleNuevoRegistro}
-                title="Realizar un nuevo registro de asistencia"
-              >
-                <UserPlus size={16} />
-                <span>Realizar nuevo registro</span>
-              </button>
-            </div>
-          </div>
+          )}
 
           <section className="attendee-card-module animated-step">
           <div className="module-header">
@@ -2440,7 +2599,7 @@ export default function AttendeeView({
               <HelpCircle size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso 3 de 5</span>
+              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
               <h2 className="module-title">Preguntas a los Ponentes en Vivo</h2>
               <p className="module-desc">
                 Envíe su pregunta o caso clínico. El moderador en el auditorio la recibirá en tiempo real.
@@ -2536,15 +2695,17 @@ export default function AttendeeView({
 
           <div className="stepper-footer-actions">
             <div className="stepper-left-actions">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setIsBadgeModalOpen(true)}
-                title="Ver credencial y comprobante oficial con código QR"
-              >
-                <Award size={16} />
-                <span>Escarapela Digital</span>
-              </button>
+              {eventConfig.modulos.escarapelaDigital && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setIsBadgeModalOpen(true)}
+                  title="Ver credencial y comprobante oficial con código QR"
+                >
+                  <Award size={16} />
+                  <span>Escarapela Digital</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-secondary btn-nuevo-registro-footer"
@@ -2560,11 +2721,24 @@ export default function AttendeeView({
               type="button"
               className="btn-primary-action"
               onClick={() => {
-                setMaxUnlockedStep(prev => Math.max(prev, 4));
-                setActiveStep(4);
+                if (eventConfig.modulos.evaluacionPonentes && hasPonentes) {
+                  setMaxUnlockedStep(prev => Math.max(prev, 4));
+                  setActiveStep(4);
+                } else if (eventConfig.modulos.encuestaSatisfaccion) {
+                  setMaxUnlockedStep(prev => Math.max(prev, 5));
+                  setActiveStep(5);
+                } else {
+                  setActiveStep(2);
+                }
               }}
             >
-              <span>Continuar a Calificar Ponentes</span>
+              <span>
+                {eventConfig.modulos.evaluacionPonentes && hasPonentes
+                  ? 'Continuar a Calificar Ponentes'
+                  : eventConfig.modulos.encuestaSatisfaccion
+                  ? 'Continuar a Encuesta Final'
+                  : 'Ver Comprobante de Asistencia'}
+              </span>
               <ChevronRight size={18} />
             </button>
           </div>
@@ -2575,14 +2749,14 @@ export default function AttendeeView({
       {/* =========================================================================
           PASO 4: CALIFICACIÓN DINÁMICA DE PONENTES
           ========================================================================= */}
-      {activeStep === 4 && hasPonentes && (
+      {activeStep === 4 && eventConfig.modulos.evaluacionPonentes && hasPonentes && (
         <section className="attendee-card-module animated-step">
           <div className="module-header">
             <div className="module-icon-wrap stars-icon">
               <Star size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso 4 de 5</span>
+              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
               <h2 className="module-title">Calificación Individual de Ponentes</h2>
               <p className="module-desc">
                 Evalúe a los conferencistas del evento. Su retroalimentación promueve la excelencia académica.
@@ -2733,21 +2907,31 @@ export default function AttendeeView({
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => setActiveStep(3)}
+              onClick={() => {
+                if (eventConfig.modulos.preguntasPonentes && hasPonentes) {
+                  setActiveStep(3);
+                } else {
+                  setActiveStep(2);
+                }
+              }}
             >
               <ChevronLeft size={16} />
-              <span>Volver a Preguntas</span>
+              <span>{eventConfig.modulos.preguntasPonentes && hasPonentes ? 'Volver a Preguntas' : 'Volver a Mi Asistencia'}</span>
             </button>
 
             <button
               type="button"
               className="btn-primary-action"
               onClick={() => {
-                setMaxUnlockedStep(5);
-                setActiveStep(5);
+                if (eventConfig.modulos.encuestaSatisfaccion) {
+                  setMaxUnlockedStep(5);
+                  setActiveStep(5);
+                } else {
+                  setActiveStep(2);
+                }
               }}
             >
-              <span>Continuar a Encuesta Final</span>
+              <span>{eventConfig.modulos.encuestaSatisfaccion ? 'Continuar a Encuesta Final' : 'Ver Comprobante de Asistencia'}</span>
               <ChevronRight size={18} />
             </button>
           </div>
@@ -2757,14 +2941,14 @@ export default function AttendeeView({
       {/* =========================================================================
           PASO 5: MICROSOFT FORMS INSTITUCIONAL + ENCUESTA DE SATISFACCIÓN
           ========================================================================= */}
-      {activeStep === 5 && (
+      {activeStep === 5 && eventConfig.modulos.encuestaSatisfaccion && (
         <section className="attendee-card-module animated-step">
           <div className="module-header">
             <div className="module-icon-wrap satisfaction-icon">
               <ThumbsUp size={22} />
             </div>
             <div>
-              <span className="step-indicator-pill">Paso {hasPonentes ? '5 de 5' : '3 de 3'}</span>
+              <span className="step-indicator-pill">Paso {currentStepNumber} de {totalStepsCount}</span>
               <h2 className="module-title">
                 {evento.habilitarMicrosoftForms && evento.microsoftFormsUrl ? 'Encuesta Institucional (Microsoft Forms) y Satisfacción' : 'Encuesta de Satisfacción General'}
               </h2>
@@ -2953,10 +3137,24 @@ export default function AttendeeView({
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => setActiveStep(hasPonentes ? 4 : 2)}
+              onClick={() => {
+                if (eventConfig.modulos.evaluacionPonentes && hasPonentes) {
+                  setActiveStep(4);
+                } else if (eventConfig.modulos.preguntasPonentes && hasPonentes) {
+                  setActiveStep(3);
+                } else {
+                  setActiveStep(2);
+                }
+              }}
             >
               <ChevronLeft size={16} />
-              <span>{hasPonentes ? 'Volver a Ponentes' : 'Volver a Mi Asistencia'}</span>
+              <span>
+                {eventConfig.modulos.evaluacionPonentes && hasPonentes
+                  ? 'Volver a Calificar Ponentes'
+                  : eventConfig.modulos.preguntasPonentes && hasPonentes
+                  ? 'Volver a Preguntas'
+                  : 'Volver a Mi Asistencia'}
+              </span>
             </button>
             <div></div>
           </div>
@@ -2964,7 +3162,7 @@ export default function AttendeeView({
       )}
 
       {/* Modal de la Escarapela Digital Oficial */}
-      {isBadgeModalOpen && activeAttendeeRecord && (
+      {isBadgeModalOpen && eventConfig.modulos.escarapelaDigital && activeAttendeeRecord && (
         <DigitalBadge
           asistente={activeAttendeeRecord}
           evento={evento}

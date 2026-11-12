@@ -32,7 +32,8 @@ import {
   getEventPolls,
   createPoll,
   togglePollStatus,
-  deletePoll
+  deletePoll,
+  getEventConfig
 } from '../services/storage';
 import { changeAdminPassword } from '../services/auth';
 import { parseMicrosoftFormsUrl } from '../services/sanitizer';
@@ -216,15 +217,25 @@ export default function AdminPanel({
   const [newPwd, setNewPwd] = useState('');
   const [pwdMsg, setPwdMsg] = useState({ text: '', isError: false });
 
-  // Validar si el evento tiene ponentes habilitados
-  const hasPonentes = Boolean(evento?.habilitarPonentes !== false && (evento?.ponentes?.length > 0 || !evento?.id));
+  // Configuración modular y validación de ponentes
+  const eventConfig = useMemo(() => getEventConfig(evento), [evento]);
+  const hasPonentes = Boolean(
+    (eventConfig.modulos.preguntasPonentes || eventConfig.modulos.evaluacionPonentes) &&
+    (evento?.ponentes?.length > 0 || !evento?.id)
+  );
 
-  // Si los ponentes están desactivados y la pestaña activa era de ponentes, cambiar a asistencias
+  // Reconciliación en tiempo real: Si un módulo se desactiva y el admin está en esa pestaña, regresar a 'asistencias'
   useEffect(() => {
-    if (evento?.habilitarPonentes === false && (activeTab === 'preguntas' || activeTab === 'evaluaciones')) {
+    if (activeTab === 'preguntas' && (!eventConfig.modulos.preguntasPonentes || !hasPonentes)) {
+      setActiveTab('asistencias');
+    } else if (activeTab === 'evaluaciones' && (!eventConfig.modulos.evaluacionPonentes || !hasPonentes)) {
+      setActiveTab('asistencias');
+    } else if (activeTab === 'encuestas' && !eventConfig.modulos.encuestasEnVivo) {
+      setActiveTab('asistencias');
+    } else if (activeTab === 'satisfaccion' && !eventConfig.modulos.encuestaSatisfaccion) {
       setActiveTab('asistencias');
     }
-  }, [evento?.habilitarPonentes, activeTab]);
+  }, [eventConfig, hasPonentes, activeTab]);
 
   // Estado para alternar activación individual de ponentes en tiempo real
   const [togglingPonenteId, setTogglingPonenteId] = useState(null);
@@ -363,6 +374,21 @@ export default function AdminPanel({
             <span className="live-pill">
               <span className="live-dot"></span> Sincronizado en Vivo
             </span>
+            <span className="gps-status-pill" style={{
+              background: eventConfig.gpsObligatorio ? '#FEF2F2' : '#F0FDF4',
+              color: eventConfig.gpsObligatorio ? '#991B1B' : '#166534',
+              border: eventConfig.gpsObligatorio ? '1px solid #FECACA' : '1px solid #BBF7D0',
+              padding: '3px 9px',
+              borderRadius: '12px',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
+              <MapPin size={12} />
+              <span>GPS: {eventConfig.gpsObligatorio ? 'Obligatorio' : 'No Obligatorio'}</span>
+            </span>
             <span className={`db-status-pill ${isFirebaseConfigured() ? 'cloud' : 'local'}`}>
               {isFirebaseConfigured() ? (
                 <>
@@ -402,15 +428,17 @@ export default function AdminPanel({
             <Barcode size={17} />
             <span>Escáner de Barras USB (PC)</span>
           </button>
-          <button
-            type="button"
-            className="btn-secondary btn-scanner-action"
-            onClick={() => setIsQRScannerOpen(true)}
-            title="Escanear en vivo con la cámara del celular o webcam para verificar y acreditar credenciales"
-          >
-            <Camera size={16} />
-            <span>Cámara QR Móvil</span>
-          </button>
+          {eventConfig.modulos.codigoQR !== false && (
+            <button
+              type="button"
+              className="btn-secondary btn-scanner-action"
+              onClick={() => setIsQRScannerOpen(true)}
+              title="Escanear en vivo con la cámara del celular o webcam para verificar y acreditar credenciales"
+            >
+              <Camera size={16} />
+              <span>Cámara QR Móvil</span>
+            </button>
+          )}
           {evento?.habilitarAlimentacion && (
             <button
               type="button"
@@ -444,19 +472,23 @@ export default function AdminPanel({
             <Edit3 size={16} />
             <span>Editar Evento Existente</span>
           </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setIsInscritosModalOpen(true)}
-            title="Cargar o gestionar lista oficial de personas inscritas (Excel / CSV) para este evento"
-          >
-            <FileSpreadsheet size={16} />
-            <span>Lista de Inscritos {evento?.inscritosResumen?.total ? `(${evento.inscritosResumen.total})` : ''}</span>
-          </button>
-          <button className="btn-secondary" onClick={onOpenQRModal}>
-            <QrCode size={16} />
-            <span>Proyectar QR</span>
-          </button>
+          {eventConfig.modulos.validacionInscritos !== false && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setIsInscritosModalOpen(true)}
+              title="Cargar o gestionar lista oficial de personas inscritas (Excel / CSV) para este evento"
+            >
+              <FileSpreadsheet size={16} />
+              <span>Lista de Inscritos {evento?.inscritosResumen?.total ? `(${evento.inscritosResumen.total})` : ''}</span>
+            </button>
+          )}
+          {eventConfig.modulos.codigoQR !== false && (
+            <button className="btn-secondary" onClick={onOpenQRModal}>
+              <QrCode size={16} />
+              <span>Proyectar QR</span>
+            </button>
+          )}
           <button className="btn-primary-action" onClick={handleDescargarExcel}>
             <Download size={16} />
             <span>Descargar Excel (.xlsx)</span>
@@ -547,61 +579,63 @@ export default function AdminPanel({
           </span>
         </div>
 
-        <div className="kpi-card">
-          <div className="kpi-header">
-            <span className="kpi-label">Placas / Parqueadero</span>
-            <div className="kpi-icon-wrap blue">
-              <Car size={18} />
+        {eventConfig.modulos.placaVehiculo && (
+          <div className="kpi-card">
+            <div className="kpi-header">
+              <span className="kpi-label">Placas / Parqueadero</span>
+              <div className="kpi-icon-wrap blue">
+                <Car size={18} />
+              </div>
             </div>
+            <div className="kpi-value">{vehiculosRegistrados}</div>
+            <span className="kpi-meta">
+              Módulo de parqueadero activo en este evento
+            </span>
           </div>
-          <div className="kpi-value">{vehiculosRegistrados}</div>
-          <span className="kpi-meta">
-            {evento.habilitarPlacaVehiculo
-              ? 'Módulo de parqueadero ACTIVO en este evento'
-              : 'Módulo de parqueadero DESACTIVADO'}
-          </span>
-        </div>
+        )}
 
-        <div className="kpi-card" style={{ opacity: hasPonentes ? 1 : 0.75 }}>
-          <div className="kpi-header">
-            <span className="kpi-label">Preguntas a Ponentes</span>
-            <div className="kpi-icon-wrap gold">
-              <HelpCircle size={18} />
+        {eventConfig.modulos.preguntasPonentes && hasPonentes && (
+          <div className="kpi-card">
+            <div className="kpi-header">
+              <span className="kpi-label">Preguntas a Ponentes</span>
+              <div className="kpi-icon-wrap gold">
+                <HelpCircle size={18} />
+              </div>
             </div>
+            <div className="kpi-value">{totalPreguntas}</div>
+            <span className="kpi-meta">
+              {`${preguntasRespondidas} de ${totalPreguntas} respondidas en vivo`}
+            </span>
           </div>
-          <div className="kpi-value">{hasPonentes ? totalPreguntas : '—'}</div>
-          <span className="kpi-meta">
-            {hasPonentes
-              ? `${preguntasRespondidas} de ${totalPreguntas} respondidas en vivo`
-              : 'Módulo de ponentes DESACTIVADO en este evento'}
-          </span>
-        </div>
+        )}
 
-        <div className="kpi-card" style={{ opacity: hasPonentes ? 1 : 0.75 }}>
-          <div className="kpi-header">
-            <span className="kpi-label">Calificación Ponentes</span>
-            <div className="kpi-icon-wrap amber">
-              <Star size={18} />
+        {eventConfig.modulos.evaluacionPonentes && hasPonentes && (
+          <div className="kpi-card">
+            <div className="kpi-header">
+              <span className="kpi-label">Calificación Ponentes</span>
+              <div className="kpi-icon-wrap amber">
+                <Star size={18} />
+              </div>
             </div>
+            <div className="kpi-value">{promedioPonentes}</div>
+            <span className="kpi-meta">
+              {`Basado en ${totalEvals} evaluaciones`}
+            </span>
           </div>
-          <div className="kpi-value">{hasPonentes ? promedioPonentes : '—'}</div>
-          <span className="kpi-meta">
-            {hasPonentes
-              ? `Basado en ${totalEvals} evaluaciones`
-              : 'Módulo de ponentes DESACTIVADO en este evento'}
-          </span>
-        </div>
+        )}
 
-        <div className="kpi-card">
-          <div className="kpi-header">
-            <span className="kpi-label">NPS Recomendación</span>
-            <div className="kpi-icon-wrap teal">
-              <ThumbsUp size={18} />
+        {eventConfig.modulos.encuestaSatisfaccion && (
+          <div className="kpi-card">
+            <div className="kpi-header">
+              <span className="kpi-label">NPS Recomendación</span>
+              <div className="kpi-icon-wrap teal">
+                <ThumbsUp size={18} />
+              </div>
             </div>
+            <div className="kpi-value">{promedioNPS} / 10</div>
+            <span className="kpi-meta">Satisfacción general {promedioExpectativas} / 5</span>
           </div>
-          <div className="kpi-value">{promedioNPS} / 10</div>
-          <span className="kpi-meta">Satisfacción general {promedioExpectativas} / 5</span>
-        </div>
+        )}
       </div>
 
       {/* Navegación por Pestañas de Administración */}
@@ -613,7 +647,7 @@ export default function AdminPanel({
           <Users size={16} />
           <span>Listado de Asistencia ({totalAsistentes})</span>
         </button>
-        {hasPonentes && (
+        {eventConfig.modulos.preguntasPonentes && hasPonentes && (
           <button
             className={`tab-link ${activeTab === 'preguntas' ? 'active' : ''}`}
             onClick={() => setActiveTab('preguntas')}
@@ -622,7 +656,7 @@ export default function AdminPanel({
             <span>Preguntas a Ponentes ({totalPreguntas})</span>
           </button>
         )}
-        {hasPonentes && (
+        {eventConfig.modulos.evaluacionPonentes && hasPonentes && (
           <button
             className={`tab-link ${activeTab === 'evaluaciones' ? 'active' : ''}`}
             onClick={() => setActiveTab('evaluaciones')}
@@ -631,20 +665,24 @@ export default function AdminPanel({
             <span>Calificaciones de Ponentes</span>
           </button>
         )}
-        <button
-          className={`tab-link ${activeTab === 'encuestas' ? 'active' : ''}`}
-          onClick={() => setActiveTab('encuestas')}
-        >
-          <BarChart3 size={16} />
-          <span>Votaciones en Vivo {evento?.habilitarEncuestasEnVivo === false ? '(Desactivado)' : `(${polls.length})`}</span>
-        </button>
-        <button
-          className={`tab-link ${activeTab === 'satisfaccion' ? 'active' : ''}`}
-          onClick={() => setActiveTab('satisfaccion')}
-        >
-          <ThumbsUp size={16} />
-          <span>Satisfacción General</span>
-        </button>
+        {eventConfig.modulos.encuestasEnVivo && (
+          <button
+            className={`tab-link ${activeTab === 'encuestas' ? 'active' : ''}`}
+            onClick={() => setActiveTab('encuestas')}
+          >
+            <BarChart3 size={16} />
+            <span>Votaciones en Vivo ({polls.length})</span>
+          </button>
+        )}
+        {eventConfig.modulos.encuestaSatisfaccion && (
+          <button
+            className={`tab-link ${activeTab === 'satisfaccion' ? 'active' : ''}`}
+            onClick={() => setActiveTab('satisfaccion')}
+          >
+            <ThumbsUp size={16} />
+            <span>Satisfacción General</span>
+          </button>
+        )}
         <button
           className={`tab-link ${activeTab === 'integracion' ? 'active' : ''}`}
           onClick={() => setActiveTab('integracion')}
@@ -723,7 +761,7 @@ export default function AdminPanel({
                   <th style={{ minWidth: '180px' }}>Asistente</th>
                   <th style={{ minWidth: '210px' }}>Contacto</th>
                   <th style={{ minWidth: '160px' }}>Vinculación</th>
-                  <th style={{ width: '90px', textAlign: 'center' }}>Placa</th>
+                  {eventConfig.modulos.placaVehiculo && <th style={{ width: '90px', textAlign: 'center' }}>Placa</th>}
                   <th style={{ minWidth: '150px' }}>Ubicación GPS</th>
                   <th style={{ width: '140px' }}>Registro</th>
                   <th style={{ width: '85px', textAlign: 'center' }}>Acciones</th>
@@ -732,7 +770,7 @@ export default function AdminPanel({
               <tbody>
                 {asistenciasFiltradas.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="empty-table-row">
+                    <td colSpan={eventConfig.modulos.placaVehiculo ? 9 : 8} className="empty-table-row">
                       No se encontraron registros de asistencia que coincidan con la búsqueda.
                     </td>
                   </tr>
@@ -772,6 +810,7 @@ export default function AdminPanel({
                             {a.vinculacion || 'Asistente'}
                           </span>
                         </td>
+                        {eventConfig.modulos.placaVehiculo && (
                           <td className="plate-cell text-center">
                             {a.placaVehiculo ? (
                               <span className="plate-badge" title={`Vehículo: ${a.placaVehiculo}`}>
@@ -782,6 +821,7 @@ export default function AdminPanel({
                               <span className="no-plate-dash" title="Sin vehículo registrado">—</span>
                             )}
                           </td>
+                        )}
                         <td>
                           <div className="geo-cluster">
                             {a.geolocalizacion?.esPresencial ? (
@@ -824,14 +864,16 @@ export default function AdminPanel({
                         </td>
                         <td className="actions-cell text-center">
                           <div className="table-actions-cluster">
-                            <button
-                              type="button"
-                              className="btn-table-action-badge"
-                              title={`Ver pase digital oficial de ${a.nombreCompleto}`}
-                              onClick={() => setSelectedBadgeAttendee(a)}
-                            >
-                              <Award size={15} />
-                            </button>
+                            {eventConfig.modulos.escarapelaDigital && (
+                              <button
+                                type="button"
+                                className="btn-table-action-badge"
+                                title={`Ver pase digital oficial de ${a.nombreCompleto}`}
+                                onClick={() => setSelectedBadgeAttendee(a)}
+                              >
+                                <Award size={15} />
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="btn-table-action-delete"
@@ -2223,7 +2265,7 @@ export default function AdminPanel({
       )}
 
       {/* Modal para visualizar el pase digital oficial de cualquier asistente */}
-      {selectedBadgeAttendee && (
+      {selectedBadgeAttendee && eventConfig.modulos.escarapelaDigital && (
         <DigitalBadge
           asistente={selectedBadgeAttendee}
           evento={evento}

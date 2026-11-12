@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Search, Calendar, MapPin, Clock, Edit3, Eye, Plus, Layers, CheckCircle2 } from 'lucide-react';
+import { getEventConfig } from '../services/storage';
 
 export default function EventSelectorModal({
   isOpen,
@@ -108,6 +109,7 @@ export default function EventSelectorModal({
               filteredEvents.map((ev) => {
                 const isCurrent = ev.id === currentEventId;
                 const hasCustomSchedules = ev.esMultidia && ev.horariosPorDia && Object.keys(ev.horariosPorDia).length > 0;
+                const evConfig = getEventConfig(ev);
 
                 return (
                   <div
@@ -124,6 +126,21 @@ export default function EventSelectorModal({
                             <CheckCircle2 size={13} /> Activo en Pantalla
                           </span>
                         )}
+                        <span style={{
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          background: evConfig.gpsObligatorio ? '#FEF2F2' : '#F0FDF4',
+                          color: evConfig.gpsObligatorio ? '#991B1B' : '#166534',
+                          border: evConfig.gpsObligatorio ? '1px solid #FECACA' : '1px solid #BBF7D0',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}>
+                          <MapPin size={11} />
+                          <span>GPS: {evConfig.gpsObligatorio ? 'Obligatorio' : 'No Obligatorio'}</span>
+                        </span>
                         {ev.esMultidia ? (
                           <span className="multiday-event-pill">
                             <Layers size={13} /> Multidía ({ev.diasEvento?.length || 'Varios'} días)
@@ -155,6 +172,27 @@ export default function EventSelectorModal({
                           <MapPin size={14} />
                           {ev.lugar}
                         </span>
+                      </div>
+
+                      {/* Resumen de Módulos Activos */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '7px' }}>
+                        {Object.entries(evConfig.modulos).filter(([k, v]) => v && k !== 'asistencia').map(([k]) => {
+                          const tagLabels = {
+                            validacionInscritos: 'Inscritos',
+                            escarapelaDigital: 'Escarapela',
+                            codigoQR: 'QR',
+                            placaVehiculo: 'Parqueadero',
+                            preguntasPonentes: 'Preguntas',
+                            evaluacionPonentes: 'Evaluación',
+                            encuestaSatisfaccion: 'Satisfacción',
+                            encuestasEnVivo: 'Votaciones'
+                          };
+                          return (
+                            <span key={k} style={{ fontSize: '0.72rem', padding: '1px 7px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '4px', color: '#475569' }}>
+                              ✓ {tagLabels[k] || k}
+                            </span>
+                          );
+                        })}
                       </div>
 
                       {ev.descripcion && (

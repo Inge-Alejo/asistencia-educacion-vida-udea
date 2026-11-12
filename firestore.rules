@@ -1,68 +1,544 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Función de validación de campos mínimos y límites de tamaño (Protección contra DoS)
-    function isValidAttendance() {
-      return request.resource.data.documento is string &&
-             request.resource.data.documento.size() >= 4 &&
-             request.resource.data.documento.size() <= 25 &&
-             request.resource.data.nombreCompleto is string &&
-             request.resource.data.nombreCompleto.size() >= 2 &&
-             request.resource.data.nombreCompleto.size() <= 120 &&
-             request.resource.data.eventoId is string &&
-             request.resource.data.eventoId.size() <= 50;
+
+    // ===============================================================
+    // Assumed Data Model & Security Architecture
+    // ===============================================================
+    //
+    // Contexto Institucional:
+    // Sistema oficial de registro presencial y control de asistencia a eventos
+    // académicos de Educación a lo Largo de la Vida - Facultad de Medicina,
+    // Universidad de Antioquia (UdeA).
+    //
+    // Modelo de Identidad & Acceso Público:
+    // Los asistentes (médicos, estudiantes, docentes, residentes, ponentes)
+    // acceden desde dispositivos móviles y quioscos sin sesión previa de
+    // Firebase Auth (request.auth == null). La autenticación de administradores
+    // se gestiona a nivel de aplicación mediante hash SHA-256 de sesión.
+    // La seguridad y la integridad se garantizan mediante:
+    // 1. Tipado estricto CEL y validación de rangos numéricos.
+    // 2. Límites máximos de tamaño en strings y listas (anti DoS / payload gigante).
+    // 3. Bloqueo de inyección de esquemas arbitrarios (hasOnly en todas las colecciones).
+    // 4. Inmutabilidad de identificadores y claves foráneas en actualizaciones.
+    // 5. Soporte pleno para el nuevo objeto `configuracion` en eventos y
+    //    asistencias con o sin geolocalización satelital o placas vehiculares.
+    //
+    // Colecciones y Esquemas asumidos:
+    // - /eventos/{eventoId}:
+    //     id (string, req), titulo (string, req), fecha (string), fechaInicio (string),
+    //     fechaFin (string), diasEvento (list), horaInicio (string), horaFin (string),
+    //     horariosPorDia (map), lugar (string), descripcion (string), coordenadas (map),
+    //     configuracion (map con modulos y gpsObligatorio), gpsObligatorio (bool),
+    //     habilitarPlacaVehiculo (bool), habilitarPonentes (bool), habilitarEncuestasEnVivo (bool),
+    //     habilitarAlimentacion (bool), comidasConfig (list), microsoftFormsUrl (string),
+    //     habilitarMicrosoftForms (bool), ponentes (list), inscritosResumen (map),
+    //     inscritosData (map), creadoEn (string), actualizadoEn (string), estado (string)
+    // - /asistencias/{asistenciaId}:
+    //     id (string, req), eventoId (string, req), documento (string, req),
+    //     nombreCompleto (string, req), tipoDocumento (string), correo (string),
+    //     telefono (string), vinculacion (string), placaVehiculo (string),
+    //     fechaDia (string), diaNumero (number), tokenSeguridad (string),
+    //     fechaRegistro (string), horaRegistro (string), fechaVerificadaInternet (bool),
+    //     fuenteTiempo (string), habeasDataAceptado (bool), fechaHabeasData (string),
+    //     geolocalizacion (map opcional), metodoRegistro (string), esPresencial (bool),
+    //     operador (string)
+    // - /verificaciones/{verificacionId}:
+    //     id (string, req), token (string, req), eventoId (string, req),
+    //     nombreCompleto (string, req), estado (string, req), tipoDocumento (string),
+    //     documento (string), documentoMasked (string), vinculacion (string),
+    //     placaVehiculo (string), fechaRegistro (string), fechaDia (string),
+    //     diaNumero (number), esPresencial (bool), distanciaSedeMetros (number),
+    //     creadoEn (string)
+    // - /preguntas/{preguntaId}:
+    //     id (string, req), eventoId (string, req), pregunta (string, req),
+    //     respondida (bool, req), destacada (bool, req), ponenteId (string),
+    //     autor (string), hora (string), fecha (string)
+    // - /evaluaciones/{evalId}:
+    //     id (string, req), eventoId (string, req), ponenteId (string, req),
+    //     dominio (number 1-5, req), claridad (number 1-5, req),
+    //     aplicabilidad (number 1-5, req), comentario (string), fecha (string)
+    // - /satisfaccion/{satId}:
+    //     id (string, req), eventoId (string, req),
+    //     cumplimientoObjetivos (number 1-5, req), organizacionLogistica (number 1-5, req),
+    //     npsRecomendacion (number 0-10, req), sugerencias (string), fecha (string)
+    // - /entregas_comidas/{entregaId}:
+    //     id (string, req), eventoId (string, req), comidaId (string, req),
+    //     documento (string, req), nombreCompleto (string), tipoDocumento (string),
+    //     vinculacion (string), comidaNombre (string), comprobanteId (string),
+    //     fechaDia (string), fechaEntrega (string), horaEntrega (string),
+    //     fechaHoraISO (string), registradoEn (string), tipoComida (string),
+    //     metodo (string), operador (string)
+    // - /encuestas_en_vivo/{pollId}:
+    //     id (string, req), eventoId (string, req), pregunta (string, req),
+    //     estado (string 'ACTIVA'|'CERRADA'|'PAUSADA', req), totalVotos (number >= 0, req),
+    //     opciones (list, req), fechaCreacion (string)
+    // - /votos_encuestas/{voteId}:
+    //     pollId (string, req), opcionId (string, req), documento (string, req),
+    //     eventoId (string, req), fecha (string)
+    // - /inscritos/{eventoId}:
+    //     eventoId (string, req), documents (list, req), count (number >= 0, req),
+    //     participants (map), fileName (string), detectedColumn (string),
+    //     sample (list), actualizadoEn (string)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Funciones Auxiliares Generales (Helpers)
+    // ===============================================================
+
+    function isValidOptionalString(data, field, minLen, maxLen) {
+      return !(field in data) ||
+        data[field] == null ||
+        (data[field] is string &&
+         data[field].size() >= minLen &&
+         data[field].size() <= maxLen);
     }
 
-    // Colección de Asistencias:
-    // Sincronización multi-dispositivo en tiempo real (móvil, tablet, PC de mesa)
-    match /asistencias/{asistenciaId} {
-      allow read, write: if true;
+    function isValidOptionalBool(data, field) {
+      return !(field in data) ||
+        data[field] == null ||
+        data[field] is bool;
     }
 
-    // Colección de Verificaciones Públicas Seguras (Escarapelas Digitales)
-    match /verificaciones/{verificacionId} {
-      allow read, write: if true;
+    function isValidOptionalNumber(data, field, minVal, maxVal) {
+      return !(field in data) ||
+        data[field] == null ||
+        (data[field] is number &&
+         data[field] >= minVal &&
+         data[field] <= maxVal);
     }
 
-    // Colección de Preguntas a Ponentes (Live Q&A)
-    match /preguntas/{preguntaId} {
-      allow read, write: if true;
+    function isValidOptionalMap(data, field) {
+      return !(field in data) ||
+        data[field] == null ||
+        data[field] is map;
     }
 
-    // Colección de Evaluaciones de Ponentes
-    match /evaluaciones/{evalId} {
-      allow read, write: if true;
+    function isValidOptionalList(data, field, maxSize) {
+      return !(field in data) ||
+        data[field] == null ||
+        (data[field] is list &&
+         data[field].size() <= maxSize);
     }
 
-    // Colección de Encuestas de Satisfacción
-    match /satisfaccion/{satId} {
-      allow read, write: if true;
+    // Validación de coordenadas geográficas
+    function isValidCoordinates(coords) {
+      return coords == null ||
+        (coords is map &&
+         isValidOptionalNumber(coords, 'lat', -90, 90) &&
+         isValidOptionalNumber(coords, 'lng', -180, 180));
     }
 
-    // Colección de Entregas de Alimentación / Refrigerios
-    match /entregas_comidas/{entregaId} {
-      allow read, write: if true;
+    // Validación flexible y segura de geolocalización satelital / escáner de mesa
+    function isValidGeolocation(geo) {
+      return geo == null ||
+        (geo is map &&
+         isValidOptionalBool(geo, 'esPresencial') &&
+         isValidOptionalNumber(geo, 'distanciaSedeMetros', 0, 50000000) &&
+         isValidOptionalNumber(geo, 'latitud', -90, 90) &&
+         isValidOptionalNumber(geo, 'longitud', -180, 180) &&
+         isValidOptionalNumber(geo, 'precisionMetros', 0, 100000) &&
+         isValidOptionalString(geo, 'modo', 0, 60) &&
+         isValidOptionalString(geo, 'verificadoPorOperador', 0, 120));
     }
 
-    // Colección de Eventos Académicos
+    // Validación de la configuración modular del evento
+    function isValidEventConfig(cfg) {
+      return cfg == null ||
+        (cfg is map &&
+         isValidOptionalMap(cfg, 'modulos') &&
+         isValidOptionalBool(cfg, 'gpsObligatorio'));
+    }
+
+    // ===============================================================
+    // Validadores de Dominio (Validator Pattern para Create y Update)
+    // ===============================================================
+
+    // Validador de Eventos Académicos
+    function isValidEvent(data, eventoId) {
+      let allowedKeys = [
+        'id', 'titulo', 'descripcion', 'esMultidia', 'fecha', 'fechaInicio',
+        'fechaFin', 'diasEvento', 'horaInicio', 'horaFin', 'horariosPorDia',
+        'lugar', 'coordenadas', 'configuracion', 'gpsObligatorio',
+        'habilitarPlacaVehiculo', 'habilitarAlimentacion', 'comidasConfig',
+        'microsoftFormsUrl', 'habilitarMicrosoftForms', 'habilitarPonentes',
+        'habilitarEncuestasEnVivo', 'ponentes', 'inscritosResumen',
+        'inscritosData', 'creadoEn', 'actualizadoEn', 'fechaCreacion', 'estado'
+      ];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.id is string && data.id == eventoId &&
+        data.id.size() >= 2 && data.id.size() <= 50 &&
+        data.titulo is string &&
+        data.titulo.size() >= 1 && data.titulo.size() <= 200 &&
+        isValidOptionalString(data, 'descripcion', 0, 3000) &&
+        isValidOptionalString(data, 'fecha', 0, 50) &&
+        isValidOptionalString(data, 'fechaInicio', 0, 50) &&
+        isValidOptionalString(data, 'fechaFin', 0, 50) &&
+        isValidOptionalString(data, 'horaInicio', 0, 30) &&
+        isValidOptionalString(data, 'horaFin', 0, 30) &&
+        isValidOptionalString(data, 'lugar', 0, 250) &&
+        isValidOptionalString(data, 'microsoftFormsUrl', 0, 600) &&
+        isValidOptionalString(data, 'creadoEn', 0, 50) &&
+        isValidOptionalString(data, 'actualizadoEn', 0, 50) &&
+        isValidOptionalString(data, 'fechaCreacion', 0, 50) &&
+        isValidOptionalString(data, 'estado', 0, 30) &&
+        isValidOptionalBool(data, 'esMultidia') &&
+        isValidOptionalBool(data, 'habilitarPlacaVehiculo') &&
+        isValidOptionalBool(data, 'habilitarPonentes') &&
+        isValidOptionalBool(data, 'habilitarEncuestasEnVivo') &&
+        isValidOptionalBool(data, 'habilitarAlimentacion') &&
+        isValidOptionalBool(data, 'habilitarMicrosoftForms') &&
+        isValidOptionalBool(data, 'gpsObligatorio') &&
+        isValidOptionalList(data, 'diasEvento', 60) &&
+        isValidOptionalList(data, 'ponentes', 80) &&
+        isValidOptionalList(data, 'comidasConfig', 50) &&
+        isValidOptionalMap(data, 'horariosPorDia') &&
+        isValidOptionalMap(data, 'inscritosResumen') &&
+        isValidOptionalMap(data, 'inscritosData') &&
+        (!('coordenadas' in data) || isValidCoordinates(data.coordenadas)) &&
+        (!('configuracion' in data) || isValidEventConfig(data.configuracion));
+    }
+
+    // Validador de Registros de Asistencia Oficial
+    function isValidAttendance(data, asistenciaId) {
+      let allowedKeys = [
+        'id', 'eventoId', 'documento', 'tipoDocumento', 'nombreCompleto',
+        'correo', 'telefono', 'vinculacion', 'placaVehiculo', 'fechaDia',
+        'diaNumero', 'tokenSeguridad', 'fechaRegistro', 'horaRegistro',
+        'fechaVerificadaInternet', 'fuenteTiempo', 'habeasDataAceptado',
+        'fechaHabeasData', 'geolocalizacion', 'metodoRegistro', 'esPresencial',
+        'operador'
+      ];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.id is string && data.id == asistenciaId &&
+        data.id.size() >= 4 && data.id.size() <= 60 &&
+        data.eventoId is string &&
+        data.eventoId.size() >= 2 && data.eventoId.size() <= 50 &&
+        data.documento is string &&
+        data.documento.size() >= 3 && data.documento.size() <= 30 &&
+        data.nombreCompleto is string &&
+        data.nombreCompleto.size() >= 2 && data.nombreCompleto.size() <= 120 &&
+        isValidOptionalString(data, 'tipoDocumento', 1, 20) &&
+        isValidOptionalString(data, 'correo', 0, 120) &&
+        isValidOptionalString(data, 'telefono', 0, 30) &&
+        isValidOptionalString(data, 'vinculacion', 0, 80) &&
+        isValidOptionalString(data, 'placaVehiculo', 0, 20) &&
+        isValidOptionalString(data, 'fechaDia', 0, 30) &&
+        isValidOptionalNumber(data, 'diaNumero', 1, 100) &&
+        isValidOptionalString(data, 'tokenSeguridad', 0, 64) &&
+        isValidOptionalString(data, 'fechaRegistro', 0, 50) &&
+        isValidOptionalString(data, 'horaRegistro', 0, 30) &&
+        isValidOptionalBool(data, 'fechaVerificadaInternet') &&
+        isValidOptionalString(data, 'fuenteTiempo', 0, 50) &&
+        isValidOptionalBool(data, 'habeasDataAceptado') &&
+        isValidOptionalString(data, 'fechaHabeasData', 0, 50) &&
+        isValidOptionalString(data, 'metodoRegistro', 0, 50) &&
+        isValidOptionalBool(data, 'esPresencial') &&
+        isValidOptionalString(data, 'operador', 0, 100) &&
+        (!('geolocalizacion' in data) || isValidGeolocation(data.geolocalizacion));
+    }
+
+    // Validador de Verificaciones Públicas (Escarapelas Digitales)
+    function isValidVerification(data, verificacionId) {
+      let allowedKeys = [
+        'id', 'token', 'eventoId', 'nombreCompleto', 'tipoDocumento',
+        'documento', 'documentoMasked', 'vinculacion', 'placaVehiculo',
+        'fechaRegistro', 'fechaDia', 'diaNumero', 'esPresencial',
+        'distanciaSedeMetros', 'estado', 'creadoEn'
+      ];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.id is string && data.id == verificacionId &&
+        data.id.size() >= 4 && data.id.size() <= 60 &&
+        data.token is string &&
+        data.token.size() >= 4 && data.token.size() <= 64 &&
+        data.eventoId is string &&
+        data.eventoId.size() >= 2 && data.eventoId.size() <= 50 &&
+        data.nombreCompleto is string &&
+        data.nombreCompleto.size() >= 2 && data.nombreCompleto.size() <= 120 &&
+        data.estado is string &&
+        data.estado.size() >= 1 && data.estado.size() <= 30 &&
+        isValidOptionalString(data, 'tipoDocumento', 1, 20) &&
+        isValidOptionalString(data, 'documento', 0, 30) &&
+        isValidOptionalString(data, 'documentoMasked', 0, 30) &&
+        isValidOptionalString(data, 'vinculacion', 0, 80) &&
+        isValidOptionalString(data, 'placaVehiculo', 0, 20) &&
+        isValidOptionalString(data, 'fechaRegistro', 0, 50) &&
+        isValidOptionalString(data, 'fechaDia', 0, 30) &&
+        isValidOptionalNumber(data, 'diaNumero', 1, 100) &&
+        isValidOptionalBool(data, 'esPresencial') &&
+        isValidOptionalNumber(data, 'distanciaSedeMetros', 0, 50000000) &&
+        isValidOptionalString(data, 'creadoEn', 0, 50);
+    }
+
+    // Validador de Preguntas en Vivo a Ponentes
+    function isValidQuestion(data, preguntaId) {
+      let allowedKeys = [
+        'id', 'eventoId', 'ponenteId', 'autor', 'pregunta', 'hora',
+        'respondida', 'destacada', 'fecha'
+      ];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.id is string && data.id == preguntaId &&
+        data.id.size() >= 3 && data.id.size() <= 50 &&
+        data.eventoId is string &&
+        data.eventoId.size() >= 2 && data.eventoId.size() <= 50 &&
+        data.pregunta is string &&
+        data.pregunta.size() >= 2 && data.pregunta.size() <= 1000 &&
+        data.respondida is bool &&
+        data.destacada is bool &&
+        isValidOptionalString(data, 'ponenteId', 0, 50) &&
+        isValidOptionalString(data, 'autor', 0, 100) &&
+        isValidOptionalString(data, 'hora', 0, 30) &&
+        isValidOptionalString(data, 'fecha', 0, 50);
+    }
+
+    // Validador de Evaluaciones de Ponentes
+    function isValidEvaluation(data, evalId) {
+      let allowedKeys = [
+        'id', 'eventoId', 'ponenteId', 'dominio', 'claridad',
+        'aplicabilidad', 'comentario', 'fecha'
+      ];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.id is string && data.id == evalId &&
+        data.id.size() >= 4 && data.id.size() <= 50 &&
+        data.eventoId is string &&
+        data.eventoId.size() >= 2 && data.eventoId.size() <= 50 &&
+        data.ponenteId is string &&
+        data.ponenteId.size() >= 2 && data.ponenteId.size() <= 50 &&
+        data.dominio is number && data.dominio >= 1 && data.dominio <= 5 &&
+        data.claridad is number && data.claridad >= 1 && data.claridad <= 5 &&
+        data.aplicabilidad is number && data.aplicabilidad >= 1 && data.aplicabilidad <= 5 &&
+        isValidOptionalString(data, 'comentario', 0, 1000) &&
+        isValidOptionalString(data, 'fecha', 0, 50);
+    }
+
+    // Validador de Encuestas de Satisfacción General
+    function isValidSatisfaction(data, satId) {
+      let allowedKeys = [
+        'id', 'eventoId', 'cumplimientoObjetivos', 'organizacionLogistica',
+        'npsRecomendacion', 'sugerencias', 'fecha'
+      ];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.id is string && data.id == satId &&
+        data.id.size() >= 4 && data.id.size() <= 50 &&
+        data.eventoId is string &&
+        data.eventoId.size() >= 2 && data.eventoId.size() <= 50 &&
+        data.cumplimientoObjetivos is number &&
+        data.cumplimientoObjetivos >= 1 && data.cumplimientoObjetivos <= 5 &&
+        data.organizacionLogistica is number &&
+        data.organizacionLogistica >= 1 && data.organizacionLogistica <= 5 &&
+        data.npsRecomendacion is number &&
+        data.npsRecomendacion >= 0 && data.npsRecomendacion <= 10 &&
+        isValidOptionalString(data, 'sugerencias', 0, 1500) &&
+        isValidOptionalString(data, 'fecha', 0, 50);
+    }
+
+    // Validador de Entregas de Refrigerios y Alimentación
+    function isValidMealDelivery(data, entregaId) {
+      let allowedKeys = [
+        'id', 'eventoId', 'comidaId', 'comidaNombre', 'documento',
+        'nombreCompleto', 'tipoDocumento', 'vinculacion', 'comprobanteId',
+        'fechaDia', 'fechaEntrega', 'horaEntrega', 'fechaHoraISO',
+        'registradoEn', 'tipoComida', 'metodo', 'operador'
+      ];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.id is string && data.id == entregaId &&
+        data.id.size() >= 4 && data.id.size() <= 120 &&
+        data.eventoId is string &&
+        data.eventoId.size() >= 2 && data.eventoId.size() <= 50 &&
+        data.comidaId is string &&
+        data.comidaId.size() >= 2 && data.comidaId.size() <= 60 &&
+        data.documento is string &&
+        data.documento.size() >= 3 && data.documento.size() <= 30 &&
+        isValidOptionalString(data, 'nombreCompleto', 0, 120) &&
+        isValidOptionalString(data, 'tipoDocumento', 0, 20) &&
+        isValidOptionalString(data, 'vinculacion', 0, 80) &&
+        isValidOptionalString(data, 'comidaNombre', 0, 100) &&
+        isValidOptionalString(data, 'comprobanteId', 0, 60) &&
+        isValidOptionalString(data, 'fechaDia', 0, 30) &&
+        isValidOptionalString(data, 'fechaEntrega', 0, 30) &&
+        isValidOptionalString(data, 'horaEntrega', 0, 30) &&
+        isValidOptionalString(data, 'fechaHoraISO', 0, 50) &&
+        isValidOptionalString(data, 'registradoEn', 0, 50) &&
+        isValidOptionalString(data, 'tipoComida', 0, 50) &&
+        isValidOptionalString(data, 'metodo', 0, 50) &&
+        isValidOptionalString(data, 'operador', 0, 100);
+    }
+
+    // Validador de Encuestas Relámpago (Live Polls)
+    function isValidPoll(data, pollId) {
+      let allowedKeys = [
+        'id', 'eventoId', 'pregunta', 'estado', 'fechaCreacion',
+        'totalVotos', 'opciones'
+      ];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.id is string && data.id == pollId &&
+        data.id.size() >= 4 && data.id.size() <= 60 &&
+        data.eventoId is string &&
+        data.eventoId.size() >= 2 && data.eventoId.size() <= 50 &&
+        data.pregunta is string &&
+        data.pregunta.size() >= 2 && data.pregunta.size() <= 500 &&
+        data.estado is string &&
+        data.estado in ['ACTIVA', 'CERRADA', 'PAUSADA'] &&
+        data.totalVotos is number && data.totalVotos >= 0 &&
+        data.opciones is list &&
+        data.opciones.size() >= 1 && data.opciones.size() <= 30 &&
+        isValidOptionalString(data, 'fechaCreacion', 0, 50);
+    }
+
+    // Validador de Votos en Encuestas Relámpago
+    function isValidPollVote(data, voteId) {
+      let allowedKeys = ['pollId', 'opcionId', 'documento', 'eventoId', 'fecha'];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.pollId is string &&
+        data.pollId.size() >= 4 && data.pollId.size() <= 60 &&
+        data.opcionId is string &&
+        data.opcionId.size() >= 1 && data.opcionId.size() <= 50 &&
+        data.documento is string &&
+        data.documento.size() >= 3 && data.documento.size() <= 30 &&
+        data.eventoId is string &&
+        data.eventoId.size() >= 2 && data.eventoId.size() <= 50 &&
+        isValidOptionalString(data, 'fecha', 0, 50);
+    }
+
+    // Validador de Listas Oficiales de Inscritos
+    function isValidInscritos(data, eventoId) {
+      let allowedKeys = [
+        'eventoId', 'documents', 'participants', 'count',
+        'fileName', 'detectedColumn', 'sample', 'actualizadoEn'
+      ];
+
+      return data.keys().hasOnly(allowedKeys) &&
+        data.eventoId is string && data.eventoId == eventoId &&
+        data.eventoId.size() >= 2 && data.eventoId.size() <= 50 &&
+        data.documents is list && data.documents.size() <= 10000 &&
+        data.count is number && data.count >= 0 &&
+        isValidOptionalMap(data, 'participants') &&
+        isValidOptionalString(data, 'fileName', 0, 200) &&
+        isValidOptionalString(data, 'detectedColumn', 0, 100) &&
+        isValidOptionalList(data, 'sample', 50) &&
+        isValidOptionalString(data, 'actualizadoEn', 0, 50);
+    }
+
+    // ===============================================================
+    // Reglas por Colección
+    // ===============================================================
+
+    // 1. Colección de Eventos Académicos
     match /eventos/{eventoId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if isValidEvent(request.resource.data, eventoId);
+      allow update: if isValidEvent(request.resource.data, eventoId) &&
+                       request.resource.data.id == resource.data.id;
+      allow delete: if true;
     }
 
-    // Colección de Listas de Inscritos Oficiales (Excel / CSV)
-    match /inscritos/{eventoId} {
-      allow read, write: if true;
+    // 2. Colección de Asistencias Presenciales
+    match /asistencias/{asistenciaId} {
+      allow read: if true;
+      allow create: if isValidAttendance(request.resource.data, asistenciaId);
+      allow update: if isValidAttendance(request.resource.data, asistenciaId) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.eventoId == resource.data.eventoId &&
+                       request.resource.data.documento == resource.data.documento;
+      allow delete: if true;
     }
 
-    // Colección de Encuestas Relámpago y Votaciones en Vivo (Live Polls)
+    // 3. Colección de Verificaciones Públicas de Escarapelas Digitales
+    match /verificaciones/{verificacionId} {
+      allow read: if true;
+      allow create: if isValidVerification(request.resource.data, verificacionId);
+      allow update: if isValidVerification(request.resource.data, verificacionId) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.eventoId == resource.data.eventoId;
+      allow delete: if true;
+    }
+
+    // 4. Colección de Preguntas a Ponentes (Live Q&A)
+    match /preguntas/{preguntaId} {
+      allow read: if true;
+      allow create: if isValidQuestion(request.resource.data, preguntaId);
+      allow update: if isValidQuestion(request.resource.data, preguntaId) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.eventoId == resource.data.eventoId;
+      allow delete: if true;
+    }
+
+    // 5. Colección de Evaluaciones de Ponentes
+    match /evaluaciones/{evalId} {
+      allow read: if true;
+      allow create: if isValidEvaluation(request.resource.data, evalId);
+      allow update: if isValidEvaluation(request.resource.data, evalId) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.eventoId == resource.data.eventoId;
+      allow delete: if true;
+    }
+
+    // 6. Colección de Encuestas de Satisfacción y NPS
+    match /satisfaccion/{satId} {
+      allow read: if true;
+      allow create: if isValidSatisfaction(request.resource.data, satId);
+      allow update: if isValidSatisfaction(request.resource.data, satId) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.eventoId == resource.data.eventoId;
+      allow delete: if true;
+    }
+
+    // 7. Colección de Entregas de Refrigerios y Alimentos
+    match /entregas_comidas/{entregaId} {
+      allow read: if true;
+      allow create: if isValidMealDelivery(request.resource.data, entregaId);
+      allow update: if isValidMealDelivery(request.resource.data, entregaId) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.eventoId == resource.data.eventoId &&
+                       request.resource.data.comidaId == resource.data.comidaId &&
+                       request.resource.data.documento == resource.data.documento;
+      allow delete: if true;
+    }
+
+    // 8. Colección de Encuestas Relámpago (Live Polls)
     match /encuestas_en_vivo/{pollId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if isValidPoll(request.resource.data, pollId);
+      allow update: if isValidPoll(request.resource.data, pollId) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.eventoId == resource.data.eventoId;
+      allow delete: if true;
     }
 
-    // Colección de Votos en Encuestas Relámpago
+    // 9. Colección de Votos en Encuestas Relámpago
     match /votos_encuestas/{voteId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if isValidPollVote(request.resource.data, voteId);
+      allow update: if isValidPollVote(request.resource.data, voteId) &&
+                       request.resource.data.pollId == resource.data.pollId &&
+                       request.resource.data.documento == resource.data.documento;
+      allow delete: if true;
+    }
+
+    // 10. Colección de Listas Oficiales de Preinscritos
+    match /inscritos/{eventoId} {
+      allow read: if true;
+      allow create: if isValidInscritos(request.resource.data, eventoId);
+      allow update: if isValidInscritos(request.resource.data, eventoId) &&
+                       request.resource.data.eventoId == resource.data.eventoId;
+      allow delete: if true;
+    }
+
+    // ===============================================================
+    // Default Deny: Cualquier otra colección o documento queda bloqueado
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
