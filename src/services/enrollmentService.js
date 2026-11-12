@@ -11,8 +11,15 @@ import * as XLSX from 'xlsx';
  */
 export function normalizeDocumentId(rawDoc) {
   if (rawDoc === null || rawDoc === undefined) return '';
-  return String(rawDoc)
-    .trim()
+  let str = String(rawDoc).trim();
+  // Expansión segura si el número viene en notación científica de Excel (ej: 1.037667076E+09)
+  if (/^[+-]?\d+(\.\d+)?[eE][+-]?\d+$/.test(str)) {
+    const num = Number(str);
+    if (!isNaN(num) && isFinite(num)) {
+      str = num.toLocaleString('fullwide', { useGrouping: false });
+    }
+  }
+  return str
     .replace(/[^a-zA-Z0-9]/g, '')
     .toUpperCase();
 }
@@ -26,6 +33,7 @@ function cleanHeaderCell(cellValue) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\._\-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -38,7 +46,7 @@ function isDocumentNumberHeader(headerText) {
   const clean = cleanHeaderCell(headerText);
   if (!clean) return false;
 
-  // EXCLUIR explícitamente columnas que son sólo el tipo de documento o estado
+  // EXCLUIR explícitamente columnas que son sólo el tipo de documento, estado o apellidos
   if (
     clean === 'tipo de documento' ||
     clean === 'tipo documento' ||
@@ -47,37 +55,62 @@ function isDocumentNumberHeader(headerText) {
     clean.startsWith('tipo doc') ||
     clean.includes('tipo de identificacion') ||
     clean.includes('tipo identificacion') ||
+    clean.includes('apellido') ||
+    clean.includes('apellidos') ||
     clean.includes('estado')
   ) {
     return false;
   }
 
-  // Patrones específicos de NÚMERO de documento
-  const specificNumberPatterns = [
+  // Coincidencias exactas de identificador
+  if (
+    clean === 'id' ||
+    clean === 'documento' ||
+    clean === 'document' ||
+    clean === 'cedula' ||
+    clean === 'cédula' ||
+    clean === 'identificacion' ||
+    clean === 'dni' ||
+    clean === 'cc' ||
+    clean === 'c c' ||
+    clean === 'rut' ||
+    clean === 'pasaporte' ||
+    clean === 'idnumber' ||
+    clean === 'codigo' ||
+    clean === 'matricula'
+  ) {
+    return true;
+  }
+
+  // Patrones específicos compuestos de NÚMERO / ID
+  const specificPatterns = [
+    'numero de id',
+    'nro de id',
+    'no de id',
+    'numero id',
+    'num id',
+    'id number',
+    'id usuario',
     'numero de documento',
-    'no. documento',
-    'no.documento',
     'no documento',
     'num documento',
-    'num. documento',
     'nro documento',
-    'nro. documento',
-    'numero documento',
-    'doc. numero',
+    'doc numero',
     'cedula de ciudadania',
     'cedula ciudadania',
-    'cedula',
-    'identificacion'
+    'documento de identidad',
+    'doc identidad',
+    'numero de identificacion'
   ];
 
-  for (const pat of specificNumberPatterns) {
+  for (const pat of specificPatterns) {
     if (clean === pat || clean.includes(pat)) {
       return true;
     }
   }
 
-  // Coincidencia exacta con "documento" o "document"
-  if (clean === 'documento' || clean === 'document') {
+  // Si la celda contiene la palabra separada "id" (ej: "id asistente", pero no "apellido")
+  if (/(^|\s)id(\s|$)/.test(clean) && !clean.includes('apellido')) {
     return true;
   }
 
@@ -214,8 +247,8 @@ function parseCSVMatrix(text) {
  */
 export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx') {
   try {
-    let rows = [];
     const isCSV = fileName.toLowerCase().endsWith('.csv') || typeof fileData === 'string';
+    const sheetDataList = [];
 
     if (isCSV) {
       // Decodificación de texto para archivos CSV con soporte UTF-8 / Latin1
@@ -226,129 +259,186 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
         text = await fileData.text();
       } else if (fileData instanceof ArrayBuffer) {
         text = new TextDecoder('utf-8').decode(fileData);
+      } else if (fileData && typeof fileData === 'object' && ('buffer' in fileData || 'byteLength' in fileData)) {
+        text = new TextDecoder('utf-8').decode(fileData);
       }
-      rows = parseCSVMatrix(text);
+      const csvRows = parseCSVMatrix(text);
+      if (csvRows && csvRows.length > 0) {
+        sheetDataList.push({ name: 'CSV', rows: csvRows });
+      }
     } else {
-      // Lectura binaria para hojas de cálculo Excel (.xlsx, .xls)
+      // Lectura binaria universal para hojas de cálculo Excel (.xlsx, .xls)
       let buffer;
       if (fileData instanceof ArrayBuffer) {
         buffer = fileData;
       } else if (fileData instanceof File || fileData instanceof Blob) {
         buffer = await fileData.arrayBuffer();
+      } else if (fileData && typeof fileData === 'object' && ('buffer' in fileData || 'byteLength' in fileData)) {
+        buffer = fileData.buffer ? fileData.buffer.slice(fileData.byteOffset || 0, (fileData.byteOffset || 0) + fileData.byteLength) : fileData;
       } else {
         throw new Error('Formato de archivo binario no soportado.');
       }
 
       const workbook = XLSX.read(buffer, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      if (!firstSheetName) {
+      if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) {
         throw new Error('El archivo no contiene hojas de cálculo válidas.');
       }
 
-      const sheet = workbook.Sheets[firstSheetName];
-      rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      // Procesar todas las hojas de cálculo del libro de Excel para no perder inscritos
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) continue;
+        const sRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+        if (sRows && sRows.length > 0) {
+          sheetDataList.push({ name: sheetName, rows: sRows });
+        }
+      }
     }
 
-    if (!rows || rows.length === 0) {
+    if (sheetDataList.length === 0) {
       throw new Error('El archivo cargado está vacío o no contiene datos legibles.');
     }
 
-    // 1. Buscar la fila donde se encuentran los encabezados y columnas
-    let headerRowIndex = -1;
-    let docColIndex = -1;
-    let nameColIndex = -1;
-    let emailColIndex = -1;
-    let phoneColIndex = -1;
-    let vinculacionColIndex = -1;
-    let tipoDocColIndex = -1;
-    let detectedColumnName = '';
-
-    for (let r = 0; r < Math.min(rows.length, 20); r++) {
-      const row = rows[r];
-      if (!Array.isArray(row)) continue;
-
-      for (let c = 0; c < row.length; c++) {
-        const cellValue = row[c];
-        if (isDocumentNumberHeader(cellValue)) {
-          headerRowIndex = r;
-          docColIndex = c;
-          detectedColumnName = String(cellValue).trim();
-          break;
-        }
-      }
-      if (docColIndex !== -1) break;
-    }
-
-    if (docColIndex === -1) {
-      throw new Error(
-        'No se encontró la columna de documento de identidad. Verifique que el archivo contenga una columna titulada "Número de documento", "No. Documento" o "Documento".'
-      );
-    }
-
-    // Detectar las demás columnas auxiliares en la fila de encabezado
-    const headerRow = rows[headerRowIndex];
-    for (let c = 0; c < headerRow.length; c++) {
-      if (c === docColIndex) continue;
-      const val = headerRow[c];
-      if (nameColIndex === -1 && isNameHeader(val)) nameColIndex = c;
-      else if (emailColIndex === -1 && isEmailHeader(val)) emailColIndex = c;
-      else if (phoneColIndex === -1 && isPhoneHeader(val)) phoneColIndex = c;
-      else if (vinculacionColIndex === -1 && isVinculacionHeader(val)) vinculacionColIndex = c;
-      else if (tipoDocColIndex === -1 && isTipoDocHeader(val)) tipoDocColIndex = c;
-    }
-
-    // 2. Extraer todos los documentos y participantes de las filas siguientes
     const documentsSet = new Set();
     const participants = {};
     const originalSample = [];
     const duplicates = [];
     const emptyOrInvalidRows = [];
+    let primaryDetectedColumn = '';
+    let totalDataRowsScanned = 0;
 
-    for (let r = headerRowIndex + 1; r < rows.length; r++) {
-      const row = rows[r];
-      if (!Array.isArray(row)) continue;
+    for (const { rows } of sheetDataList) {
+      // 1. Buscar la fila donde se encuentran los encabezados
+      let headerRowIndex = -1;
+      let docColIndex = -1;
+      let nameColIndex = -1;
+      let emailColIndex = -1;
+      let phoneColIndex = -1;
+      let vinculacionColIndex = -1;
+      let tipoDocColIndex = -1;
 
-      const rawValue = row.length > docColIndex ? row[docColIndex] : '';
-      const normalizedDoc = normalizeDocumentId(rawValue);
+      for (let r = 0; r < Math.min(rows.length, 50); r++) {
+        const row = rows[r];
+        if (!Array.isArray(row)) continue;
 
-      // Descartar celdas vacías o cadenas de menos de 4 caracteres
-      if (normalizedDoc && normalizedDoc.length >= 4) {
-        if (!documentsSet.has(normalizedDoc)) {
-          documentsSet.add(normalizedDoc);
+        for (let c = 0; c < row.length; c++) {
+          const cellValue = row[c];
+          if (isDocumentNumberHeader(cellValue)) {
+            headerRowIndex = r;
+            docColIndex = c;
+            if (!primaryDetectedColumn) primaryDetectedColumn = String(cellValue).trim();
+            break;
+          }
+        }
+        if (docColIndex !== -1) break;
+      }
 
-          const nombreCompleto = nameColIndex !== -1 && row[nameColIndex] ? String(row[nameColIndex]).trim() : '';
-          const correo = emailColIndex !== -1 && row[emailColIndex] ? String(row[emailColIndex]).trim().toLowerCase() : '';
-          const telefono = phoneColIndex !== -1 && row[phoneColIndex] ? String(row[phoneColIndex]).trim() : '';
-          const vinculacion = vinculacionColIndex !== -1 && row[vinculacionColIndex] ? String(row[vinculacionColIndex]).trim() : 'Asistente';
-          const tipoDocRaw = tipoDocColIndex !== -1 && row[tipoDocColIndex] ? String(row[tipoDocColIndex]).trim().toUpperCase() : 'CC';
-          const tipoDocumento = ['CC', 'TI', 'CE', 'PASAPORTE', 'PEP', 'PPT'].includes(tipoDocRaw) ? tipoDocRaw : 'CC';
+      // Si no se encontró encabezado de texto, auto-detectar columna con números de identificación
+      if (docColIndex === -1 && rows.length > 0) {
+        const colScores = {};
+        for (let r = 0; r < Math.min(rows.length, 15); r++) {
+          const row = rows[r];
+          if (!Array.isArray(row)) continue;
+          for (let c = 0; c < row.length; c++) {
+            const clean = String(row[c] || '').replace(/[^a-zA-Z0-9]/g, '');
+            if (/^\d{5,12}$/.test(clean)) {
+              colScores[c] = (colScores[c] || 0) + 1;
+            }
+          }
+        }
+        let bestCol = -1;
+        let maxScore = 0;
+        for (const [col, score] of Object.entries(colScores)) {
+          if (score > maxScore) {
+            maxScore = score;
+            bestCol = parseInt(col, 10);
+          }
+        }
+        if (bestCol !== -1 && maxScore >= 2) {
+          docColIndex = bestCol;
+          headerRowIndex = -1; // Comienza desde la primera fila sin encabezados
+          if (!primaryDetectedColumn) primaryDetectedColumn = `Columna ${bestCol + 1}`;
+        }
+      }
 
-          participants[normalizedDoc] = {
-            documento: normalizedDoc,
-            documentoOriginal: String(rawValue).trim(),
-            tipoDocumento,
-            nombreCompleto,
-            correo,
-            telefono,
-            vinculacion
-          };
+      if (docColIndex === -1) continue;
 
-          if (originalSample.length < 8) {
-            originalSample.push(normalizedDoc);
+      // Detectar columnas auxiliares en la fila de encabezado
+      if (headerRowIndex !== -1) {
+        const headerRow = rows[headerRowIndex];
+        for (let c = 0; c < headerRow.length; c++) {
+          if (c === docColIndex) continue;
+          const val = headerRow[c];
+          if (nameColIndex === -1 && isNameHeader(val)) nameColIndex = c;
+          else if (emailColIndex === -1 && isEmailHeader(val)) emailColIndex = c;
+          else if (phoneColIndex === -1 && isPhoneHeader(val)) phoneColIndex = c;
+          else if (vinculacionColIndex === -1 && isVinculacionHeader(val)) vinculacionColIndex = c;
+          else if (tipoDocColIndex === -1 && isTipoDocHeader(val)) tipoDocColIndex = c;
+        }
+      }
+
+      // 2. Extraer todos los documentos y participantes de las filas de datos
+      for (let r = headerRowIndex + 1; r < rows.length; r++) {
+        const row = rows[r];
+        if (!Array.isArray(row)) continue;
+
+        let rawValue = row.length > docColIndex ? row[docColIndex] : '';
+        let normalizedDoc = normalizeDocumentId(rawValue);
+
+        // Fallback: Si en esta fila la columna principal de documento está vacía, revisar columnas adyacentes
+        if (!normalizedDoc) {
+          for (let c = 0; c < Math.min(row.length, 6); c++) {
+            if (c !== docColIndex) {
+              const candidate = normalizeDocumentId(row[c]);
+              if (/^\d{6,12}$/.test(candidate)) {
+                normalizedDoc = candidate;
+                rawValue = row[c];
+                break;
+              }
+            }
+          }
+        }
+
+        // Aceptar cualquier documento con al menos 2 caracteres alfanuméricos
+        if (normalizedDoc && normalizedDoc.length >= 2) {
+          totalDataRowsScanned++;
+          if (!documentsSet.has(normalizedDoc)) {
+            documentsSet.add(normalizedDoc);
+
+            const nombreCompleto = nameColIndex !== -1 && row[nameColIndex] ? String(row[nameColIndex]).trim() : '';
+            const correo = emailColIndex !== -1 && row[emailColIndex] ? String(row[emailColIndex]).trim().toLowerCase() : '';
+            const telefono = phoneColIndex !== -1 && row[phoneColIndex] ? String(row[phoneColIndex]).trim() : '';
+            const vinculacion = vinculacionColIndex !== -1 && row[vinculacionColIndex] ? String(row[vinculacionColIndex]).trim() : 'Asistente';
+            const tipoDocRaw = tipoDocColIndex !== -1 && row[tipoDocColIndex] ? String(row[tipoDocColIndex]).trim().toUpperCase() : 'CC';
+            const tipoDocumento = ['CC', 'TI', 'CE', 'PASAPORTE', 'PEP', 'PPT'].includes(tipoDocRaw) ? tipoDocRaw : 'CC';
+
+            participants[normalizedDoc] = {
+              documento: normalizedDoc,
+              documentoOriginal: String(rawValue).trim(),
+              tipoDocumento,
+              nombreCompleto,
+              correo,
+              telefono,
+              vinculacion
+            };
+
+            if (originalSample.length < 8) {
+              originalSample.push(normalizedDoc);
+            }
+          } else {
+            duplicates.push({
+              fila: r + 1,
+              documento: normalizedDoc
+            });
           }
         } else {
-          duplicates.push({
-            fila: r + 1,
-            documento: normalizedDoc
-          });
-        }
-      } else {
-        const hasAnyContent = row.some(cell => String(cell || '').trim() !== '');
-        if (hasAnyContent) {
-          emptyOrInvalidRows.push({
-            fila: r + 1,
-            valor: rawValue
-          });
+          const hasAnyContent = row.some(cell => String(cell || '').trim() !== '');
+          if (hasAnyContent) {
+            emptyOrInvalidRows.push({
+              fila: r + 1,
+              valor: rawValue
+            });
+          }
         }
       }
     }
@@ -356,10 +446,10 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
     const documents = Array.from(documentsSet);
 
     if (documents.length === 0) {
-      throw new Error('No se encontraron registros válidos de documentos en la columna detectada.');
+      throw new Error(
+        'No se encontraron registros de documentos válidos en el archivo. Verifique que contenga una columna con números de identificación o cédula.'
+      );
     }
-
-    const totalDataRows = rows.length - (headerRowIndex + 1);
 
     return {
       success: true,
@@ -367,12 +457,9 @@ export async function parseEnrollmentFile(fileData, fileName = 'Inscritos.xlsx')
       documents,
       participants,
       fileName,
-      detectedColumn: detectedColumnName,
+      detectedColumn: primaryDetectedColumn,
       sample: originalSample,
-      totalRowsInFile: rows.length,
-      headerRowNumber: headerRowIndex + 1,
-      metadataRowsCount: headerRowIndex + 1,
-      totalDataRows,
+      totalRowsScanned: totalDataRowsScanned,
       duplicatesCount: duplicates.length,
       duplicates,
       emptyOrInvalidRowsCount: emptyOrInvalidRows.length
