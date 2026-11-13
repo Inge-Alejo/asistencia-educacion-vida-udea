@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { UserCheck, Settings, QrCode, Lock, LogOut, Calendar, GraduationCap } from 'lucide-react';
-import { getEventConfig } from '../services/storage';
+import { getEventConfig, sortEventsRecentFirst } from '../services/storage';
 
 export default function Header({
   currentView,
@@ -12,6 +12,9 @@ export default function Header({
   isAdmin,
   onLogoutAdmin
 }) {
+  // Ordenar lista desplegable de eventos del más reciente al más antiguo
+  const sortedDropdownEvents = useMemo(() => sortEventsRecentFirst(events), [events]);
+
   return (
     <header className="udea-header">
       <div className="header-top-bar">
@@ -43,7 +46,7 @@ export default function Header({
                 className="event-dropdown"
                 aria-label="Seleccionar evento administrativo"
               >
-                {events.map((ev) => {
+                {sortedDropdownEvents.map((ev) => {
                   const displayTitle = ev.titulo?.length > 45 ? ev.titulo.substring(0, 45) + '...' : (ev.titulo || 'Evento');
                   return (
                     <option key={ev.id} value={ev.id}>

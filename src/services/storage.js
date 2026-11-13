@@ -330,10 +330,47 @@ export function initStorage() {
 }
 
 // Métodos de Eventos
+
+/**
+ * Ordena una lista de eventos del más reciente al más antiguo.
+ * Prioriza la fecha del evento (fechaFin / fecha / fechaInicio descendente).
+ * Si las fechas son iguales, utiliza la fecha de creación (creadoEn) o timestamp embebido en el ID.
+ */
+export function sortEventsRecentFirst(eventsList) {
+  if (!Array.isArray(eventsList)) return [];
+  return [...eventsList].sort((a, b) => {
+    // 1. Fecha del evento (descendente: 2026-11-13 antes de 2026-09-21)
+    const dateA = a?.fechaFin || a?.fecha || a?.fechaInicio || '';
+    const dateB = b?.fechaFin || b?.fecha || b?.fechaInicio || '';
+    if (dateA && dateB && dateA !== dateB) {
+      return dateB.localeCompare(dateA);
+    }
+    if (dateA && !dateB) return -1;
+    if (!dateA && dateB) return 1;
+
+    // 2. Fecha de creación / actualización
+    const createdA = a?.creadoEn || a?.createdAt || a?.actualizadoEn || '';
+    const createdB = b?.creadoEn || b?.createdAt || b?.actualizadoEn || '';
+    if (createdA && createdB && createdA !== createdB) {
+      return createdB.localeCompare(createdA);
+    }
+
+    // 3. Timestamps embebidos en el ID si existen (ej: EVT-MED-1790213372497-a039)
+    const timeA = (a?.id || '').match(/\d{12,14}/)?.[0] || '0';
+    const timeB = (b?.id || '').match(/\d{12,14}/)?.[0] || '0';
+    if (timeA !== '0' || timeB !== '0') {
+      return timeB.localeCompare(timeA);
+    }
+
+    return String(b?.id || '').localeCompare(String(a?.id || ''));
+  });
+}
+
 export function getEvents() {
   initStorage();
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_EVENTS) || '[]');
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY_EVENTS) || '[]');
+    return sortEventsRecentFirst(raw);
   } catch {
     return [];
   }
@@ -441,6 +478,7 @@ export async function saveEvent(eventData) {
 
   const consolidatedEvent = {
     ...eventData,
+    creadoEn: eventData.creadoEn || eventData.createdAt || new Date().toISOString(),
     configuracion: config,
     habilitarPlacaVehiculo: config.modulos.placaVehiculo,
     habilitarPonentes: config.modulos.preguntasPonentes || config.modulos.evaluacionPonentes,
@@ -455,7 +493,8 @@ export async function saveEvent(eventData) {
   } else {
     events.unshift(consolidatedEvent);
   }
-  localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(events));
+  const sorted = sortEventsRecentFirst(events);
+  localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(sorted));
 
   // Sincronizar inmediatamente con Cloud Firestore en la colección 'eventos'
   if (isFirebaseConfigured() && db) {
@@ -565,7 +604,7 @@ export function subscribeToEvents(onUpdate) {
             }
           });
 
-          const merged = Array.from(map.values());
+          const merged = sortEventsRecentFirst(Array.from(map.values()));
           localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(merged));
           if (onUpdate) onUpdate(merged);
         }

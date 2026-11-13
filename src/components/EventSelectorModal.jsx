@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, Search, Calendar, MapPin, Clock, Edit3, Eye, Plus, Layers, CheckCircle2 } from 'lucide-react';
-import { getEventConfig } from '../services/storage';
+import { getEventConfig, sortEventsRecentFirst } from '../services/storage';
 
 export default function EventSelectorModal({
   isOpen,
@@ -13,9 +13,23 @@ export default function EventSelectorModal({
 }) {
   const [searchTerm, setSearchTerm] = useState('');
 
+  // 1. Ordenar todos los eventos del más reciente al más antiguo.
+  // 2. Si hay un evento activo en el panel admin (currentEventId), ubicarlo de primero en la lista.
+  const sortedEvents = useMemo(() => {
+    const list = sortEventsRecentFirst(events);
+    if (!currentEventId) return list;
+
+    const currentIndex = list.findIndex(ev => ev.id === currentEventId);
+    if (currentIndex > 0) {
+      const [current] = list.splice(currentIndex, 1);
+      list.unshift(current);
+    }
+    return list;
+  }, [events, currentEventId]);
+
   if (!isOpen) return null;
 
-  const filteredEvents = events.filter((ev) => {
+  const filteredEvents = sortedEvents.filter((ev) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
     const termNoDash = term.replace(/[^a-z0-9]/g, '');
