@@ -1,7 +1,7 @@
 // Servicio de Exportación a Microsoft Excel (.xlsx) y compatibilidad con Microsoft Forms
 // Facultad de Medicina - Universidad de Antioquia
 // Implementación 100% Modular: genera hojas según los módulos activos del evento.
-// Cruce relacional por documento con la lista oficial de inscritos (3_Inscritos_Oficiales) para enriquecer datos oficiales.
+// Cruce relacional bidireccional inteligente: enriquece 3_Inscritos_Oficiales y 1_Consolidado_Asistentes cruzando por cédula.
 // Incluye blindaje contra Inyección de Fórmulas CSV/Excel (CWE-1236).
 
 import * as XLSX from 'xlsx';
@@ -30,7 +30,7 @@ export function exportEventDataToExcel({
   const config = getEventConfig(safeEvento);
   const modulos = config.modulos || {};
 
-  // Analítica por jornadas y consolidación de personas únicas con cruce relacional de inscritos
+  // Analítica por jornadas y consolidación de personas únicas con cruce relacional bidireccional de inscritos
   const {
     eventDays,
     totalEventDays,
@@ -47,6 +47,7 @@ export function exportEventDataToExcel({
     inscritosAusentes,
     noInscritosQueAsistieron,
     tasaAsistenciaInscritos,
+    enrolledDocsSet,
     participantsDict,
     inscritosDataObj
   } = enrollmentStats;
@@ -101,7 +102,7 @@ export function exportEventDataToExcel({
       { 'Parámetro': 'Inscritos Oficiales Ausentes', 'Detalle': `${inscritosAusentes}` },
       { 'Parámetro': 'Asistentes Extraordinarios en Sitio (No Inscritos Previamente)', 'Detalle': `${noInscritosQueAsistieron}` },
       { 'Parámetro': 'Efectividad de Asistencia sobre Convocatoria', 'Detalle': `${tasaAsistenciaInscritos}%` },
-      { 'Parámetro': 'Cruce Relacional con Inscritos', 'Detalle': 'Datos demográficos enriquecidos automáticamente desde la lista oficial por cédula' }
+      { 'Parámetro': 'Cruce Relacional con Inscritos', 'Detalle': 'Datos demográficos enriquecidos bidireccionalmente entre asistencias y la lista oficial' }
     );
   }
 
@@ -110,7 +111,6 @@ export function exportEventDataToExcel({
 
   // -------------------------------------------------------------
   // HOJA 1: CONSOLIDADO DE ASISTENTES ÚNICOS (SIN REPETIDOS)
-  // Enriquecido automáticamente desde la lista oficial de inscritos (3_Inscritos_Oficiales)
   // -------------------------------------------------------------
   const consolidadoData = uniquePersons.map((p, index) => {
     const row = {
@@ -165,10 +165,11 @@ export function exportEventDataToExcel({
     const dayObj = eventDays.find(d => d.fecha === recDate);
     const dayLabel = dayObj ? dayObj.label : (a.diaNumero ? `Día ${a.diaNumero}` : 'Jornada Única');
     const docClean = normalizeDocumentId(a?.documento) || String(a?.documento || '').trim();
-    const inscrito = participantsDict[docClean] || null;
+    const esInscrito = enrolledDocsSet ? enrolledDocsSet.has(docClean) : false;
+    const inscrito = participantsDict ? (participantsDict[docClean] || participantsDict[a?.documento]) : null;
 
-    // Enriquecimiento de datos oficiales si figura en la lista de inscritos
-    const nombreFinal = (inscrito?.nombreCompleto && String(inscrito.nombreCompleto).trim().length > 0)
+    // Enriquecimiento de datos oficiales si figura en la lista de inscritos y contiene nombre válido
+    const nombreFinal = (inscrito?.nombreCompleto && String(inscrito.nombreCompleto).trim().length > 0 && String(inscrito.nombreCompleto).trim() !== 'Sin nombre en archivo')
       ? String(inscrito.nombreCompleto).trim()
       : (a.nombreCompleto || 'Sin nombre');
 
@@ -180,7 +181,7 @@ export function exportEventDataToExcel({
       ? String(inscrito.telefono).trim()
       : (a.telefono || '');
 
-    const vinculacionFinal = (inscrito?.vinculacion && String(inscrito.vinculacion).trim().length > 0)
+    const vinculacionFinal = (inscrito?.vinculacion && String(inscrito.vinculacion).trim().length > 0 && String(inscrito.vinculacion).trim() !== 'Inscrito')
       ? String(inscrito.vinculacion).trim()
       : (a.vinculacion || 'Asistente');
 
@@ -193,7 +194,7 @@ export function exportEventDataToExcel({
     };
 
     if (hasInscritos) {
-      row['Inscrito Oficial'] = inscrito ? 'SÍ (Acreditado)' : 'NO (En sitio)';
+      row['Inscrito Oficial'] = esInscrito ? 'SÍ (Acreditado)' : 'NO (En sitio)';
     }
 
     row['Tipo Doc.'] = sanitizeExcelFormula(a.tipoDocumento || 'CC');
@@ -225,21 +226,41 @@ export function exportEventDataToExcel({
   // -------------------------------------------------------------
   // HOJA MODULAR 3: VALIDACIÓN DE LISTA DE INSCRITOS OFICIALES
   // (Solo si el módulo está habilitado y hay lista de inscritos cargada)
-  // Cruce total: lista de matriculados vs asistencia real, deserción y cumplimiento
+  // Cruce bidireccional total: si la persona asistió, completar automáticamente
+  // Nombre, Correo, Teléfono y Rol desde su registro de asistencia
   // -------------------------------------------------------------
   if (modulos.validacionInscritos !== false && hasInscritos) {
     const inscritosRows = inscritosDataObj.documents.map((docNum, index) => {
-      const pInfo = participantsDict[docNum] || {};
-      const personMatch = uniquePersons.find(p => p.documentoNormalizado === docNum);
+      const normDoc = normalizeDocumentId(docNum) || String(docNum).trim();
+      const pInfo = (participantsDict && (participantsDict[normDoc] || participantsDict[docNum])) || {};
+      const personMatch = uniquePersons.find(p => p.documentoNormalizado === normDoc || p.documentoNormalizado === docNum);
       const asistio = Boolean(personMatch);
+
+      // Si la persona asistió pero en el archivo de inscritos no venía su nombre o correo,
+      // enriquecer desde los datos capturados en el registro de asistencia
+      const nombreFinal = (pInfo.nombreCompleto && String(pInfo.nombreCompleto).trim().length > 0 && String(pInfo.nombreCompleto).trim() !== 'Sin nombre en archivo')
+        ? String(pInfo.nombreCompleto).trim()
+        : (personMatch?.nombreCompleto || 'Sin nombre en archivo (No asistió)');
+
+      const correoFinal = (pInfo.correo && String(pInfo.correo).trim().length > 0)
+        ? String(pInfo.correo).trim()
+        : (personMatch?.correo || '');
+
+      const telefonoFinal = (pInfo.telefono && String(pInfo.telefono).trim().length > 0)
+        ? String(pInfo.telefono).trim()
+        : (personMatch?.telefono || '');
+
+      const vinculacionFinal = (pInfo.vinculacion && String(pInfo.vinculacion).trim().length > 0 && String(pInfo.vinculacion).trim() !== 'Inscrito')
+        ? String(pInfo.vinculacion).trim()
+        : (personMatch?.vinculacion || 'Inscrito');
 
       const row = {
         'N°': index + 1,
         'Documento': sanitizeExcelFormula(pInfo.documentoOriginal || docNum),
-        'Nombre Completo': sanitizeExcelFormula(pInfo.nombreCompleto || 'Sin nombre en archivo'),
-        'Correo': sanitizeExcelFormula(pInfo.correo || ''),
-        'Teléfono': sanitizeExcelFormula(pInfo.telefono || ''),
-        'Vinculación': sanitizeExcelFormula(pInfo.vinculacion || 'Inscrito'),
+        'Nombre Completo': sanitizeExcelFormula(nombreFinal),
+        'Correo': sanitizeExcelFormula(correoFinal),
+        'Teléfono': sanitizeExcelFormula(telefonoFinal),
+        'Vinculación': sanitizeExcelFormula(vinculacionFinal),
         'Estado Asistencia': asistio ? 'ASISTIÓ' : 'NO ASISTIÓ',
         'Total Días Asistidos': personMatch ? personMatch.totalDiasAsistidos : 0,
         'Total Días Evento': totalEventDays,
@@ -421,9 +442,9 @@ export function exportMicrosoftFormsFormat({ evento = {}, asistencias = [], sati
   const msFormsData = safeAsistencias.map((a, index) => {
     const sat = safeSatisfaccion[index] || {};
     const docClean = normalizeDocumentId(a?.documento) || String(a?.documento || '').trim();
-    const inscrito = participantsDict[docClean] || null;
+    const inscrito = participantsDict[docClean] || participantsDict[a?.documento] || null;
 
-    const nombreFinal = (inscrito?.nombreCompleto && String(inscrito.nombreCompleto).trim().length > 0)
+    const nombreFinal = (inscrito?.nombreCompleto && String(inscrito.nombreCompleto).trim().length > 0 && String(inscrito.nombreCompleto).trim() !== 'Sin nombre en archivo')
       ? String(inscrito.nombreCompleto).trim()
       : (a.nombreCompleto || 'Sin nombre');
 
@@ -435,7 +456,7 @@ export function exportMicrosoftFormsFormat({ evento = {}, asistencias = [], sati
       ? String(inscrito.telefono).trim()
       : (a.telefono || '');
 
-    const vinculacionFinal = (inscrito?.vinculacion && String(inscrito.vinculacion).trim().length > 0)
+    const vinculacionFinal = (inscrito?.vinculacion && String(inscrito.vinculacion).trim().length > 0 && String(inscrito.vinculacion).trim() !== 'Inscrito')
       ? String(inscrito.vinculacion).trim()
       : (a.vinculacion || 'Asistente');
 

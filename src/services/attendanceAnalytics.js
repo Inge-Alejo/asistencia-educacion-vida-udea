@@ -1,7 +1,7 @@
 // Servicio de Analítica de Asistencia por Días y Consolidación de Asistentes Únicos
 // Facultad de Medicina - Universidad de Antioquia
 // Soporta eventos de 1 solo día, multidía (2, 3, 5, ... N días) y detección dinámica de fechas.
-// Cruce relacional inteligente con el listado oficial de inscritos (3_Inscritos_Oficiales) por documento.
+// Cruce relacional bidireccional inteligente con el listado oficial de inscritos (3_Inscritos_Oficiales) por documento.
 
 import { normalizeDocumentId } from './enrollmentService.js';
 import { getEventInscritosData } from './storage.js';
@@ -67,6 +67,7 @@ export function extractRecordDate(record) {
  *     inscritosAusentes: number,
  *     noInscritosQueAsistieron: number,
  *     tasaAsistenciaInscritos: number,
+ *     enrolledDocsSet: Set<string>,
  *     participantsDict: Record<string, object>,
  *     inscritosDataObj: object|null
  *   }
@@ -84,6 +85,13 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = [], cus
     : {};
   const hasInscritos = Boolean(inscritosDataObj && Array.isArray(inscritosDataObj.documents) && inscritosDataObj.documents.length > 0);
   const totalInscritos = hasInscritos ? inscritosDataObj.documents.length : 0;
+
+  // Set optimizado de documentos inscritos normalizados para búsqueda instantánea O(1)
+  const enrolledDocsSet = new Set(
+    hasInscritos
+      ? inscritosDataObj.documents.map(d => normalizeDocumentId(d) || String(d).trim())
+      : []
+  );
 
   // 2. Extraer los días planificados en la configuración del evento
   if (safeEvento?.esMultidia && Array.isArray(safeEvento.diasEvento) && safeEvento.diasEvento.length > 0) {
@@ -199,7 +207,7 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = [], cus
   const totalEventDays = sortedDays.length || 1;
 
   // 6. Generar lista procesada de personas únicas con estadísticas de asistencia
-  // y enriquecimiento relacional desde la lista de inscritos oficiales
+  // y enriquecimiento relacional bidireccional
   const uniquePersons = Array.from(uniquePersonsMap.values()).map(person => {
     const distinctDaysAttended = Object.keys(person.diasAsistidosMap);
     const totalDiasAsistidos = distinctDaysAttended.length;
@@ -213,12 +221,12 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = [], cus
 
     // Cruce inteligente por documento con la lista oficial de inscritos (3_Inscritos_Oficiales)
     const normDoc = person.documentoNormalizado;
+    const esInscritoOficial = enrolledDocsSet.has(normDoc);
     const inscrito = participantsDict[normDoc] || null;
-    const esInscritoOficial = Boolean(inscrito);
 
-    // Si el participante está en la lista oficial de inscritos, enriquecer sus datos oficiales
-    // Priorizando la información acreditada de la universidad (evita erratas o tipografía informal en el celular)
-    const nombreOficial = (inscrito?.nombreCompleto && String(inscrito.nombreCompleto).trim().length > 0)
+    // Si el participante está en la lista de inscritos y el archivo contiene nombre válido, usarlo.
+    // Si el archivo venía sin nombres (o vacío / "Sin nombre"), conservar el nombre ingresado por el asistente.
+    const nombreOficial = (inscrito?.nombreCompleto && String(inscrito.nombreCompleto).trim().length > 0 && String(inscrito.nombreCompleto).trim() !== 'Sin nombre en archivo')
       ? String(inscrito.nombreCompleto).trim()
       : person.nombreCompleto;
 
@@ -230,7 +238,7 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = [], cus
       ? String(inscrito.telefono).trim()
       : person.telefono;
 
-    const vinculacionOficial = (inscrito?.vinculacion && String(inscrito.vinculacion).trim().length > 0)
+    const vinculacionOficial = (inscrito?.vinculacion && String(inscrito.vinculacion).trim().length > 0 && String(inscrito.vinculacion).trim() !== 'Inscrito')
       ? String(inscrito.vinculacion).trim()
       : person.vinculacion;
 
@@ -287,6 +295,7 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = [], cus
       inscritosAusentes,
       noInscritosQueAsistieron,
       tasaAsistenciaInscritos,
+      enrolledDocsSet,
       participantsDict,
       inscritosDataObj
     }
