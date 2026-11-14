@@ -5,7 +5,7 @@ import {
   ExternalLink, Trash2, Shield, KeyRound, LogOut, Upload, X, Award,
   Database, HardDrive, Server, Activity, Wifi, Camera, Edit3,
   CheckCircle2, Globe, Phone, Cloud, AlertTriangle, UtensilsCrossed, Barcode,
-  BarChart3, Lock, Play
+  BarChart3, Lock, Play, Calendar
 } from 'lucide-react';
 import DigitalBadge from './DigitalBadge';
 import QRScannerModal from './QRScannerModal';
@@ -14,6 +14,7 @@ import BarcodeScannerDeskModal from './BarcodeScannerDeskModal';
 import EventSelectorModal from './EventSelectorModal';
 import InscritosModal from './InscritosModal';
 import { exportEventDataToExcel, exportMicrosoftFormsFormat } from '../services/excelExport';
+import { analyzeEventDaysAndAttendance, extractRecordDate } from '../services/attendanceAnalytics.js';
 import {
   toggleQuestionAnswered,
   toggleQuestionFeatured,
@@ -92,6 +93,7 @@ export default function AdminPanel({
   const [isBarcodeDeskModalOpen, setIsBarcodeDeskModalOpen] = useState(false);
   const [isEditSelectorOpen, setIsEditSelectorOpen] = useState(false);
   const [isInscritosModalOpen, setIsInscritosModalOpen] = useState(false);
+  const [attendanceDayFilter, setAttendanceDayFilter] = useState('UNICOS'); // 'UNICOS' | 'TODOS' | 'YYYY-MM-DD'
 
   // Estados para control de Alimentación y Refrigerios
   const [mealFilterId, setMealFilterId] = useState('ALL');
@@ -262,6 +264,19 @@ export default function AdminPanel({
     return getGlobalDatabaseMetrics();
   }, [asistencias, preguntas, evaluaciones, satisfaccion, entregasComidas, polls, events, activeTab]);
 
+  // Analítica por jornadas y consolidación de personas únicas (sin duplicados)
+  const attendanceAnalytics = useMemo(() => {
+    return analyzeEventDaysAndAttendance(evento, asistencias);
+  }, [evento, asistencias]);
+
+  const {
+    eventDays,
+    totalEventDays,
+    uniquePersons,
+    totalUniquePersons,
+    isMultidia
+  } = attendanceAnalytics;
+
   // Estadísticas Rápidas
   const totalAsistentes = asistencias.length;
   const presencialesGPS = asistencias.filter(a => a.geolocalizacion?.esPresencial).length;
@@ -286,21 +301,49 @@ export default function AdminPanel({
     ? (satisfaccion.reduce((acc, s) => acc + s.npsRecomendacion, 0) / totalSat).toFixed(1)
     : '10.0';
 
-  // Filtrado de Asistencias seguro
-  const asistenciasFiltradas = (asistencias || []).filter(a => {
-    const docStr = String(a?.documento || '');
-    const nameStr = String(a?.nombreCompleto || '').toLowerCase();
-    const placaStr = String(a?.placaVehiculo || '').toLowerCase();
-    const term = (searchTerm || '').toLowerCase();
+  // Filtrado de Asistencias seguro (Historial completo)
+  const asistenciasFiltradas = useMemo(() => {
+    return (asistencias || []).filter(a => {
+      const docStr = String(a?.documento || '');
+      const nameStr = String(a?.nombreCompleto || '').toLowerCase();
+      const placaStr = String(a?.placaVehiculo || '').toLowerCase();
+      const term = (searchTerm || '').toLowerCase();
 
-    const matchSearch =
-      nameStr.includes(term) ||
-      docStr.includes(searchTerm) ||
-      (placaStr && placaStr.includes(term));
+      const matchSearch =
+        !term ||
+        nameStr.includes(term) ||
+        docStr.includes(term) ||
+        (placaStr && placaStr.includes(term));
 
-    const matchVinculacion = filterVinculacion === 'todos' || a?.vinculacion === filterVinculacion;
-    return matchSearch && matchVinculacion;
-  });
+      const matchVinculacion = filterVinculacion === 'todos' || a?.vinculacion === filterVinculacion;
+      return matchSearch && matchVinculacion;
+    });
+  }, [asistencias, searchTerm, filterVinculacion]);
+
+  // Filtrado de Personas Únicas seguro (Consolidado sin duplicados)
+  const personasUnicasFiltradas = useMemo(() => {
+    return uniquePersons.filter(p => {
+      const docStr = String(p?.documento || '');
+      const nameStr = String(p?.nombreCompleto || '').toLowerCase();
+      const placaStr = String(p?.placaVehiculo || '').toLowerCase();
+      const term = (searchTerm || '').toLowerCase();
+
+      const matchSearch =
+        !term ||
+        nameStr.includes(term) ||
+        docStr.includes(term) ||
+        (placaStr && placaStr.includes(term));
+
+      const matchVinculacion = filterVinculacion === 'todos' || p?.vinculacion === filterVinculacion;
+      return matchSearch && matchVinculacion;
+    });
+  }, [uniquePersons, searchTerm, filterVinculacion]);
+
+  // Registros de la jornada o día seleccionado
+  const asistenciasDelDiaFiltradas = useMemo(() => {
+    if (attendanceDayFilter === 'UNICOS' || attendanceDayFilter === 'TODOS') return asistenciasFiltradas;
+    return asistenciasFiltradas.filter(a => extractRecordDate(a) === attendanceDayFilter);
+  }, [asistenciasFiltradas, attendanceDayFilter]);
 
   // Filtrado Multicriterio de Preguntas en Vivo seguro
   const preguntasFiltradas = (preguntas || []).filter(q => {
@@ -568,14 +611,16 @@ export default function AdminPanel({
       <div className="kpi-grid">
         <div className="kpi-card">
           <div className="kpi-header">
-            <span className="kpi-label">Asistentes Totales</span>
+            <span className="kpi-label">{isMultidia ? 'Personas Únicas' : 'Asistentes Totales'}</span>
             <div className="kpi-icon-wrap green">
               <Users size={18} />
             </div>
           </div>
-          <div className="kpi-value">{totalAsistentes}</div>
+          <div className="kpi-value">{isMultidia ? totalUniquePersons : totalAsistentes}</div>
           <span className="kpi-meta">
-            {presencialesGPS} confirmados en sede GPS ({porcentajePresencial}%)
+            {isMultidia
+              ? `${totalAsistentes} registros en ${totalEventDays} jornadas • ${presencialesGPS} en sede (${porcentajePresencial}%)`
+              : `${presencialesGPS} confirmados en sede GPS (${porcentajePresencial}%)`}
           </span>
         </div>
 
@@ -711,191 +756,395 @@ export default function AdminPanel({
       {/* PESTAÑA 1: LISTADO DE ASISTENCIAS */}
       {activeTab === 'asistencias' && (
         <div className="tab-panel">
+          {/* BARRA DE SELECCIÓN DE VISTA / DÍAS DE ASISTENCIA */}
+          <div className="attendance-days-selector-bar">
+            <div className="days-pills-list">
+              <button
+                type="button"
+                className={`day-filter-pill ${attendanceDayFilter === 'UNICOS' ? 'active' : ''}`}
+                onClick={() => setAttendanceDayFilter('UNICOS')}
+                title="Listado consolidado de personas sin duplicados con total de días asistidos"
+              >
+                <Users size={14} />
+                <span>Personas Únicas ({totalUniquePersons})</span>
+              </button>
+
+              {eventDays.map((d) => (
+                <button
+                  key={d.fecha}
+                  type="button"
+                  className={`day-filter-pill ${attendanceDayFilter === d.fecha ? 'active' : ''}`}
+                  onClick={() => setAttendanceDayFilter(d.fecha)}
+                  title={`Ver asistentes registrados en el ${d.label} (${d.fecha})`}
+                >
+                  <Calendar size={14} />
+                  <span>{d.label}: {d.fecha} ({d.totalAsistentes})</span>
+                </button>
+              ))}
+
+              <button
+                type="button"
+                className={`day-filter-pill ${attendanceDayFilter === 'TODOS' ? 'active' : ''}`}
+                onClick={() => setAttendanceDayFilter('TODOS')}
+                title="Historial cronológico completo de registros individuales"
+              >
+                <Clock size={14} />
+                <span>Todos los Registros ({asistencias.length})</span>
+              </button>
+            </div>
+
+            <div className="days-current-badge">
+              {attendanceDayFilter === 'UNICOS' && (
+                <span>⭐ Listado consolidado: <strong>{personasUnicasFiltradas.length}</strong> personas únicas (1 fila por participante)</span>
+              )}
+              {attendanceDayFilter === 'TODOS' && (
+                <span>🕒 Historial cronológico: <strong>{asistenciasFiltradas.length}</strong> registros individuales</span>
+              )}
+              {attendanceDayFilter !== 'UNICOS' && attendanceDayFilter !== 'TODOS' && (() => {
+                const curDay = eventDays.find(d => d.fecha === attendanceDayFilter);
+                return (
+                  <span>📅 Asistencia del <strong>{curDay?.label || 'Día'}</strong> ({attendanceDayFilter}): <strong>{asistenciasDelDiaFiltradas.length}</strong> participantes</span>
+                );
+              })()}
+            </div>
+          </div>
+
           <div className="table-controls-bar">
             <div className="search-box">
               <Search size={16} />
               <input
-                 type="text"
-                 placeholder="Buscar por nombre, documento o placa..."
-                 value={searchTerm}
-                 onChange={(e) => setSearchTerm(e.target.value)}
-               />
-             </div>
+                type="text"
+                placeholder={attendanceDayFilter === 'UNICOS' ? "Buscar persona por nombre, documento o placa..." : "Buscar por nombre, documento o placa..."}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
 
-             <div className="filter-box">
-               <Filter size={16} />
-               <select
-                 value={filterVinculacion}
-                 onChange={(e) => setFilterVinculacion(e.target.value)}
-               >
-                 <option value="todos">Todos los roles institucionales</option>
-                 <option value="Ponente / Conferencista">Ponente / Conferencista</option>
-                 <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
-                 <option value="Residente / Posgrado UdeA">Residente / Posgrado UdeA</option>
-                 <option value="Docente / Investigador UdeA">Docente / Investigador UdeA</option>
-                 <option value="Auxiliar / Administrativo UdeA">Auxiliar / Administrativo</option>
-                 <option value="Egresado UdeA">Egresado UdeA</option>
-                 <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
-               </select>
-             </div>
+            <div className="filter-box">
+              <Filter size={16} />
+              <select
+                value={filterVinculacion}
+                onChange={(e) => setFilterVinculacion(e.target.value)}
+              >
+                <option value="todos">Todos los roles institucionales</option>
+                <option value="Ponente / Conferencista">Ponente / Conferencista</option>
+                <option value="Estudiante Pregrado Medicina UdeA">Estudiante Pregrado UdeA</option>
+                <option value="Residente / Posgrado UdeA">Residente / Posgrado UdeA</option>
+                <option value="Docente / Investigador UdeA">Docente / Investigador UdeA</option>
+                <option value="Auxiliar / Administrativo UdeA">Auxiliar / Administrativo</option>
+                <option value="Egresado UdeA">Egresado UdeA</option>
+                <option value="Médico / Especialista Externo">Médico / Especialista Externo</option>
+              </select>
+            </div>
 
-              {asistencias.length > 0 && (
-                <button
-                  type="button"
-                  className="btn-danger-purge"
-                  onClick={handleOpenPurgeModal}
-                  title="Eliminar permanentemente todos los registros de personas de este evento"
-                >
-                  <Trash2 size={15} />
-                  <span>Eliminar Todos los Asistentes ({asistencias.length})</span>
-                </button>
-              )}
-           </div>
+            {asistencias.length > 0 && (
+              <button
+                type="button"
+                className="btn-danger-purge"
+                onClick={handleOpenPurgeModal}
+                title="Eliminar permanentemente todos los registros de personas de este evento"
+              >
+                <Trash2 size={15} />
+                <span>Eliminar Todos los Registros ({asistencias.length})</span>
+              </button>
+            )}
+          </div>
 
-           <div className="table-responsive-container">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '45px', textAlign: 'center' }}>N°</th>
-                  <th style={{ width: '135px' }}>Documento</th>
-                  <th style={{ minWidth: '180px' }}>Asistente</th>
-                  <th style={{ minWidth: '210px' }}>Contacto</th>
-                  <th style={{ minWidth: '160px' }}>Vinculación</th>
-                  {eventConfig.modulos.placaVehiculo && <th style={{ width: '90px', textAlign: 'center' }}>Placa</th>}
-                  <th style={{ minWidth: '150px' }}>Ubicación GPS</th>
-                  <th style={{ width: '140px' }}>Registro</th>
-                  <th style={{ width: '85px', textAlign: 'center' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {asistenciasFiltradas.length === 0 ? (
+          {/* VISTA 1: TABLA DE PERSONAS ÚNICAS (CONSOLIDADO SIN REPETIDOS) */}
+          {attendanceDayFilter === 'UNICOS' ? (
+            <div className="table-responsive-container">
+              <table className="admin-table">
+                <thead>
                   <tr>
-                    <td colSpan={eventConfig.modulos.placaVehiculo ? 9 : 8} className="empty-table-row">
-                      No se encontraron registros de asistencia que coincidan con la búsqueda.
-                    </td>
+                    <th style={{ width: '45px', textAlign: 'center' }}>N°</th>
+                    <th style={{ width: '135px' }}>Documento</th>
+                    <th style={{ minWidth: '180px' }}>Asistente</th>
+                    <th style={{ minWidth: '200px' }}>Contacto</th>
+                    <th style={{ minWidth: '150px' }}>Vinculación</th>
+                    <th style={{ minWidth: '160px', textAlign: 'center' }}>Días Asistidos</th>
+                    {eventConfig.modulos.placaVehiculo && <th style={{ width: '90px', textAlign: 'center' }}>Placa</th>}
+                    <th style={{ minWidth: '140px' }}>Primer y Último Registro</th>
+                    <th style={{ width: '85px', textAlign: 'center' }}>Acciones</th>
                   </tr>
-                ) : (
-                  asistenciasFiltradas.map((a, idx) => {
-                    const dateInfo = formatRegistrationDate(a.fechaRegistro, a.horaRegistro);
-                    const isPonente = a.vinculacion?.includes('Ponente');
-                    const isEspecialista = a.vinculacion?.includes('Especialista') || a.vinculacion?.includes('Docente');
-                    const isEgresado = a.vinculacion?.includes('Egresado');
-                    const roleClass = isPonente ? 'role-chip-ponente' : isEspecialista ? 'role-chip-docente' : isEgresado ? 'role-chip-egresado' : 'role-chip-estudiante';
+                </thead>
+                <tbody>
+                  {personasUnicasFiltradas.length === 0 ? (
+                    <tr>
+                      <td colSpan={eventConfig.modulos.placaVehiculo ? 9 : 8} className="empty-table-row">
+                        No se encontraron personas registradas que coincidan con la búsqueda.
+                      </td>
+                    </tr>
+                  ) : (
+                    personasUnicasFiltradas.map((p, idx) => {
+                      const isPonente = p.vinculacion?.includes('Ponente');
+                      const isEspecialista = p.vinculacion?.includes('Especialista') || p.vinculacion?.includes('Docente');
+                      const isEgresado = p.vinculacion?.includes('Egresado');
+                      const roleClass = isPonente ? 'role-chip-ponente' : isEspecialista ? 'role-chip-docente' : isEgresado ? 'role-chip-egresado' : 'role-chip-estudiante';
 
-                    return (
-                      <tr key={a.id || idx} className="admin-table-row">
-                        <td className="row-index-cell">{idx + 1}</td>
-                        <td>
-                          <div className="doc-cluster">
-                            <span className="doc-val">{a.documento}</span>
-                            <span className="doc-pill">{a.tipoDocumento || 'CC'}</span>
-                          </div>
-                        </td>
-                        <td className="attendee-name-cell">
-                          <span className="attendee-name-text">{a.nombreCompleto}</span>
-                        </td>
-                        <td>
-                          <div className="contact-cluster">
-                            <span className="contact-email-text" title={a.correo}>{a.correo}</span>
-                            {a.telefono && (
-                              <span className="contact-phone-text">
-                                <Phone size={11} className="contact-sub-icon" />
-                                <span>{a.telefono}</span>
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td>
-                          <span className={`role-chip ${roleClass}`}>
-                            {a.vinculacion || 'Asistente'}
-                          </span>
-                        </td>
-                        {eventConfig.modulos.placaVehiculo && (
-                          <td className="plate-cell text-center">
-                            {a.placaVehiculo ? (
-                              <span className="plate-badge" title={`Vehículo: ${a.placaVehiculo}`}>
-                                <Car size={13} />
-                                <span>{a.placaVehiculo}</span>
-                              </span>
-                            ) : (
-                              <span className="no-plate-dash" title="Sin vehículo registrado">—</span>
-                            )}
+                      const pct = p.porcentajeAsistencia;
+                      const badgeClass = pct === 100 ? 'high' : pct >= 50 ? 'medium' : 'low';
+                      const lastReg = p.registros[p.registros.length - 1] || p.registros[0];
+                      const firstDateInfo = formatRegistrationDate(p.primerRegistro);
+                      const lastDateInfo = formatRegistrationDate(p.ultimoRegistro);
+
+                      return (
+                        <tr key={p.documentoNormalizado || idx} className="admin-table-row">
+                          <td className="row-index-cell">{idx + 1}</td>
+                          <td>
+                            <div className="doc-cluster">
+                              <span className="doc-val">{p.documento}</span>
+                              <span className="doc-pill">{p.tipoDocumento || 'CC'}</span>
+                            </div>
                           </td>
-                        )}
-                        <td>
-                          <div className="geo-cluster">
-                            {a.geolocalizacion?.esPresencial ? (
-                              <span className="geo-pill in-situ" title={`Confirmado en sede (a ${a.geolocalizacion.distanciaSedeMetros}m)`}>
-                                <CheckCircle2 size={12} />
-                                <span>En Sede ({a.geolocalizacion.distanciaSedeMetros}m)</span>
-                              </span>
-                            ) : (
-                              <span className="geo-pill remote" title={a.geolocalizacion?.distanciaSedeMetros ? `A ${a.geolocalizacion.distanciaSedeMetros}m de la sede` : 'Asistencia remota'}>
-                                <Globe size={12} />
-                                <span>Remoto {a.geolocalizacion?.distanciaSedeMetros ? `(${a.geolocalizacion.distanciaSedeMetros}m)` : ''}</span>
-                              </span>
-                            )}
-
-                            {a.geolocalizacion?.latitud && a.geolocalizacion?.longitud && (
-                              <button
-                                type="button"
-                                className="btn-geo-map-pill"
-                                onClick={() => setSelectedGeoRecord(a)}
-                                title="Ver ubicación en mapa satelital interactivo"
-                              >
-                                <MapPin size={11} />
-                                <span>Mapa</span>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                        <td>
-                          <div className="timestamp-cluster">
-                            <span className="time-date-text">{dateInfo.date}</span>
-                            <div className="time-sub-line">
-                              {dateInfo.time && <span className="time-clock-text">{dateInfo.time}</span>}
-                              {(evento.esMultidia || a.diaNumero) && (
-                                <span className="day-badge-clean">
-                                  Día {a.diaNumero || 1}
+                          <td className="attendee-name-cell">
+                            <span className="attendee-name-text">{p.nombreCompleto}</span>
+                          </td>
+                          <td>
+                            <div className="contact-cluster">
+                              <span className="contact-email-text" title={p.correo}>{p.correo || '—'}</span>
+                              {p.telefono && (
+                                <span className="contact-phone-text">
+                                  <Phone size={11} className="contact-sub-icon" />
+                                  <span>{p.telefono}</span>
                                 </span>
                               )}
                             </div>
-                          </div>
-                        </td>
-                        <td className="actions-cell text-center">
-                          <div className="table-actions-cluster">
-                            {eventConfig.modulos.escarapelaDigital && (
+                          </td>
+                          <td>
+                            <span className={`role-chip ${roleClass}`}>
+                              {p.vinculacion || 'Asistente'}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <div className="attendance-days-cluster">
+                              <span className={`attendance-days-pill ${badgeClass}`}>
+                                {p.totalDiasAsistidos} / {totalEventDays} {totalEventDays === 1 ? 'día' : 'días'} ({pct}%)
+                              </span>
+                              {isMultidia && (
+                                <div className="mini-days-row">
+                                  {eventDays.map(d => {
+                                    const attended = p.asistenciaPorDia[d.fecha];
+                                    return (
+                                      <span
+                                        key={d.fecha}
+                                        className={`mini-day-tag ${attended ? 'attended' : 'missed'}`}
+                                        title={attended ? `Asistió el ${d.label} (${d.fecha})` : `No asistió el ${d.label} (${d.fecha})`}
+                                      >
+                                        {attended ? `✓ ${d.label}` : `— ${d.label}`}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          {eventConfig.modulos.placaVehiculo && (
+                            <td className="plate-cell text-center">
+                              {p.placaVehiculo ? (
+                                <span className="plate-badge" title={`Vehículo: ${p.placaVehiculo}`}>
+                                  <Car size={13} />
+                                  <span>{p.placaVehiculo}</span>
+                                </span>
+                              ) : (
+                                <span className="no-plate-dash" title="Sin vehículo registrado">—</span>
+                              )}
+                            </td>
+                          )}
+                          <td>
+                            <div className="timestamp-cluster">
+                              <span className="time-date-text">
+                                1°: {firstDateInfo.date} {firstDateInfo.time && `(${firstDateInfo.time})`}
+                              </span>
+                              {p.totalDiasAsistidos > 1 && (
+                                <span className="time-sub-line" style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                  Últ: {lastDateInfo.date} {lastDateInfo.time && `(${lastDateInfo.time})`}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="actions-cell text-center">
+                            <div className="table-actions-cluster">
+                              {eventConfig.modulos.escarapelaDigital && (
+                                <button
+                                  type="button"
+                                  className="btn-table-action-badge"
+                                  title={`Ver pase digital oficial de ${p.nombreCompleto}`}
+                                  onClick={() => setSelectedBadgeAttendee(lastReg)}
+                                >
+                                  <Award size={15} />
+                                </button>
+                              )}
                               <button
                                 type="button"
-                                className="btn-table-action-badge"
-                                title={`Ver pase digital oficial de ${a.nombreCompleto}`}
-                                onClick={() => setSelectedBadgeAttendee(a)}
+                                className="btn-table-action-delete"
+                                title={`Eliminar todos los registros de ${p.nombreCompleto}`}
+                                onClick={async () => {
+                                  if (window.confirm(`¿Eliminar todos los registros de asistencia de "${p.nombreCompleto}" (Doc: ${p.documento}) en este evento?`)) {
+                                    for (const r of p.registros) {
+                                      await deleteAttendance(r.id);
+                                    }
+                                    if (onDataUpdated) onDataUpdated();
+                                  }
+                                }}
                               >
-                                <Award size={15} />
+                                <Trash2 size={15} />
                               </button>
-                            )}
-                            <button
-                              type="button"
-                              className="btn-table-action-delete"
-                              title={`Eliminar asistencia de ${a.nombreCompleto}`}
-                              onClick={async () => {
-                                if (window.confirm(`¿Eliminar el registro de asistencia de "${a.nombreCompleto}" (Doc: ${a.documento})?`)) {
-                                  await deleteAttendance(a.id);
-                                  if (onDataUpdated) onDataUpdated();
-                                }
-                              }}
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            /* VISTA 2: TABLA POR DÍA ESPECÍFICO O HISTORIAL COMPLETO */
+            <div className="table-responsive-container">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '45px', textAlign: 'center' }}>N°</th>
+                    <th style={{ width: '135px' }}>Documento</th>
+                    <th style={{ minWidth: '180px' }}>Asistente</th>
+                    <th style={{ minWidth: '210px' }}>Contacto</th>
+                    <th style={{ minWidth: '160px' }}>Vinculación</th>
+                    {eventConfig.modulos.placaVehiculo && <th style={{ width: '90px', textAlign: 'center' }}>Placa</th>}
+                    <th style={{ minWidth: '150px' }}>Ubicación GPS</th>
+                    <th style={{ width: '140px' }}>Registro</th>
+                    <th style={{ width: '85px', textAlign: 'center' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {asistenciasDelDiaFiltradas.length === 0 ? (
+                    <tr>
+                      <td colSpan={eventConfig.modulos.placaVehiculo ? 9 : 8} className="empty-table-row">
+                        No se encontraron registros de asistencia que coincidan con la búsqueda para esta selección.
                       </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                    </tr>
+                  ) : (
+                    asistenciasDelDiaFiltradas.map((a, idx) => {
+                      const dateInfo = formatRegistrationDate(a.fechaRegistro, a.horaRegistro);
+                      const isPonente = a.vinculacion?.includes('Ponente');
+                      const isEspecialista = a.vinculacion?.includes('Especialista') || a.vinculacion?.includes('Docente');
+                      const isEgresado = a.vinculacion?.includes('Egresado');
+                      const roleClass = isPonente ? 'role-chip-ponente' : isEspecialista ? 'role-chip-docente' : isEgresado ? 'role-chip-egresado' : 'role-chip-estudiante';
+
+                      return (
+                        <tr key={a.id || idx} className="admin-table-row">
+                          <td className="row-index-cell">{idx + 1}</td>
+                          <td>
+                            <div className="doc-cluster">
+                              <span className="doc-val">{a.documento}</span>
+                              <span className="doc-pill">{a.tipoDocumento || 'CC'}</span>
+                            </div>
+                          </td>
+                          <td className="attendee-name-cell">
+                            <span className="attendee-name-text">{a.nombreCompleto}</span>
+                          </td>
+                          <td>
+                            <div className="contact-cluster">
+                              <span className="contact-email-text" title={a.correo}>{a.correo}</span>
+                              {a.telefono && (
+                                <span className="contact-phone-text">
+                                  <Phone size={11} className="contact-sub-icon" />
+                                  <span>{a.telefono}</span>
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`role-chip ${roleClass}`}>
+                              {a.vinculacion || 'Asistente'}
+                            </span>
+                          </td>
+                          {eventConfig.modulos.placaVehiculo && (
+                            <td className="plate-cell text-center">
+                              {a.placaVehiculo ? (
+                                <span className="plate-badge" title={`Vehículo: ${a.placaVehiculo}`}>
+                                  <Car size={13} />
+                                  <span>{a.placaVehiculo}</span>
+                                </span>
+                              ) : (
+                                <span className="no-plate-dash" title="Sin vehículo registrado">—</span>
+                              )}
+                            </td>
+                          )}
+                          <td>
+                            <div className="geo-cluster">
+                              {a.geolocalizacion?.esPresencial ? (
+                                <span className="geo-pill in-situ" title={`Confirmado en sede (a ${a.geolocalizacion.distanciaSedeMetros}m)`}>
+                                  <CheckCircle2 size={12} />
+                                  <span>En Sede ({a.geolocalizacion.distanciaSedeMetros}m)</span>
+                                </span>
+                              ) : (
+                                <span className="geo-pill remote" title={a.geolocalizacion?.distanciaSedeMetros ? `A ${a.geolocalizacion.distanciaSedeMetros}m de la sede` : 'Asistencia remota'}>
+                                  <Globe size={12} />
+                                  <span>Remoto {a.geolocalizacion?.distanciaSedeMetros ? `(${a.geolocalizacion.distanciaSedeMetros}m)` : ''}</span>
+                                </span>
+                              )}
+
+                              {a.geolocalizacion?.latitud && a.geolocalizacion?.longitud && (
+                                <button
+                                  type="button"
+                                  className="btn-geo-map-pill"
+                                  onClick={() => setSelectedGeoRecord(a)}
+                                  title="Ver ubicación en mapa satelital interactivo"
+                                >
+                                  <MapPin size={11} />
+                                  <span>Mapa</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="timestamp-cluster">
+                              <span className="time-date-text">{dateInfo.date}</span>
+                              <div className="time-sub-line">
+                                {dateInfo.time && <span className="time-clock-text">{dateInfo.time}</span>}
+                                {(evento.esMultidia || a.diaNumero) && (
+                                  <span className="day-badge-clean">
+                                    Día {a.diaNumero || 1}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="actions-cell text-center">
+                            <div className="table-actions-cluster">
+                              {eventConfig.modulos.escarapelaDigital && (
+                                <button
+                                  type="button"
+                                  className="btn-table-action-badge"
+                                  title={`Ver pase digital oficial de ${a.nombreCompleto}`}
+                                  onClick={() => setSelectedBadgeAttendee(a)}
+                                >
+                                  <Award size={15} />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="btn-table-action-delete"
+                                title={`Eliminar asistencia de ${a.nombreCompleto}`}
+                                onClick={async () => {
+                                  if (window.confirm(`¿Eliminar este registro de asistencia de "${a.nombreCompleto}" (Doc: ${a.documento})?`)) {
+                                    await deleteAttendance(a.id);
+                                    if (onDataUpdated) onDataUpdated();
+                                  }
+                                }}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
