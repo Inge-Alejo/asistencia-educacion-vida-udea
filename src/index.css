@@ -1494,6 +1494,36 @@ body {
   border: 1px solid #E2E8F0;
 }
 
+.attendee-name-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.inscrito-source-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+
+.inscrito-source-tag.verified {
+  background: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #86EFAC;
+}
+
+.inscrito-source-tag.unverified {
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #CBD5E1;
+}
+
 /* Tabla de Asistencias */
 .table-controls-bar {
   display: flex;

@@ -274,7 +274,8 @@ export default function AdminPanel({
     totalEventDays,
     uniquePersons,
     totalUniquePersons,
-    isMultidia
+    isMultidia,
+    enrollmentStats
   } = attendanceAnalytics;
 
   // Estadísticas Rápidas
@@ -618,11 +619,28 @@ export default function AdminPanel({
           </div>
           <div className="kpi-value">{isMultidia ? totalUniquePersons : totalAsistentes}</div>
           <span className="kpi-meta">
-            {isMultidia
-              ? `${totalAsistentes} registros en ${totalEventDays} jornadas • ${presencialesGPS} en sede (${porcentajePresencial}%)`
-              : `${presencialesGPS} confirmados en sede GPS (${porcentajePresencial}%)`}
+            {enrollmentStats?.hasInscritos
+              ? `${enrollmentStats.inscritosQueAsistieron} de ${enrollmentStats.totalInscritos} inscritos (${enrollmentStats.tasaAsistenciaInscritos}%) • ${presencialesGPS} en sede GPS`
+              : (isMultidia
+                ? `${totalAsistentes} registros en ${totalEventDays} jornadas • ${presencialesGPS} en sede (${porcentajePresencial}%)`
+                : `${presencialesGPS} confirmados en sede GPS (${porcentajePresencial}%)`)}
           </span>
         </div>
+
+        {enrollmentStats?.hasInscritos && (
+          <div className="kpi-card">
+            <div className="kpi-header">
+              <span className="kpi-label">Asistencia de Inscritos</span>
+              <div className="kpi-icon-wrap emerald">
+                <CheckCircle2 size={18} />
+              </div>
+            </div>
+            <div className="kpi-value">{enrollmentStats.inscritosQueAsistieron} / {enrollmentStats.totalInscritos}</div>
+            <span className="kpi-meta">
+              {`${enrollmentStats.tasaAsistenciaInscritos}% de asistencia oficial • ${enrollmentStats.noInscritosQueAsistieron} en sitio`}
+            </span>
+          </div>
+        )}
 
         {eventConfig.modulos.placaVehiculo && (
           <div className="kpi-card">
@@ -897,7 +915,17 @@ export default function AdminPanel({
                             </div>
                           </td>
                           <td className="attendee-name-cell">
-                            <span className="attendee-name-text">{p.nombreCompleto}</span>
+                            <div className="attendee-name-cluster">
+                              <span className="attendee-name-text">{p.nombreCompleto}</span>
+                              {enrollmentStats?.hasInscritos && (
+                                <span
+                                  className={`inscrito-source-tag ${p.esInscritoOficial ? 'verified' : 'unverified'}`}
+                                  title={p.esInscritoOficial ? 'Participante acreditado en la lista oficial de inscritos (3_Inscritos_Oficiales)' : 'Registrado en sitio (no figuraba en la lista previa)'}
+                                >
+                                  {p.esInscritoOficial ? '✓ Inscrito Oficial' : 'En Sitio'}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td>
                             <div className="contact-cluster">

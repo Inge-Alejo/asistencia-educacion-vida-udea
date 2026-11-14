@@ -1,12 +1,14 @@
 // Servicio de Exportación a Microsoft Excel (.xlsx) y compatibilidad con Microsoft Forms
 // Facultad de Medicina - Universidad de Antioquia
 // Implementación 100% Modular: genera hojas según los módulos activos del evento.
+// Cruce relacional por documento con la lista oficial de inscritos (3_Inscritos_Oficiales) para enriquecer datos oficiales.
 // Incluye blindaje contra Inyección de Fórmulas CSV/Excel (CWE-1236).
 
 import * as XLSX from 'xlsx';
 import { sanitizeExcelFormula } from './sanitizer.js';
 import { getEventConfig, getEventInscritosData, getEventPolls } from './storage.js';
 import { analyzeEventDaysAndAttendance, extractRecordDate } from './attendanceAnalytics.js';
+import { normalizeDocumentId } from './enrollmentService.js';
 
 export function exportEventDataToExcel({
   evento = {},
@@ -28,14 +30,26 @@ export function exportEventDataToExcel({
   const config = getEventConfig(safeEvento);
   const modulos = config.modulos || {};
 
-  // Analítica por jornadas y consolidación de personas únicas
+  // Analítica por jornadas y consolidación de personas únicas con cruce relacional de inscritos
   const {
     eventDays,
     totalEventDays,
     uniquePersons,
     totalUniquePersons,
-    isMultidia
+    isMultidia,
+    enrollmentStats
   } = analyzeEventDaysAndAttendance(safeEvento, safeAsistencias);
+
+  const {
+    hasInscritos,
+    totalInscritos,
+    inscritosQueAsistieron,
+    inscritosAusentes,
+    noInscritosQueAsistieron,
+    tasaAsistenciaInscritos,
+    participantsDict,
+    inscritosDataObj
+  } = enrollmentStats;
 
   // -------------------------------------------------------------
   // HOJA 0: FICHA TÉCNICA Y RESUMEN EJECUTIVO DEL EVENTO
@@ -79,22 +93,40 @@ export function exportEventDataToExcel({
     { 'Parámetro': 'Fecha de Generación del Reporte', 'Detalle': new Date().toLocaleString('es-CO') },
     { 'Parámetro': 'Enlace Microsoft Forms Institucional', 'Detalle': sanitizeExcelFormula(safeEvento.microsoftFormsUrl || 'No configurado') }
   ];
+
+  if (hasInscritos) {
+    resumenEvento.push(
+      { 'Parámetro': 'Lista Oficial de Inscritos', 'Detalle': `Cargada (${totalInscritos} participantes en archivo)` },
+      { 'Parámetro': 'Inscritos Oficiales que Asistieron', 'Detalle': `${inscritosQueAsistieron} de ${totalInscritos} (${tasaAsistenciaInscritos}%)` },
+      { 'Parámetro': 'Inscritos Oficiales Ausentes', 'Detalle': `${inscritosAusentes}` },
+      { 'Parámetro': 'Asistentes Extraordinarios en Sitio (No Inscritos Previamente)', 'Detalle': `${noInscritosQueAsistieron}` },
+      { 'Parámetro': 'Efectividad de Asistencia sobre Convocatoria', 'Detalle': `${tasaAsistenciaInscritos}%` },
+      { 'Parámetro': 'Cruce Relacional con Inscritos', 'Detalle': 'Datos demográficos enriquecidos automáticamente desde la lista oficial por cédula' }
+    );
+  }
+
   const wsResumen = XLSX.utils.json_to_sheet(resumenEvento);
   XLSX.utils.book_append_sheet(wb, wsResumen, '0_Ficha_Tecnica');
 
   // -------------------------------------------------------------
   // HOJA 1: CONSOLIDADO DE ASISTENTES ÚNICOS (SIN REPETIDOS)
+  // Enriquecido automáticamente desde la lista oficial de inscritos (3_Inscritos_Oficiales)
   // -------------------------------------------------------------
   const consolidadoData = uniquePersons.map((p, index) => {
     const row = {
-      'N°': index + 1,
-      'Tipo Doc.': sanitizeExcelFormula(p.tipoDocumento || 'CC'),
-      'Documento': sanitizeExcelFormula(p.documento),
-      'Nombre Completo': sanitizeExcelFormula(p.nombreCompleto),
-      'Correo Electrónico': sanitizeExcelFormula(p.correo),
-      'Teléfono / Celular': sanitizeExcelFormula(p.telefono),
-      'Vinculación / Rol': sanitizeExcelFormula(p.vinculacion)
+      'N°': index + 1
     };
+
+    if (hasInscritos) {
+      row['Inscrito Oficial'] = p.esInscritoOficial ? 'SÍ (Acreditado)' : 'NO (Registro en sitio)';
+    }
+
+    row['Tipo Doc.'] = sanitizeExcelFormula(p.tipoDocumento || 'CC');
+    row['Documento'] = sanitizeExcelFormula(p.documento);
+    row['Nombre Completo'] = sanitizeExcelFormula(p.nombreCompleto);
+    row['Correo Electrónico'] = sanitizeExcelFormula(p.correo);
+    row['Teléfono / Celular'] = sanitizeExcelFormula(p.telefono);
+    row['Vinculación / Rol'] = sanitizeExcelFormula(p.vinculacion);
 
     if (modulos.placaVehiculo !== false) {
       row['Placa Vehículo'] = sanitizeExcelFormula(p.placaVehiculo || 'No registrada');
@@ -126,25 +158,50 @@ export function exportEventDataToExcel({
 
   // -------------------------------------------------------------
   // HOJA 2: HISTORIAL DETALLADO DE ASISTENCIAS (LOG CRONOLÓGICO)
+  // Cruce por cédula con lista oficial para normalizar nombres y roles
   // -------------------------------------------------------------
   const asistenciasDetalleData = safeAsistencias.map((a, index) => {
     const recDate = extractRecordDate(a);
     const dayObj = eventDays.find(d => d.fecha === recDate);
     const dayLabel = dayObj ? dayObj.label : (a.diaNumero ? `Día ${a.diaNumero}` : 'Jornada Única');
+    const docClean = normalizeDocumentId(a?.documento) || String(a?.documento || '').trim();
+    const inscrito = participantsDict[docClean] || null;
+
+    // Enriquecimiento de datos oficiales si figura en la lista de inscritos
+    const nombreFinal = (inscrito?.nombreCompleto && String(inscrito.nombreCompleto).trim().length > 0)
+      ? String(inscrito.nombreCompleto).trim()
+      : (a.nombreCompleto || 'Sin nombre');
+
+    const correoFinal = (inscrito?.correo && String(inscrito.correo).trim().length > 0)
+      ? String(inscrito.correo).trim()
+      : (a.correo || '');
+
+    const telefonoFinal = (inscrito?.telefono && String(inscrito.telefono).trim().length > 0)
+      ? String(inscrito.telefono).trim()
+      : (a.telefono || '');
+
+    const vinculacionFinal = (inscrito?.vinculacion && String(inscrito.vinculacion).trim().length > 0)
+      ? String(inscrito.vinculacion).trim()
+      : (a.vinculacion || 'Asistente');
 
     const row = {
       'N°': index + 1,
       'Código Registro': sanitizeExcelFormula(a.id),
       'Jornada': dayLabel,
       'Fecha Sesión': recDate,
-      'Hora Registro': a.horaRegistro || '',
-      'Tipo Doc.': sanitizeExcelFormula(a.tipoDocumento || 'CC'),
-      'Documento': sanitizeExcelFormula(a.documento),
-      'Nombre Completo': sanitizeExcelFormula(a.nombreCompleto),
-      'Correo Electrónico': sanitizeExcelFormula(a.correo),
-      'Teléfono / Celular': sanitizeExcelFormula(a.telefono),
-      'Vinculación / Rol': sanitizeExcelFormula(a.vinculacion)
+      'Hora Registro': a.horaRegistro || ''
     };
+
+    if (hasInscritos) {
+      row['Inscrito Oficial'] = inscrito ? 'SÍ (Acreditado)' : 'NO (En sitio)';
+    }
+
+    row['Tipo Doc.'] = sanitizeExcelFormula(a.tipoDocumento || 'CC');
+    row['Documento'] = sanitizeExcelFormula(a.documento);
+    row['Nombre Completo'] = sanitizeExcelFormula(nombreFinal);
+    row['Correo Electrónico'] = sanitizeExcelFormula(correoFinal);
+    row['Teléfono / Celular'] = sanitizeExcelFormula(telefonoFinal);
+    row['Vinculación / Rol'] = sanitizeExcelFormula(vinculacionFinal);
 
     if (modulos.placaVehiculo !== false) {
       row['Placa Vehículo'] = sanitizeExcelFormula(a.placaVehiculo || 'No registrada');
@@ -167,35 +224,43 @@ export function exportEventDataToExcel({
 
   // -------------------------------------------------------------
   // HOJA MODULAR 3: VALIDACIÓN DE LISTA DE INSCRITOS OFICIALES
-  // (Solo si el módulo está habilitado o hay lista de inscritos cargada)
+  // (Solo si el módulo está habilitado y hay lista de inscritos cargada)
+  // Cruce total: lista de matriculados vs asistencia real, deserción y cumplimiento
   // -------------------------------------------------------------
-  if (modulos.validacionInscritos !== false) {
-    const inscritosDataObj = safeEvento.inscritosData || getEventInscritosData(safeEvento.id);
-    if (inscritosDataObj && inscritosDataObj.documents && inscritosDataObj.documents.length > 0) {
-      const participantsDict = inscritosDataObj.participants || {};
-      const uniqueDocsSet = new Set(uniquePersons.map(p => p.documentoNormalizado));
+  if (modulos.validacionInscritos !== false && hasInscritos) {
+    const inscritosRows = inscritosDataObj.documents.map((docNum, index) => {
+      const pInfo = participantsDict[docNum] || {};
+      const personMatch = uniquePersons.find(p => p.documentoNormalizado === docNum);
+      const asistio = Boolean(personMatch);
 
-      const inscritosRows = inscritosDataObj.documents.map((docNum, index) => {
-        const pInfo = participantsDict[docNum] || {};
-        const asistio = uniqueDocsSet.has(docNum);
-        const personMatch = asistio ? uniquePersons.find(p => p.documentoNormalizado === docNum) : null;
+      const row = {
+        'N°': index + 1,
+        'Documento': sanitizeExcelFormula(pInfo.documentoOriginal || docNum),
+        'Nombre Completo': sanitizeExcelFormula(pInfo.nombreCompleto || 'Sin nombre en archivo'),
+        'Correo': sanitizeExcelFormula(pInfo.correo || ''),
+        'Teléfono': sanitizeExcelFormula(pInfo.telefono || ''),
+        'Vinculación': sanitizeExcelFormula(pInfo.vinculacion || 'Inscrito'),
+        'Estado Asistencia': asistio ? 'ASISTIÓ' : 'NO ASISTIÓ',
+        'Total Días Asistidos': personMatch ? personMatch.totalDiasAsistidos : 0,
+        'Total Días Evento': totalEventDays,
+        'Porcentaje Asistencia': personMatch ? `${personMatch.porcentajeAsistencia}%` : '0%'
+      };
 
-        return {
-          'N°': index + 1,
-          'Documento': sanitizeExcelFormula(pInfo.documentoOriginal || docNum),
-          'Nombre Completo': sanitizeExcelFormula(pInfo.nombreCompleto || 'Sin nombre en archivo'),
-          'Correo': sanitizeExcelFormula(pInfo.correo || ''),
-          'Teléfono': sanitizeExcelFormula(pInfo.telefono || ''),
-          'Vinculación': sanitizeExcelFormula(pInfo.vinculacion || 'Inscrito'),
-          'Estado Asistencia': asistio ? 'ASISTIÓ' : 'NO ASISTIÓ',
-          'Días Asistidos': personMatch ? personMatch.totalDiasAsistidos : 0,
-          'Porcentaje Asistencia': personMatch ? `${personMatch.porcentajeAsistencia}%` : '0%'
-        };
-      });
+      if (isMultidia) {
+        eventDays.forEach(d => {
+          row[`${d.label} (${d.fecha})`] = personMatch?.asistenciaPorDia[d.fecha] ? 'SÍ' : 'NO';
+        });
+      }
 
-      const wsInscritos = XLSX.utils.json_to_sheet(inscritosRows);
-      XLSX.utils.book_append_sheet(wb, wsInscritos, '3_Inscritos_Oficiales');
-    }
+      row['Primer Registro'] = personMatch ? (personMatch.primerRegistro || 'Confirmado') : 'Sin asistencia';
+      row['Último Registro'] = personMatch ? (personMatch.ultimoRegistro || 'Confirmado') : 'Sin asistencia';
+      row['Cumple Requisito Asistencia (>=80%)'] = (personMatch?.porcentajeAsistencia >= 80) ? 'SÍ' : 'NO';
+
+      return row;
+    });
+
+    const wsInscritos = XLSX.utils.json_to_sheet(inscritosRows);
+    XLSX.utils.book_append_sheet(wb, wsInscritos, '3_Inscritos_Oficiales');
   }
 
   // -------------------------------------------------------------
@@ -348,17 +413,41 @@ export function exportMicrosoftFormsFormat({ evento = {}, asistencias = [], sati
   const safeSatisfaccion = Array.isArray(satisfaccion) ? satisfaccion : [];
   const safeEvento = evento || {};
 
+  const inscritosDataObj = safeEvento.inscritosData || getEventInscritosData(safeEvento.id);
+  const participantsDict = (inscritosDataObj && typeof inscritosDataObj.participants === 'object' && inscritosDataObj.participants !== null)
+    ? inscritosDataObj.participants
+    : {};
+
   const msFormsData = safeAsistencias.map((a, index) => {
     const sat = safeSatisfaccion[index] || {};
+    const docClean = normalizeDocumentId(a?.documento) || String(a?.documento || '').trim();
+    const inscrito = participantsDict[docClean] || null;
+
+    const nombreFinal = (inscrito?.nombreCompleto && String(inscrito.nombreCompleto).trim().length > 0)
+      ? String(inscrito.nombreCompleto).trim()
+      : (a.nombreCompleto || 'Sin nombre');
+
+    const correoFinal = (inscrito?.correo && String(inscrito.correo).trim().length > 0)
+      ? String(inscrito.correo).trim()
+      : (a.correo || '');
+
+    const telefonoFinal = (inscrito?.telefono && String(inscrito.telefono).trim().length > 0)
+      ? String(inscrito.telefono).trim()
+      : (a.telefono || '');
+
+    const vinculacionFinal = (inscrito?.vinculacion && String(inscrito.vinculacion).trim().length > 0)
+      ? String(inscrito.vinculacion).trim()
+      : (a.vinculacion || 'Asistente');
+
     return {
       'Id.': index + 1,
       'Hora de inicio': a.fechaRegistro || '',
       'Hora de finalización': a.fechaRegistro || '',
-      'Correo electrónico': sanitizeExcelFormula(a.correo),
-      'Nombre': sanitizeExcelFormula(a.nombreCompleto),
+      'Correo electrónico': sanitizeExcelFormula(correoFinal),
+      'Nombre': sanitizeExcelFormula(nombreFinal),
       'Documento de Identidad': sanitizeExcelFormula(a.documento),
-      'Tipo de Vinculación': sanitizeExcelFormula(a.vinculacion),
-      'Teléfono': sanitizeExcelFormula(a.telefono),
+      'Tipo de Vinculación': sanitizeExcelFormula(vinculacionFinal),
+      'Teléfono': sanitizeExcelFormula(telefonoFinal),
       'Placa Vehículo': sanitizeExcelFormula(a.placaVehiculo || 'N/A'),
       'Calificación General Evento (1-5)': sat.cumplimientoObjetivos || 'Sin respuesta',
       'Recomendación NPS (0-10)': sat.npsRecomendacion ?? 'Sin respuesta',

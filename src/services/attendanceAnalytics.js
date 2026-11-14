@@ -1,8 +1,10 @@
 // Servicio de Analítica de Asistencia por Días y Consolidación de Asistentes Únicos
 // Facultad de Medicina - Universidad de Antioquia
 // Soporta eventos de 1 solo día, multidía (2, 3, 5, ... N días) y detección dinámica de fechas.
+// Cruce relacional inteligente con el listado oficial de inscritos (3_Inscritos_Oficiales) por documento.
 
 import { normalizeDocumentId } from './enrollmentService.js';
+import { getEventInscritosData } from './storage.js';
 
 /**
  * Extrae la fecha en formato ISO YYYY-MM-DD de un registro de asistencia,
@@ -44,27 +46,48 @@ export function extractRecordDate(record) {
 }
 
 /**
- * Analiza un evento y sus registros de asistencia para desglosar la participación por días
+ * Analiza un evento y sus registros de asistencia para desglosar la participación por días,
+ * enriquecer los datos de los asistentes desde la lista oficial de inscritos (cruzando por cédula)
  * y generar la lista consolidada de personas únicas sin duplicados.
  *
  * @param {object} evento Objeto del evento académico
  * @param {Array} asistencias Lista de registros de asistencia del evento
+ * @param {object|null} customInscritosData Objeto opcional con datos de inscritos precargados
  * @returns {{
  *   eventDays: Array<{ fecha: string, label: string, numero: number, totalAsistentes: number }>,
  *   totalEventDays: number,
  *   uniquePersons: Array<object>,
  *   totalUniquePersons: number,
  *   countsByDay: Record<string, number>,
- *   isMultidia: boolean
+ *   isMultidia: boolean,
+ *   enrollmentStats: {
+ *     hasInscritos: boolean,
+ *     totalInscritos: number,
+ *     inscritosQueAsistieron: number,
+ *     inscritosAusentes: number,
+ *     noInscritosQueAsistieron: number,
+ *     tasaAsistenciaInscritos: number,
+ *     participantsDict: Record<string, object>,
+ *     inscritosDataObj: object|null
+ *   }
  * }}
  */
-export function analyzeEventDaysAndAttendance(evento = {}, asistencias = []) {
+export function analyzeEventDaysAndAttendance(evento = {}, asistencias = [], customInscritosData = null) {
+  const safeEvento = evento || {};
   const safeAsistencias = Array.isArray(asistencias) ? asistencias : [];
   const daysMap = new Map(); // fecha -> { fecha, label, numero }
 
-  // 1. Extraer los días planificados en la configuración del evento
-  if (evento?.esMultidia && Array.isArray(evento.diasEvento) && evento.diasEvento.length > 0) {
-    evento.diasEvento.forEach((dStr, idx) => {
+  // 1. Obtener y preparar datos de la lista oficial de inscritos (fuente de verdad oficial)
+  const inscritosDataObj = customInscritosData || safeEvento?.inscritosData || (safeEvento?.id ? getEventInscritosData(safeEvento.id) : null);
+  const participantsDict = (inscritosDataObj && typeof inscritosDataObj.participants === 'object' && inscritosDataObj.participants !== null)
+    ? inscritosDataObj.participants
+    : {};
+  const hasInscritos = Boolean(inscritosDataObj && Array.isArray(inscritosDataObj.documents) && inscritosDataObj.documents.length > 0);
+  const totalInscritos = hasInscritos ? inscritosDataObj.documents.length : 0;
+
+  // 2. Extraer los días planificados en la configuración del evento
+  if (safeEvento?.esMultidia && Array.isArray(safeEvento.diasEvento) && safeEvento.diasEvento.length > 0) {
+    safeEvento.diasEvento.forEach((dStr, idx) => {
       const cleanDate = String(dStr).slice(0, 10);
       daysMap.set(cleanDate, {
         fecha: cleanDate,
@@ -72,9 +95,9 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = []) {
         numero: idx + 1
       });
     });
-  } else if (evento?.esMultidia && evento?.fechaInicio && evento?.fechaFin) {
-    const start = new Date(evento.fechaInicio + 'T12:00:00');
-    const end = new Date(evento.fechaFin + 'T12:00:00');
+  } else if (safeEvento?.esMultidia && safeEvento?.fechaInicio && safeEvento?.fechaFin) {
+    const start = new Date(safeEvento.fechaInicio + 'T12:00:00');
+    const end = new Date(safeEvento.fechaFin + 'T12:00:00');
     let cur = new Date(start);
     let dayNum = 1;
     while (cur <= end) {
@@ -87,8 +110,8 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = []) {
       cur.setDate(cur.getDate() + 1);
       dayNum++;
     }
-  } else if (evento?.fecha) {
-    const cleanDate = String(evento.fecha).slice(0, 10);
+  } else if (safeEvento?.fecha) {
+    const cleanDate = String(safeEvento.fecha).slice(0, 10);
     daysMap.set(cleanDate, {
       fecha: cleanDate,
       label: 'Día 1',
@@ -96,7 +119,7 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = []) {
     });
   }
 
-  // 2. Extraer fechas registradas en las asistencias para no omitir registros en fechas atípicas
+  // 3. Extraer fechas registradas en las asistencias para no omitir registros en fechas atípicas
   safeAsistencias.forEach(a => {
     const recDate = extractRecordDate(a);
     if (recDate && !daysMap.has(recDate)) {
@@ -121,13 +144,13 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = []) {
     d.label = sortedDays.length > 1 ? `Día ${idx + 1}` : 'Jornada Única';
   });
 
-  // 3. Conteo de asistencias por día
+  // 4. Conteo de asistencias por día
   const countsByDay = {};
   sortedDays.forEach(d => {
     countsByDay[d.fecha] = 0;
   });
 
-  // 4. Consolidar por persona única (agrupada por documento normalizado)
+  // 5. Consolidar por persona única (agrupada por documento normalizado)
   const uniquePersonsMap = new Map();
 
   safeAsistencias.forEach(a => {
@@ -175,7 +198,8 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = []) {
 
   const totalEventDays = sortedDays.length || 1;
 
-  // Generar lista procesada de personas únicas con estadísticas de asistencia
+  // 6. Generar lista procesada de personas únicas con estadísticas de asistencia
+  // y enriquecimiento relacional desde la lista de inscritos oficiales
   const uniquePersons = Array.from(uniquePersonsMap.values()).map(person => {
     const distinctDaysAttended = Object.keys(person.diasAsistidosMap);
     const totalDiasAsistidos = distinctDaysAttended.length;
@@ -187,8 +211,39 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = []) {
       asistenciaPorDia[d.fecha] = Boolean(person.diasAsistidosMap[d.fecha]);
     });
 
+    // Cruce inteligente por documento con la lista oficial de inscritos (3_Inscritos_Oficiales)
+    const normDoc = person.documentoNormalizado;
+    const inscrito = participantsDict[normDoc] || null;
+    const esInscritoOficial = Boolean(inscrito);
+
+    // Si el participante está en la lista oficial de inscritos, enriquecer sus datos oficiales
+    // Priorizando la información acreditada de la universidad (evita erratas o tipografía informal en el celular)
+    const nombreOficial = (inscrito?.nombreCompleto && String(inscrito.nombreCompleto).trim().length > 0)
+      ? String(inscrito.nombreCompleto).trim()
+      : person.nombreCompleto;
+
+    const correoOficial = (inscrito?.correo && String(inscrito.correo).trim().length > 0)
+      ? String(inscrito.correo).trim()
+      : person.correo;
+
+    const telefonoOficial = (inscrito?.telefono && String(inscrito.telefono).trim().length > 0)
+      ? String(inscrito.telefono).trim()
+      : person.telefono;
+
+    const vinculacionOficial = (inscrito?.vinculacion && String(inscrito.vinculacion).trim().length > 0)
+      ? String(inscrito.vinculacion).trim()
+      : person.vinculacion;
+
     return {
       ...person,
+      nombreCompleto: nombreOficial,
+      correo: correoOficial,
+      telefono: telefonoOficial,
+      vinculacion: vinculacionOficial,
+      nombreCapturadoEnAsistencia: person.nombreCompleto,
+      correoCapturadoEnAsistencia: person.correo,
+      esInscritoOficial,
+      datosInscrito: inscrito,
       distinctDaysAttended,
       totalDiasAsistidos,
       porcentajeAsistencia,
@@ -196,7 +251,7 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = []) {
     };
   });
 
-  // Incorporar conteo final a cada día
+  // 7. Incorporar conteo final a cada día
   const eventDays = sortedDays.map(d => ({
     ...d,
     totalAsistentes: countsByDay[d.fecha] || 0
@@ -204,12 +259,36 @@ export function analyzeEventDaysAndAttendance(evento = {}, asistencias = []) {
 
   const isMultidia = eventDays.length > 1;
 
+  // 8. Métricas globales de convocatoria y asistencia sobre la lista oficial de inscritos
+  const inscritosQueAsistieron = hasInscritos
+    ? uniquePersons.filter(p => p.esInscritoOficial).length
+    : 0;
+  const inscritosAusentes = hasInscritos
+    ? Math.max(0, totalInscritos - inscritosQueAsistieron)
+    : 0;
+  const noInscritosQueAsistieron = hasInscritos
+    ? uniquePersons.filter(p => !p.esInscritoOficial).length
+    : uniquePersons.length;
+  const tasaAsistenciaInscritos = totalInscritos > 0
+    ? Math.round((inscritosQueAsistieron / totalInscritos) * 100)
+    : 0;
+
   return {
     eventDays,
     totalEventDays,
     uniquePersons,
     totalUniquePersons: uniquePersons.length,
     countsByDay,
-    isMultidia
+    isMultidia,
+    enrollmentStats: {
+      hasInscritos,
+      totalInscritos,
+      inscritosQueAsistieron,
+      inscritosAusentes,
+      noInscritosQueAsistieron,
+      tasaAsistenciaInscritos,
+      participantsDict,
+      inscritosDataObj
+    }
   };
 }
